@@ -9,6 +9,8 @@ import { AlertStack } from "./AlertStack";
 import { VoiceBar } from "./VoiceBar";
 import { HowToVideoModal } from "./HowToVideoModal";
 import { QuadView, type QuadPanelId } from "./QuadView";
+import { PreferenceCard } from "./PreferenceCard";
+import { PatientDetailsModal } from "./PatientDetailsModal";
 import { LayoutGrid } from "lucide-react";
 
 interface Props {
@@ -52,7 +54,7 @@ export function AwakeDashboard({ staffName, staffRole, initials, onSleep }: Prop
   const [dismissedAlerts, setDismissedAlerts] = useState<Set<number>>(new Set());
   const [quadOpen, setQuadOpen] = useState(false);
   const [quadFocused, setQuadFocused] = useState<QuadPanelId | null>(null);
-
+  const [patientDetailsOpen, setPatientDetailsOpen] = useState(false);
   // ───────── Voice tool handlers (called by ElevenLabs agent) ─────────
   const openHowToVideo = useCallback((title?: string) => {
     const lookup = (title ?? "").toLowerCase();
@@ -156,7 +158,7 @@ export function AwakeDashboard({ staffName, staffRole, initials, onSleep }: Prop
         />
 
         <main className="flex min-h-0 flex-1 flex-col gap-5 overflow-y-auto px-8 py-6 animate-fade-in">
-          <CaseHeader cockpitMode={cockpit} />
+          <CaseHeader cockpitMode={cockpit} onOpenPatientDetails={() => setPatientDetailsOpen(true)} />
 
           <div className="grid grid-cols-1 gap-5 xl:grid-cols-3">
             <div className="space-y-5 xl:col-span-2">
@@ -174,6 +176,8 @@ export function AwakeDashboard({ staffName, staffRole, initials, onSleep }: Prop
               <TeamRoster />
             </div>
           </div>
+
+          <PreferenceCard />
 
           <div className="h-24" />
         </main>
@@ -212,6 +216,11 @@ export function AwakeDashboard({ staffName, staffRole, initials, onSleep }: Prop
         open={howToOpen}
         onClose={() => setHowToOpen(false)}
         title={howToTitle}
+      />
+
+      <PatientDetailsModal
+        open={patientDetailsOpen}
+        onClose={() => setPatientDetailsOpen(false)}
       />
 
       <QuadView

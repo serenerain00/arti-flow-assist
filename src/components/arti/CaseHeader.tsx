@@ -1,15 +1,16 @@
-import { Clock, MapPin } from "lucide-react";
+import { Clock, MapPin, User } from "lucide-react";
 import { useEffect, useState } from "react";
 
 interface Props {
   cockpitMode: boolean;
+  onOpenPatientDetails?: () => void;
 }
 
 /**
  * Above-the-fold case identity. Hick's law: the most-needed info is one glance away.
  * Countdown gives temporal anchoring; cockpit mode chip changes the whole frame's tone.
  */
-export function CaseHeader({ cockpitMode }: Props) {
+export function CaseHeader({ cockpitMode, onOpenPatientDetails }: Props) {
   const [secs, setSecs] = useState(32 * 60 + 14);
   useEffect(() => {
     const i = setInterval(() => setSecs((s) => Math.max(0, s - 1)), 1000);
@@ -54,6 +55,15 @@ export function CaseHeader({ cockpitMode }: Props) {
         </div>
 
         <div className="flex items-center gap-6">
+          {onOpenPatientDetails && (
+            <button
+              onClick={onOpenPatientDetails}
+              className="flex items-center gap-2 rounded-xl border border-border bg-surface-2/60 px-4 py-2.5 text-sm text-muted-foreground transition-colors hover:border-primary/40 hover:text-foreground"
+            >
+              <User className="h-4 w-4 text-primary" />
+              Patient Info
+            </button>
+          )}
           <div className="text-right">
             <div className="font-mono text-[10px] uppercase tracking-[0.3em] text-muted-foreground">
               Incision in
