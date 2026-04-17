@@ -1,6 +1,6 @@
 import { useEffect, useLayoutEffect, useRef, useState } from "react";
 import gsap from "gsap";
-import { ArrowUp, Mic, MicOff, Sparkles, X } from "lucide-react";
+import { ArrowUp, Mic, Sparkles, X } from "lucide-react";
 import { cn } from "@/lib/utils";
 import { useArtiVoice, type ArtiVoiceCallbacks } from "@/hooks/useArtiVoice";
 
