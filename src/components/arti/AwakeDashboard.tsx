@@ -1,4 +1,4 @@
-import { useState } from "react";
+import { useCallback, useState } from "react";
 import { Sidebar } from "./Sidebar";
 import { TopBar } from "./TopBar";
 import { CaseHeader } from "./CaseHeader";
@@ -16,22 +16,69 @@ interface Props {
   onSleep: () => void;
 }
 
+export type TimeOutId = "patient" | "site" | "procedure" | "allergies";
+export type InstrumentId = "raytec" | "lap" | "needle" | "blade" | "clamps";
+
+const VIDEO_TITLES: Record<string, string> = {
+  rotator: "Rotator cuff repair — Suture anchor technique",
+  glenoid: "Univers Revers™ — Glenoid baseplate placement",
+  reverse: "Reverse Total Shoulder Arthroplasty — Step-by-step",
+  default: "Univers Revers™ — Glenoid baseplate placement",
+};
+
 export function AwakeDashboard({ staffName, staffRole, initials, onSleep }: Props) {
   const [cockpit, setCockpit] = useState(false);
   const [howToOpen, setHowToOpen] = useState(false);
-  const [howToTitle, setHowToTitle] = useState(
-    "Univers Revers™ — Glenoid baseplate placement"
-  );
+  const [howToTitle, setHowToTitle] = useState(VIDEO_TITLES.default);
+  const [timeOutChecked, setTimeOutChecked] = useState<Set<TimeOutId>>(new Set());
+  const [counts, setCounts] = useState<Record<InstrumentId, number>>({
+    raytec: 20,
+    lap: 9,
+    needle: 14,
+    blade: 3,
+    clamps: 12,
+  });
+  const [dismissedAlerts, setDismissedAlerts] = useState<Set<number>>(new Set());
 
-  const handleVoiceCommand = (cmd: string) => {
-    const lower = cmd.toLowerCase();
-    if (lower.includes("video") || lower.includes("rotator") || lower.includes("how")) {
-      setHowToTitle("Rotator cuff repair — Suture anchor technique");
-      setHowToOpen(true);
-    } else if (lower.includes("cockpit")) {
-      setCockpit((c) => !c);
-    }
-  };
+  // ───────── Voice tool handlers (called by ElevenLabs agent) ─────────
+  const openHowToVideo = useCallback((title?: string) => {
+    const lookup = (title ?? "").toLowerCase();
+    const matched =
+      Object.entries(VIDEO_TITLES).find(([k]) => k !== "default" && lookup.includes(k))?.[1] ??
+      title ??
+      VIDEO_TITLES.default;
+    setHowToTitle(matched);
+    setHowToOpen(true);
+    return `Opened video: ${matched}`;
+  }, []);
+
+  const toggleTimeOutItem = useCallback((id: TimeOutId) => {
+    setTimeOutChecked((prev) => {
+      const next = new Set(prev);
+      if (next.has(id)) next.delete(id);
+      else next.add(id);
+      return next;
+    });
+    return `Toggled time-out item: ${id}`;
+  }, []);
+
+  const adjustInstrumentCount = useCallback((item: InstrumentId, delta: number) => {
+    setCounts((prev) => ({
+      ...prev,
+      [item]: Math.max(0, prev[item] + delta),
+    }));
+    return `Adjusted ${item} by ${delta}`;
+  }, []);
+
+  const toggleSterileCockpit = useCallback((enabled?: boolean) => {
+    setCockpit((c) => (typeof enabled === "boolean" ? enabled : !c));
+    return `Sterile cockpit ${enabled ?? !cockpit ? "on" : "off"}`;
+  }, [cockpit]);
+
+  const dismissAlert = useCallback((index: number) => {
+    setDismissedAlerts((prev) => new Set(prev).add(index));
+    return `Dismissed alert ${index}`;
+  }, []);
 
   return (
     <div className="flex h-screen w-full overflow-hidden bg-background">
@@ -51,21 +98,36 @@ export function AwakeDashboard({ staffName, staffRole, initials, onSleep }: Prop
 
           <div className="grid grid-cols-1 gap-5 xl:grid-cols-3">
             <div className="space-y-5 xl:col-span-2">
-              <TimeOutPanel />
-              <InstrumentCount />
+              <TimeOutPanel
+                checked={timeOutChecked as Set<string>}
+                onToggle={(id) => toggleTimeOutItem(id as TimeOutId)}
+              />
+              <InstrumentCount
+                counts={counts}
+                onAdjust={(id, delta) => adjustInstrumentCount(id as InstrumentId, delta)}
+              />
+
             </div>
             <div className="space-y-5">
-              <AlertStack />
+              <AlertStack dismissed={dismissedAlerts} onDismiss={dismissAlert} />
               <TeamRoster />
             </div>
           </div>
 
-          {/* footer spacer so voice bar doesn't overlap content */}
           <div className="h-24" />
         </main>
 
         <div className="absolute bottom-6 left-32 right-8 z-40">
-          <VoiceBar onCommand={handleVoiceCommand} />
+          <VoiceBar
+            staffName={staffName}
+            tools={{
+              openHowToVideo,
+              toggleTimeOutItem,
+              adjustInstrumentCount,
+              toggleSterileCockpit,
+              dismissAlert,
+            }}
+          />
         </div>
       </div>
 

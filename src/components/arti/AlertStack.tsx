@@ -44,7 +44,17 @@ const tones = {
   },
 };
 
-export function AlertStack() {
+interface Props {
+  dismissed?: Set<number>;
+  onDismiss?: (index: number) => void;
+}
+
+export function AlertStack({ dismissed, onDismiss }: Props = {}) {
+  const visible = ALERTS.map((a, i) => ({ ...a, index: i })).filter(
+    (a) => !dismissed?.has(a.index)
+  );
+  const dismissedCount = dismissed?.size ?? 0;
+
   return (
     <section className="glass rounded-2xl p-6">
       <div className="mb-4 flex items-end justify-between">
@@ -55,17 +65,17 @@ export function AlertStack() {
           <h2 className="mt-1 text-lg font-light">Awareness</h2>
         </div>
         <div className="font-mono text-[10px] uppercase tracking-wider text-muted-foreground">
-          3 active · 0 muted
+          {visible.length} active · {dismissedCount} muted
         </div>
       </div>
 
       <ul className="space-y-2">
-        {ALERTS.map((a) => {
+        {visible.map((a) => {
           const t = tones[a.tone];
           return (
             <li
               key={a.title}
-              className="relative flex gap-4 overflow-hidden rounded-lg bg-surface-2/40 p-4"
+              className="relative flex gap-4 overflow-hidden rounded-lg bg-surface-2/40 p-4 animate-fade-in"
             >
               <span className={`absolute inset-y-0 left-0 w-[3px] ${t.bar}`} />
               <div
@@ -86,10 +96,25 @@ export function AlertStack() {
                   {a.body}
                 </p>
               </div>
+              {onDismiss && (
+                <button
+                  onClick={() => onDismiss(a.index)}
+                  className="self-start rounded-md px-2 py-1 text-[10px] font-mono uppercase tracking-wider text-muted-foreground hover:bg-surface-3 hover:text-foreground"
+                  aria-label={`Dismiss ${a.title}`}
+                >
+                  Dismiss
+                </button>
+              )}
             </li>
           );
         })}
+        {visible.length === 0 && (
+          <li className="rounded-lg border border-dashed border-border p-6 text-center text-xs font-light text-muted-foreground">
+            All alerts acknowledged.
+          </li>
+        )}
       </ul>
     </section>
   );
 }
+
