@@ -110,7 +110,7 @@ export function HomeDashboard({ staffName, staffRole, initials, onSleep, onPromp
           </section>
 
           {/* Two-column: Up next + environment / quick-actions */}
-          <section className="mt-6 grid grid-cols-1 gap-5 xl:grid-cols-3">
+          <section className="grid grid-cols-1 gap-5 xl:grid-cols-3">
             {/* Up next */}
             <article className="xl:col-span-2 glass relative overflow-hidden rounded-2xl p-7">
               <div className="flex items-center justify-between">
@@ -195,8 +195,27 @@ export function HomeDashboard({ staffName, staffRole, initials, onSleep, onPromp
             </aside>
           </section>
 
+          {/* Analytics — bar + pie */}
+          <section className="grid grid-cols-1 gap-5 xl:grid-cols-3">
+            <ChartCard
+              className="xl:col-span-2"
+              eyebrow="Throughput · last 7 days"
+              title="Cases per day"
+              trailing={<TrendingPill value="+12%" />}
+            >
+              <CasesPerDayChart />
+            </ChartCard>
+
+            <ChartCard
+              eyebrow="Mix · today"
+              title="Procedure mix"
+            >
+              <ProcedureMixChart />
+            </ChartCard>
+          </section>
+
           {/* Quick suggestions */}
-          <section className="mt-6 grid grid-cols-1 gap-5 md:grid-cols-3">
+          <section className="grid grid-cols-1 gap-5 md:grid-cols-3">
             <QuickCard
               icon={ListChecks}
               title="Today's case list"
