@@ -24,6 +24,7 @@ import {
 import { Sidebar } from "./Sidebar";
 import { TopBar } from "./TopBar";
 import { ArtiInvoker } from "./ArtiInvoker";
+import type { ArtiVoiceCallbacks } from "@/hooks/useArtiVoice";
 import { TODAY_CASES, STATUS_META } from "./cases";
 import { cn } from "@/lib/utils";
 
@@ -33,6 +34,7 @@ interface Props {
   initials: string;
   onSleep: () => void;
   onPrompt: (text: string) => void;
+  voice?: ArtiVoiceCallbacks;
 }
 
 /**
