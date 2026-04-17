@@ -92,16 +92,11 @@ export function CaseListScreen({
           <div className="h-32" />
         </main>
 
-        {/* Floating prompt */}
-        <div className="pointer-events-none absolute inset-x-0 bottom-0 z-30 flex justify-center px-8 pb-6">
-          <div className="pointer-events-auto w-full max-w-2xl">
-            <PromptBar
-              placeholder="Ask Arti to open a case…"
-              onSubmit={onPrompt}
-              suggestions={["Open Marcus Chen's case", "Next case", "Go home"]}
-            />
-          </div>
-        </div>
+        <ArtiInvoker
+          placeholder="Ask Arti to open a case…"
+          onSubmit={onPrompt}
+          suggestions={["Open Marcus Chen's case", "Next case", "Go home"]}
+        />
       </div>
     </div>
   );
