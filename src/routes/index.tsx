@@ -46,7 +46,7 @@ function ArtiWall() {
     setPhase((p) => (p === "waking" ? "greeting" : p));
   }, []);
 
-  const handleGreetingComplete = useCallback(() => {
+  const handleGoToDashboard = useCallback(() => {
     setPhase((p) => (p === "greeting" ? "dashboard" : p));
   }, []);
 
@@ -71,7 +71,7 @@ function ArtiWall() {
       staffName={staff.name}
       onWakeRequested={handleWakeRequested}
       onWakeAnimationComplete={handleWakeAnimationComplete}
-      onGreetingComplete={handleGreetingComplete}
+      onGoToDashboard={handleGoToDashboard}
     />
   );
 }
