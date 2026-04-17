@@ -1,5 +1,6 @@
 import { useEffect, useState } from "react";
 import { RippleCanvas } from "./RippleCanvas";
+import { GreetingVoice } from "./GreetingVoice";
 
 function getGreeting(d?: Date | null) {
   if (!d) return "Hello";
@@ -38,7 +39,8 @@ export function SleepScreen({ onWake, staffName }: Props) {
       return () => clearTimeout(t);
     }
     if (phase === "greeting") {
-      const t = setTimeout(() => onWake(), 4100);
+      // Hold the greeting longer so Arti's spoken "Good morning" can play.
+      const t = setTimeout(() => onWake(), 6500);
       return () => clearTimeout(t);
     }
   }, [phase, onWake]);
