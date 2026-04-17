@@ -115,23 +115,41 @@ export function useArtiVoice(callbacks: ArtiVoiceCallbacks) {
 
   /* ------------------------- conversation control ------------------------- */
 
-  const startSession = useCallback(async () => {
-    if (sessionStatus === "connecting" || sessionStatus === "connected") return;
-    setError(null);
-    setSessionStatus("connecting");
-    try {
-      await navigator.mediaDevices.getUserMedia({ audio: true });
-      const { token } = await getElevenLabsConversationToken();
-      await conversation.startSession({
-        conversationToken: token,
-        connectionType: "webrtc",
-      });
-    } catch (err) {
-      console.error("[arti-voice] failed to start session", err);
-      setError(err instanceof Error ? err.message : "Could not start voice session");
-      setSessionStatus("error");
-    }
-  }, [conversation, sessionStatus]);
+  const startSession = useCallback(
+    async (opts?: { firstMessage?: string; promptAddition?: string }) => {
+      if (sessionStatus === "connecting" || sessionStatus === "connected") return;
+      setError(null);
+      setSessionStatus("connecting");
+      try {
+        await navigator.mediaDevices.getUserMedia({ audio: true });
+        const { token } = await getElevenLabsConversationToken();
+        // Overrides let us personalize Arti's greeting per session. The
+        // matching toggles ("First message" + "System prompt") MUST be
+        // enabled in the ElevenLabs agent's Security tab for these to
+        // take effect — otherwise the SDK silently ignores them.
+        const overrides = opts?.firstMessage || opts?.promptAddition
+          ? {
+              agent: {
+                ...(opts.firstMessage ? { firstMessage: opts.firstMessage } : {}),
+                ...(opts.promptAddition
+                  ? { prompt: { prompt: opts.promptAddition } }
+                  : {}),
+              },
+            }
+          : undefined;
+        await conversation.startSession({
+          conversationToken: token,
+          connectionType: "webrtc",
+          ...(overrides ? { overrides } : {}),
+        });
+      } catch (err) {
+        console.error("[arti-voice] failed to start session", err);
+        setError(err instanceof Error ? err.message : "Could not start voice session");
+        setSessionStatus("error");
+      }
+    },
+    [conversation, sessionStatus],
+  );
 
   const endSession = useCallback(async () => {
     try {

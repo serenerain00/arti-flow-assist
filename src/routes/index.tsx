@@ -1,5 +1,5 @@
 import { createFileRoute } from "@tanstack/react-router";
-import { useCallback, useMemo, useState } from "react";
+import { useCallback, useEffect, useMemo, useRef, useState } from "react";
 import { AnimatePresence, motion } from "framer-motion";
 import { SleepScreen } from "@/components/arti/SleepScreen";
 import { HomeDashboard } from "@/components/arti/HomeDashboard";
@@ -7,10 +7,14 @@ import { CaseListScreen } from "@/components/arti/CaseListScreen";
 import { AwakeDashboard } from "@/components/arti/AwakeDashboard";
 import { parseIntent } from "@/components/arti/intent";
 import { TODAY_CASES, type CaseItem } from "@/components/arti/cases";
+import {
+  ArtiVoiceProvider,
+  useArtiVoiceContext,
+} from "@/hooks/ArtiVoiceContext";
 import type { ArtiVoiceCallbacks } from "@/hooks/useArtiVoice";
 
 export const Route = createFileRoute("/")({
-  component: ArtiWall,
+  component: ArtiWallRoot,
   head: () => ({
     meta: [
       { title: "Arti Wall · Intelligent OR Companion" },
@@ -24,6 +28,36 @@ export const Route = createFileRoute("/")({
 });
 
 /**
+ * Root that wires the shared voice session in once. We use a ref to bridge
+ * the agent's tool callbacks (registered up here in the provider) to the
+ * actual state setters living inside ArtiWall — that way the provider can
+ * be mounted before the inner component initializes.
+ */
+function ArtiWallRoot() {
+  const callbacksRef = useRef<ArtiVoiceCallbacks>({
+    onGoHome: () => {},
+    onShowCases: () => {},
+    onOpenCase: () => {},
+    onSleep: () => {},
+  });
+  const stableCallbacks = useMemo<ArtiVoiceCallbacks>(
+    () => ({
+      onGoHome: () => callbacksRef.current.onGoHome(),
+      onShowCases: () => callbacksRef.current.onShowCases(),
+      onOpenCase: (q) => callbacksRef.current.onOpenCase(q),
+      onSleep: () => callbacksRef.current.onSleep(),
+    }),
+    [],
+  );
+
+  return (
+    <ArtiVoiceProvider callbacks={stableCallbacks}>
+      <ArtiWall callbacksRef={callbacksRef} />
+    </ArtiVoiceProvider>
+  );
+}
+
+/**
  * Top-level state machine for the Arti wall:
  *   sleep → waking → greeting → home → cases → preop
  *
@@ -33,7 +67,11 @@ export const Route = createFileRoute("/")({
  */
 type ArtiPhase = "sleep" | "waking" | "greeting" | "home" | "cases" | "preop";
 
-function ArtiWall() {
+interface ArtiWallProps {
+  callbacksRef: React.MutableRefObject<ArtiVoiceCallbacks>;
+}
+
+function ArtiWall({ callbacksRef }: ArtiWallProps) {
   const [phase, setPhase] = useState<ArtiPhase>("sleep");
   const [activeCase, setActiveCase] = useState<CaseItem>(
     () => TODAY_CASES.find((c) => c.status === "next") ?? TODAY_CASES[0]
@@ -117,26 +155,51 @@ function ArtiWall() {
 
   /**
    * Voice tool callbacks. The agent invokes these via ElevenLabs client
-   * tools to navigate the wall hands-free. Memoized so the conversation
-   * session doesn't see a new identity on every render.
+   * tools to navigate the wall hands-free. We update the bridge ref every
+   * render so the provider's stable callback identities (registered once
+   * with the conversation session) always call the latest closures.
    */
-  const voice = useMemo<ArtiVoiceCallbacks>(
-    () => ({
-      onGoHome: () => setPhase("home"),
-      onShowCases: () => setPhase("cases"),
-      onOpenCase: (query: string) => {
-        const match = findCase(query);
-        if (match) {
-          setActiveCase(match);
-          setPhase("preop");
-        } else {
-          setPhase("cases");
-        }
-      },
-      onSleep: () => setPhase("sleep"),
-    }),
-    [findCase]
-  );
+  callbacksRef.current = {
+    onGoHome: () => setPhase("home"),
+    onShowCases: () => setPhase("cases"),
+    onOpenCase: (query: string) => {
+      const match = findCase(query);
+      if (match) {
+        setActiveCase(match);
+        setPhase("preop");
+      } else {
+        setPhase("cases");
+      }
+    },
+    onSleep: () => setPhase("sleep"),
+  };
+
+  /**
+   * Auto-greet: when Arti enters the greeting phase (just woke up), open a
+   * voice session with a personalized first message so he literally says
+   * hello. We track which greeting we've already triggered to avoid
+   * re-greeting on phase flicker. Falls back silently if voice isn't
+   * available (e.g. mic denied, no agent configured).
+   */
+  const v = useArtiVoiceContext();
+  const greetedRef = useRef<number>(0);
+  useEffect(() => {
+    if (phase !== "greeting" || !v) return;
+    // Only greet once per wake cycle.
+    const stamp = Date.now();
+    if (greetedRef.current && stamp - greetedRef.current < 30_000) return;
+    greetedRef.current = stamp;
+
+    const hour = new Date().getHours();
+    const tod =
+      hour < 5 ? "Good evening" : hour < 12 ? "Good morning" : hour < 17 ? "Good afternoon" : "Good evening";
+    const nextCase = TODAY_CASES.find((c) => c.status === "next") ?? TODAY_CASES[0];
+    const firstMessage = `${tod}, ${staff.name.split(" ")[0]}. You have ${TODAY_CASES.length} cases on the schedule today. ${nextCase.patientName} is up first for ${nextCase.procedureShort}. How can I help?`;
+
+    void v.startSession({ firstMessage });
+    // We intentionally only run this when phase becomes 'greeting'.
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [phase]);
 
   /**
    * Each phase mounts a different full-screen component. We wrap them in
@@ -177,7 +240,6 @@ function ArtiWall() {
         onBackHome={() => setPhase("home")}
         onSelectCase={handleSelectCase}
         onPrompt={handlePrompt}
-        voice={voice}
       />
     );
   } else if (phase === "home") {
@@ -188,7 +250,6 @@ function ArtiWall() {
         initials={staff.initials}
         onSleep={handleSleep}
         onPrompt={handlePrompt}
-        voice={voice}
       />
     );
   } else {
@@ -199,7 +260,6 @@ function ArtiWall() {
         onWakeRequested={handleWakeRequested}
         onWakeAnimationComplete={handleWakeAnimationComplete}
         onPrompt={handlePrompt}
-        voice={voice}
       />
     );
   }

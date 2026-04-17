@@ -2,7 +2,7 @@ import { useEffect, useLayoutEffect, useRef, useState } from "react";
 import gsap from "gsap";
 import { ArrowUp, Mic, Sparkles, X } from "lucide-react";
 import { cn } from "@/lib/utils";
-import { useArtiVoice, type ArtiVoiceCallbacks } from "@/hooks/useArtiVoice";
+import { useArtiVoiceContext } from "@/hooks/ArtiVoiceContext";
 
 interface Props {
   onSubmit: (text: string) => void;
@@ -13,11 +13,6 @@ interface Props {
    * footer position.
    */
   className?: string;
-  /**
-   * Voice callbacks. When provided, the mic button starts an ElevenLabs
-   * conversational session and the orb listens for "Hey Arti".
-   */
-  voice?: ArtiVoiceCallbacks;
 }
 
 /**
@@ -33,7 +28,7 @@ interface Props {
  *   3. Voice + keyboard inputs are mutually exclusive UX-wise; this is the
  *      single surface that hosts both.
  */
-export function ArtiInvoker({ onSubmit, placeholder, suggestions = [], className, voice }: Props) {
+export function ArtiInvoker({ onSubmit, placeholder, suggestions = [], className }: Props) {
   const [open, setOpen] = useState(false);
   const [value, setValue] = useState("");
 
@@ -42,18 +37,10 @@ export function ArtiInvoker({ onSubmit, placeholder, suggestions = [], className
   const inputRef = useRef<HTMLInputElement>(null);
   const tlRef = useRef<gsap.core.Timeline | null>(null);
 
-  /* ---------------- voice (ElevenLabs + wake word) ---------------- */
-  // Always call the hook (rules of hooks); pass no-op callbacks if voice
-  // wasn't provided so the hook stays inert.
-  const noopVoice: ArtiVoiceCallbacks = {
-    onGoHome: () => {},
-    onShowCases: () => {},
-    onOpenCase: () => {},
-    onSleep: () => {},
-  };
-  const v = useArtiVoice(voice ?? noopVoice);
-  const voiceEnabled = !!voice;
-  const listening = v.isConnected || v.sessionStatus === "connecting";
+  /* ---------------- voice (consumed from shared provider) ---------------- */
+  const v = useArtiVoiceContext();
+  // (`voiceEnabled` previously tracked prop-based opt-in; now derived from `!!v`.)
+  const listening = !!v && (v.isConnected || v.sessionStatus === "connecting");
 
   /* ---------------- keyboard shortcut: "/" to invoke ---------------- */
   useEffect(() => {
@@ -134,7 +121,7 @@ export function ArtiInvoker({ onSubmit, placeholder, suggestions = [], className
   };
 
   const toggleListening = () => {
-    if (!voiceEnabled) return;
+    if (!v) return;
     if (v.isConnected || v.sessionStatus === "connecting") {
       void v.endSession();
     } else {
@@ -144,13 +131,13 @@ export function ArtiInvoker({ onSubmit, placeholder, suggestions = [], className
 
   // Auto-start the wake-word listener when voice is enabled.
   useEffect(() => {
-    if (!voiceEnabled || !v.wakeWordSupported) return;
+    if (!v || !v.wakeWordSupported) return;
     if (v.isConnected) {
       v.stopWakeWord();
     } else {
       v.startWakeWord();
     }
-  }, [voiceEnabled, v.isConnected, v.wakeWordSupported, v]);
+  }, [v?.isConnected, v?.wakeWordSupported, v]);
 
   return (
     <div className={cn("pointer-events-none absolute bottom-0 right-0 z-40 p-6", className)}>
@@ -169,11 +156,11 @@ export function ArtiInvoker({ onSubmit, placeholder, suggestions = [], className
           <span
             className={cn(
               "pointer-events-none absolute inset-0 rounded-full border",
-              v.isAgentSpeaking
+              v?.isAgentSpeaking
                 ? "border-primary/70 [animation:ripple-pulse_0.9s_ease-out_infinite]"
-                : v.isConnected
+                : v?.isConnected
                   ? "border-primary/55 [animation:ripple-pulse_1.6s_ease-out_infinite]"
-                  : v.wakeListening
+                  : v?.wakeListening
                     ? "border-primary/40 [animation:ripple-pulse_2s_ease-out_infinite]"
                     : "border-primary/30 [animation:ripple-pulse_3s_ease-out_infinite]",
             )}
@@ -186,11 +173,11 @@ export function ArtiInvoker({ onSubmit, placeholder, suggestions = [], className
           <Sparkles className="relative h-5 w-5 text-white" strokeWidth={1.8} />
           {/* Hint */}
           <span className="pointer-events-none absolute -top-8 right-0 whitespace-nowrap rounded-full border border-border bg-surface/90 px-2.5 py-1 font-mono text-[9px] uppercase tracking-[0.25em] text-muted-foreground opacity-0 backdrop-blur transition-opacity group-hover:opacity-100">
-            {v.isAgentSpeaking
+            {v?.isAgentSpeaking
               ? "Arti speaking"
-              : v.isConnected
+              : v?.isConnected
                 ? "Listening · tap to end"
-                : v.wakeListening
+                : v?.wakeListening
                   ? "Say “Hey Arti”"
                   : "Ask Arti · /"}
           </span>

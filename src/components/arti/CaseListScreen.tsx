@@ -2,7 +2,7 @@ import { ArrowLeft, Clock, MapPin, User } from "lucide-react";
 import { Sidebar } from "./Sidebar";
 import { TopBar } from "./TopBar";
 import { ArtiInvoker } from "./ArtiInvoker";
-import type { ArtiVoiceCallbacks } from "@/hooks/useArtiVoice";
+
 import { TODAY_CASES, STATUS_META, type CaseItem } from "./cases";
 import { cn } from "@/lib/utils";
 
@@ -14,7 +14,6 @@ interface Props {
   onBackHome: () => void;
   onSelectCase: (c: CaseItem) => void;
   onPrompt: (text: string) => void;
-  voice?: ArtiVoiceCallbacks;
 }
 
 /**
@@ -30,7 +29,6 @@ export function CaseListScreen({
   onBackHome,
   onSelectCase,
   onPrompt,
-  voice,
 }: Props) {
   const today = new Date().toLocaleDateString(undefined, {
     weekday: "long",
@@ -98,7 +96,6 @@ export function CaseListScreen({
         <ArtiInvoker
           placeholder="Ask Arti to open a case…"
           onSubmit={onPrompt}
-          voice={voice}
           suggestions={["Open Marcus Chen's case", "Next case", "Go home"]}
         />
       </div>
