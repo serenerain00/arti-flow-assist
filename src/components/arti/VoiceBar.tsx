@@ -1,48 +1,112 @@
-import { Mic, MicOff, Sparkles } from "lucide-react";
-import { useEffect, useState } from "react";
+import { Mic, MicOff, Sparkles, Loader2 } from "lucide-react";
+import { useCallback, useEffect, useRef, useState } from "react";
+import { useConversation } from "@elevenlabs/react";
 import { cn } from "@/lib/utils";
+import { toast } from "sonner";
+import type { InstrumentId, TimeOutId } from "./AwakeDashboard";
+
+interface VoiceTools {
+  openHowToVideo: (title?: string) => string;
+  toggleTimeOutItem: (id: TimeOutId) => string;
+  adjustInstrumentCount: (item: InstrumentId, delta: number) => string;
+  toggleSterileCockpit: (enabled?: boolean) => string;
+  dismissAlert: (index: number) => string;
+}
 
 interface Props {
-  onCommand: (cmd: string) => void;
+  staffName: string;
+  tools: VoiceTools;
 }
 
 const SUGGESTED = [
   '"Show me the rotator cuff repair video"',
-  '"Start the time-out"',
-  '"What is the current sponge count?"',
-  '"Page Dr. Patel"',
+  '"Check off patient identity in the time-out"',
+  '"Add two needles to the count"',
+  '"Sterile cockpit on"',
 ];
 
 /**
- * Always-listening voice bar. Mic toggle simulates wake-word capture;
- * preset prompts demonstrate intent → action flow without real STT.
+ * Live voice bar powered by ElevenLabs Conversational AI (WebRTC).
+ * Token is fetched server-side from /api/elevenlabs/token to keep the API key secret.
+ * Client tools mutate dashboard state on agent request.
  */
-export function VoiceBar({ onCommand }: Props) {
-  const [listening, setListening] = useState(true);
-  const [transcript, setTranscript] = useState("");
-  const [thinking, setThinking] = useState(false);
+export function VoiceBar({ staffName, tools }: Props) {
   const [hint, setHint] = useState(0);
+  const [connecting, setConnecting] = useState(false);
+  const [transcript, setTranscript] = useState("");
+  const toolsRef = useRef(tools);
+  toolsRef.current = tools;
+
+  const conversation = useConversation({
+    onConnect: () => toast.success("Arti is listening"),
+    onDisconnect: () => setTranscript(""),
+    onError: (err) => {
+      console.error("[Arti] conversation error", err);
+      toast.error("Voice connection error");
+    },
+    onMessage: (msg: { source?: string; message?: string }) => {
+      // Surface latest user transcript / agent message
+      if (msg?.message) setTranscript(msg.message);
+    },
+    clientTools: {
+      openHowToVideo: (params: { title?: string }) =>
+        toolsRef.current.openHowToVideo(params?.title),
+      toggleTimeOutItem: (params: { id: TimeOutId }) =>
+        toolsRef.current.toggleTimeOutItem(params.id),
+      adjustInstrumentCount: (params: { item: InstrumentId; delta: number }) =>
+        toolsRef.current.adjustInstrumentCount(params.item, Number(params.delta) || 0),
+      toggleSterileCockpit: (params: { enabled?: boolean }) =>
+        toolsRef.current.toggleSterileCockpit(params?.enabled),
+      dismissAlert: (params: { index: number }) =>
+        toolsRef.current.dismissAlert(Number(params.index) || 0),
+    },
+  });
+
+  const isConnected = conversation.status === "connected";
+  const isThinking = isConnected && !conversation.isSpeaking && !transcript;
 
   useEffect(() => {
-    if (!listening) return;
+    if (isConnected) return;
     const i = setInterval(() => setHint((h) => (h + 1) % SUGGESTED.length), 4000);
     return () => clearInterval(i);
-  }, [listening]);
+  }, [isConnected]);
 
-  const runCommand = (text: string) => {
-    setTranscript(text);
-    setThinking(true);
-    setTimeout(() => {
-      setThinking(false);
-      onCommand(text);
-      setTimeout(() => setTranscript(""), 2400);
-    }, 1100);
-  };
+  const start = useCallback(async () => {
+    setConnecting(true);
+    try {
+      await navigator.mediaDevices.getUserMedia({ audio: true });
+
+      const res = await fetch("/api/elevenlabs/token");
+      if (!res.ok) throw new Error(`Token request failed: ${res.status}`);
+      const { token, error } = (await res.json()) as { token?: string; error?: string };
+      if (!token) throw new Error(error ?? "No token received");
+
+      await conversation.startSession({
+        conversationToken: token,
+        connectionType: "webrtc",
+        overrides: {
+          agent: {
+            firstMessage: `Good morning, ${staffName.split(" ")[0]}. I'm here whenever you need me.`,
+          },
+        },
+      });
+    } catch (err) {
+      console.error("[Arti] failed to start session", err);
+      toast.error(
+        err instanceof Error ? err.message : "Could not start voice session"
+      );
+    } finally {
+      setConnecting(false);
+    }
+  }, [conversation, staffName]);
+
+  const stop = useCallback(async () => {
+    await conversation.endSession();
+  }, [conversation]);
 
   return (
     <div className="glass relative flex items-center gap-4 overflow-hidden rounded-2xl px-5 py-4">
-      {/* listening scan line */}
-      {listening && !transcript && (
+      {isConnected && !transcript && !conversation.isSpeaking && (
         <span
           aria-hidden
           className="scan-line pointer-events-none absolute inset-y-0 left-0 w-32 bg-gradient-to-r from-transparent via-primary/15 to-transparent"
@@ -50,20 +114,27 @@ export function VoiceBar({ onCommand }: Props) {
       )}
 
       <button
-        onClick={() => setListening((l) => !l)}
+        onClick={isConnected ? stop : start}
+        disabled={connecting}
         className={cn(
           "flex h-12 w-12 shrink-0 items-center justify-center rounded-full transition-colors",
-          listening
+          isConnected
             ? "bg-primary text-primary-foreground glow-primary"
-            : "bg-surface-3 text-muted-foreground"
+            : "bg-surface-3 text-muted-foreground hover:bg-surface-3/80",
+          connecting && "opacity-60"
         )}
-        aria-label={listening ? "Mute Arti" : "Unmute Arti"}
+        aria-label={isConnected ? "End conversation with Arti" : "Wake Arti"}
       >
-        {listening ? <Mic className="h-5 w-5" /> : <MicOff className="h-5 w-5" />}
+        {connecting ? (
+          <Loader2 className="h-5 w-5 animate-spin" />
+        ) : isConnected ? (
+          <Mic className="h-5 w-5" />
+        ) : (
+          <MicOff className="h-5 w-5" />
+        )}
       </button>
 
       <div className="flex min-w-0 flex-1 items-center gap-4">
-        {/* waveform */}
         <div className="flex h-8 items-center gap-[3px]" aria-hidden>
           {Array.from({ length: 18 }).map((_, i) => (
             <span
@@ -72,47 +143,47 @@ export function VoiceBar({ onCommand }: Props) {
               style={{
                 height: "100%",
                 animationDelay: `${i * 0.07}s`,
-                animationPlayState: listening && !thinking ? "running" : "paused",
-                opacity: listening ? 1 : 0.25,
+                animationPlayState:
+                  isConnected && conversation.isSpeaking ? "running" : "paused",
+                opacity: isConnected ? 1 : 0.25,
               }}
             />
           ))}
         </div>
 
         <div className="min-w-0 flex-1">
-          {thinking ? (
+          {isThinking ? (
             <div className="flex items-center gap-2 font-mono text-sm text-primary">
               <Sparkles className="h-3.5 w-3.5 animate-pulse" />
-              Arti is thinking…
+              Arti is listening…
             </div>
           ) : transcript ? (
             <div className="truncate text-sm font-light text-foreground">{transcript}</div>
-          ) : listening ? (
+          ) : isConnected ? (
             <div className="text-sm font-light text-muted-foreground">
-              Try saying{" "}
-              <span
-                key={hint}
-                className="text-foreground/80 animate-fade-in"
-              >
+              {conversation.isSpeaking ? "Arti is speaking…" : "Listening…"}
+            </div>
+          ) : (
+            <div className="text-sm font-light text-muted-foreground">
+              Tap the mic to wake Arti.{" "}
+              <span key={hint} className="text-foreground/70 animate-fade-in">
                 {SUGGESTED[hint]}
               </span>
             </div>
-          ) : (
-            <div className="text-sm text-muted-foreground/60">Microphone muted</div>
           )}
         </div>
       </div>
 
-      <div className="hidden gap-2 lg:flex">
-        {SUGGESTED.slice(0, 2).map((s) => (
-          <button
-            key={s}
-            onClick={() => runCommand(s.replace(/"/g, ""))}
-            className="rounded-full border border-border bg-surface-2/60 px-3 py-1.5 text-xs font-light text-muted-foreground transition-colors hover:border-primary/40 hover:text-foreground"
-          >
-            {s}
-          </button>
-        ))}
+      <div className="hidden items-center gap-2 lg:flex">
+        <span className="font-mono text-[10px] uppercase tracking-wider text-muted-foreground">
+          {isConnected ? "Live" : "Idle"}
+        </span>
+        <span
+          className={cn(
+            "h-2 w-2 rounded-full",
+            isConnected ? "bg-success animate-pulse" : "bg-muted-foreground/40"
+          )}
+        />
       </div>
     </div>
   );
