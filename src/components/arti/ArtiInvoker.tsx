@@ -164,8 +164,20 @@ export function ArtiInvoker({ onSubmit, placeholder, suggestions = [], className
           className="pointer-events-auto group relative flex h-14 w-14 items-center justify-center rounded-full border border-border bg-surface/80 backdrop-blur-xl transition-shadow hover:shadow-[var(--shadow-glow)]"
           style={{ background: "linear-gradient(135deg, var(--surface), var(--surface-2))" }}
         >
-          {/* Pulse ring */}
-          <span className="pointer-events-none absolute inset-0 rounded-full border border-primary/30 [animation:ripple-pulse_3s_ease-out_infinite]" />
+          {/* Pulse ring — speeds up while wake word is listening, glows
+              while the agent is connected, fastest while it's speaking. */}
+          <span
+            className={cn(
+              "pointer-events-none absolute inset-0 rounded-full border",
+              v.isAgentSpeaking
+                ? "border-primary/70 [animation:ripple-pulse_0.9s_ease-out_infinite]"
+                : v.isConnected
+                  ? "border-primary/55 [animation:ripple-pulse_1.6s_ease-out_infinite]"
+                  : v.wakeListening
+                    ? "border-primary/40 [animation:ripple-pulse_2s_ease-out_infinite]"
+                    : "border-primary/30 [animation:ripple-pulse_3s_ease-out_infinite]",
+            )}
+          />
           {/* Inner orb */}
           <span
             className="absolute inset-1.5 rounded-full"
@@ -174,7 +186,13 @@ export function ArtiInvoker({ onSubmit, placeholder, suggestions = [], className
           <Sparkles className="relative h-5 w-5 text-white" strokeWidth={1.8} />
           {/* Hint */}
           <span className="pointer-events-none absolute -top-8 right-0 whitespace-nowrap rounded-full border border-border bg-surface/90 px-2.5 py-1 font-mono text-[9px] uppercase tracking-[0.25em] text-muted-foreground opacity-0 backdrop-blur transition-opacity group-hover:opacity-100">
-            Ask Arti · /
+            {v.isAgentSpeaking
+              ? "Arti speaking"
+              : v.isConnected
+                ? "Listening · tap to end"
+                : v.wakeListening
+                  ? "Say “Hey Arti”"
+                  : "Ask Arti · /"}
           </span>
         </button>
 
