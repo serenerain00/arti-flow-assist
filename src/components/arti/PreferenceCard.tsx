@@ -7,8 +7,11 @@ import {
   Stethoscope,
   ChevronDown,
   ChevronUp,
+  LayoutGrid,
 } from "lucide-react";
 import { useState } from "react";
+import surgicalTableOverview from "@/assets/surgical-table-overview.jpg";
+import surgicalTableMayo from "@/assets/surgical-table-mayo.jpg";
 
 // Demo data — in production this comes from the surgeon's saved preference card
 const PREF_CARD = {
