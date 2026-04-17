@@ -22,9 +22,9 @@ function ArtiWall() {
 
   // Demo persona — in production sourced from RFID badge / OR scheduling
   const staff = {
-    name: "Nora Quinn",
+    name: "Melissa Quinn",
     role: "Circulating Nurse",
-    initials: "NQ",
+    initials: "MQ",
   };
 
   return awake ? (

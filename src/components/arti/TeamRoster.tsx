@@ -8,7 +8,7 @@ import { cn } from "@/lib/utils";
 const TEAM = [
   { name: "Dr. Anika Patel", role: "Surgeon", initials: "AP", scrubbed: true },
   { name: "Dr. Liam Reyes", role: "Anesthesia", initials: "LR", scrubbed: true },
-  { name: "Nora Quinn", role: "Circulator", initials: "NQ", scrubbed: true },
+  { name: "Melissa Quinn", role: "Circulator", initials: "MQ", scrubbed: true },
   { name: "Sam Okafor", role: "Scrub Tech", initials: "SO", scrubbed: true },
   { name: "Maya Chen", role: "Rep · Arthrex", initials: "MC", scrubbed: false },
 ];
