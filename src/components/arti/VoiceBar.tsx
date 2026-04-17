@@ -92,6 +92,14 @@ export function VoiceBar({ staffName, tools }: Props) {
       conversation.startSession({
         signedUrl,
         connectionType: "websocket",
+        overrides: {
+          agent: {
+            firstMessage: `Good morning, ${staffName.split(" ")[0]}. I'm here whenever you need me.`,
+          },
+          tts: {
+            voiceId: "6sFKzaJr574YWVu4UuJF",
+          },
+        },
       });
     } catch (err) {
       console.error("[Arti] failed to start session", err);
