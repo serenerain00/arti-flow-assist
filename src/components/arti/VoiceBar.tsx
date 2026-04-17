@@ -81,7 +81,9 @@ export function VoiceBar({ staffName, tools }: Props) {
       const { token, error } = (await res.json()) as { token?: string; error?: string };
       if (!token) throw new Error(error ?? "No token received");
 
-      await conversation.startSession({
+      // Note: startSession returns void; the SDK transitions `status` to
+      // "connected" asynchronously. Errors arrive via the onError callback.
+      conversation.startSession({
         conversationToken: token,
         connectionType: "webrtc",
         overrides: {
@@ -98,13 +100,17 @@ export function VoiceBar({ staffName, tools }: Props) {
       toast.error(
         err instanceof Error ? err.message : "Could not start voice session"
       );
-    } finally {
       setConnecting(false);
     }
   }, [conversation, staffName]);
 
-  const stop = useCallback(async () => {
-    await conversation.endSession();
+  // Once the SDK reports connected, clear the connecting state.
+  useEffect(() => {
+    if (conversation.status === "connected") setConnecting(false);
+  }, [conversation.status]);
+
+  const stop = useCallback(() => {
+    conversation.endSession();
   }, [conversation]);
 
   return (
