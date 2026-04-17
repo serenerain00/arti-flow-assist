@@ -10,6 +10,7 @@ import { HowToVideoModal } from "./HowToVideoModal";
 import { QuadView, type QuadPanelId } from "./QuadView";
 import { PreferenceCard } from "./PreferenceCard";
 import { PatientDetailsModal } from "./PatientDetailsModal";
+import { ArtiInvoker } from "./ArtiInvoker";
 import { ArrowLeft, LayoutGrid } from "lucide-react";
 import type { CaseItem } from "./cases";
 
@@ -22,6 +23,8 @@ interface Props {
   activeCase?: CaseItem;
   /** When provided, shows a "back to cases" affordance. */
   onBackToCases?: () => void;
+  /** Free-text prompt handler (drives navigation + voice). */
+  onPrompt: (text: string) => void;
 }
 
 export type TimeOutId = "patient" | "site" | "procedure" | "allergies";
@@ -40,6 +43,7 @@ export function AwakeDashboard({
   initials,
   onSleep,
   onBackToCases,
+  onPrompt,
 }: Props) {
   const [cockpit, setCockpit] = useState(false);
   const [howToOpen, setHowToOpen] = useState(false);
@@ -162,6 +166,12 @@ export function AwakeDashboard({
         adjustInstrumentCount={adjustInstrumentCount}
         dismissedAlerts={dismissedAlerts}
         dismissAlert={dismissAlert}
+      />
+
+      <ArtiInvoker
+        placeholder="Ask Arti about this case…"
+        onSubmit={onPrompt}
+        suggestions={["Show team", "Read time-out", "Back to cases"]}
       />
     </div>
   );
