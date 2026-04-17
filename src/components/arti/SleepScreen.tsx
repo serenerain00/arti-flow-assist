@@ -33,13 +33,14 @@ export function SleepScreen({ onWake, staffName }: Props) {
   }, []);
 
   useEffect(() => {
-    if (phase !== "waking") return;
-    const t1 = setTimeout(() => setPhase("greeting"), 1100);
-    const t2 = setTimeout(() => onWake(), 5200);
-    return () => {
-      clearTimeout(t1);
-      clearTimeout(t2);
-    };
+    if (phase === "waking") {
+      const t = setTimeout(() => setPhase("greeting"), 1100);
+      return () => clearTimeout(t);
+    }
+    if (phase === "greeting") {
+      const t = setTimeout(() => onWake(), 4100);
+      return () => clearTimeout(t);
+    }
   }, [phase, onWake]);
 
   const greeting = getGreeting(time ?? undefined);
