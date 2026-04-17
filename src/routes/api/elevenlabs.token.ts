@@ -4,14 +4,13 @@ import "@tanstack/react-start";
 const AGENT_ID = "agent_9301kpe2x3y2e31a8wwvsbxcm9nh";
 
 /**
- * Issues a single-use WebRTC conversation token for the ElevenLabs agent.
+ * Issues a signed WebSocket URL for the ElevenLabs agent.
  * Keeps ELEVENLABS_API_KEY server-only.
  */
 export const Route = createFileRoute("/api/elevenlabs/token")({
   server: {
     handlers: {
       GET: async () => {
-
         const apiKey = process.env.ELEVENLABS_API_KEY;
         if (!apiKey) {
           return new Response(
@@ -21,20 +20,22 @@ export const Route = createFileRoute("/api/elevenlabs/token")({
         }
 
         const res = await fetch(
-          `https://api.elevenlabs.io/v1/convai/conversation/token?agent_id=${AGENT_ID}`,
+          `https://api.elevenlabs.io/v1/convai/conversation/get-signed-url?agent_id=${AGENT_ID}`,
           { headers: { "xi-api-key": apiKey } }
         );
 
         if (!res.ok) {
           const err = await res.text();
           return new Response(
-            JSON.stringify({ error: `ElevenLabs token request failed: ${res.status} ${err}` }),
+            JSON.stringify({
+              error: `ElevenLabs signed URL request failed: ${res.status} ${err}`,
+            }),
             { status: 502, headers: { "Content-Type": "application/json" } }
           );
         }
 
-        const { token } = (await res.json()) as { token: string };
-        return new Response(JSON.stringify({ token }), {
+        const { signed_url } = (await res.json()) as { signed_url: string };
+        return new Response(JSON.stringify({ signedUrl: signed_url }), {
           status: 200,
           headers: { "Content-Type": "application/json" },
         });

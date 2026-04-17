@@ -78,14 +78,17 @@ export function VoiceBar({ staffName, tools }: Props) {
 
       const res = await fetch("/api/elevenlabs/token");
       if (!res.ok) throw new Error(`Token request failed: ${res.status}`);
-      const { token, error } = (await res.json()) as { token?: string; error?: string };
-      if (!token) throw new Error(error ?? "No token received");
+      const { signedUrl, error } = (await res.json()) as {
+        signedUrl?: string;
+        error?: string;
+      };
+      if (!signedUrl) throw new Error(error ?? "No signed URL received");
 
       // Note: startSession returns void; the SDK transitions `status` to
       // "connected" asynchronously. Errors arrive via the onError callback.
       conversation.startSession({
-        conversationToken: token,
-        connectionType: "webrtc",
+        signedUrl,
+        connectionType: "websocket",
         overrides: {
           agent: {
             firstMessage: `Good morning, ${staffName.split(" ")[0]}. I'm here whenever you need me.`,
