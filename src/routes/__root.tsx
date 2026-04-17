@@ -69,9 +69,5 @@ function RootShell({ children }: { children: React.ReactNode }) {
 }
 
 function RootComponent() {
-  return (
-    <ConversationProvider>
-      <Outlet />
-    </ConversationProvider>
-  );
+  return <Outlet />;
 }
