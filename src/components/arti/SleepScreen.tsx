@@ -23,9 +23,10 @@ interface Props {
  */
 export function SleepScreen({ onWake, staffName }: Props) {
   const [phase, setPhase] = useState<"asleep" | "waking" | "greeting">("asleep");
-  const [time, setTime] = useState(new Date());
+  const [time, setTime] = useState<Date | null>(null);
 
   useEffect(() => {
+    setTime(new Date());
     const i = setInterval(() => setTime(new Date()), 1000 * 30);
     return () => clearInterval(i);
   }, []);
