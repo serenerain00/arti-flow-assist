@@ -1,5 +1,5 @@
 import { createFileRoute } from "@tanstack/react-router";
-import { useState } from "react";
+import { useCallback, useState } from "react";
 import { SleepScreen } from "@/components/arti/SleepScreen";
 import { AwakeDashboard } from "@/components/arti/AwakeDashboard";
 
@@ -17,8 +17,19 @@ export const Route = createFileRoute("/")({
   }),
 });
 
+/**
+ * Top-level state machine for the Arti wall:
+ *   sleep → waking → greeting → dashboard
+ *
+ * Each transition is one-directional and triggered by an explicit
+ * event. The dashboard never auto-restarts the wake flow; only an
+ * explicit "go to sleep" returns to the sleep state, which resets
+ * the cycle.
+ */
+type ArtiPhase = "sleep" | "waking" | "greeting" | "dashboard";
+
 function ArtiWall() {
-  const [awake, setAwake] = useState(false);
+  const [phase, setPhase] = useState<ArtiPhase>("sleep");
 
   // Demo persona — in production sourced from RFID badge / OR scheduling
   const staff = {
@@ -27,14 +38,40 @@ function ArtiWall() {
     initials: "MQ",
   };
 
-  return awake ? (
-    <AwakeDashboard
+  const handleWakeRequested = useCallback(() => {
+    setPhase((p) => (p === "sleep" ? "waking" : p));
+  }, []);
+
+  const handleWakeAnimationComplete = useCallback(() => {
+    setPhase((p) => (p === "waking" ? "greeting" : p));
+  }, []);
+
+  const handleGreetingComplete = useCallback(() => {
+    setPhase((p) => (p === "greeting" ? "dashboard" : p));
+  }, []);
+
+  const handleSleep = useCallback(() => {
+    setPhase("sleep");
+  }, []);
+
+  if (phase === "dashboard") {
+    return (
+      <AwakeDashboard
+        staffName={staff.name}
+        staffRole={staff.role}
+        initials={staff.initials}
+        onSleep={handleSleep}
+      />
+    );
+  }
+
+  return (
+    <SleepScreen
+      phase={phase}
       staffName={staff.name}
-      staffRole={staff.role}
-      initials={staff.initials}
-      onSleep={() => setAwake(false)}
+      onWakeRequested={handleWakeRequested}
+      onWakeAnimationComplete={handleWakeAnimationComplete}
+      onGreetingComplete={handleGreetingComplete}
     />
-  ) : (
-    <SleepScreen onWake={() => setAwake(true)} staffName={staff.name} />
   );
 }
