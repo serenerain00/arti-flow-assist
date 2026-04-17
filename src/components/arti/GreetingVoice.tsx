@@ -67,7 +67,7 @@ export function GreetingVoice({ staffName, greeting, onGoToDashboard }: Props) {
         connectionType: "websocket",
         overrides: {
           agent: {
-            firstMessage: `${greeting}, ${firstName}. Today's first case begins in 32 minutes, and I have your pre-op plan ready — just say "show me the dashboard" whenever you'd like to begin.`,
+            firstMessage: `${greeting}, ${firstName}.`,
           },
           tts: { voiceId: "6sFKzaJr574YWVu4UuJF" },
         },
