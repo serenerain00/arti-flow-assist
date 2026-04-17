@@ -49,16 +49,26 @@ export function VoiceBar({ staffName, tools }: Props) {
       if (msg?.message) setTranscript(msg.message);
     },
     clientTools: {
-      openHowToVideo: (params: { title?: string }) =>
-        toolsRef.current.openHowToVideo(params?.title),
-      toggleTimeOutItem: (params: { id: TimeOutId }) =>
-        toolsRef.current.toggleTimeOutItem(params.id),
-      adjustInstrumentCount: (params: { item: InstrumentId; delta: number }) =>
-        toolsRef.current.adjustInstrumentCount(params.item, Number(params.delta) || 0),
-      toggleSterileCockpit: (params: { enabled?: boolean }) =>
-        toolsRef.current.toggleSterileCockpit(params?.enabled),
-      dismissAlert: (params: { index: number }) =>
-        toolsRef.current.dismissAlert(Number(params.index) || 0),
+      openHowToVideo: (params: { title?: string }) => {
+        console.log("[Arti tool] openHowToVideo", params);
+        return toolsRef.current.openHowToVideo(params?.title);
+      },
+      toggleTimeOutItem: (params: { id: TimeOutId }) => {
+        console.log("[Arti tool] toggleTimeOutItem", params);
+        return toolsRef.current.toggleTimeOutItem(params.id);
+      },
+      adjustInstrumentCount: (params: { item: InstrumentId; delta: number }) => {
+        console.log("[Arti tool] adjustInstrumentCount", params);
+        return toolsRef.current.adjustInstrumentCount(params.item, Number(params.delta) || 0);
+      },
+      toggleSterileCockpit: (params: { enabled?: boolean }) => {
+        console.log("[Arti tool] toggleSterileCockpit", params);
+        return toolsRef.current.toggleSterileCockpit(params?.enabled);
+      },
+      dismissAlert: (params: { index: number }) => {
+        console.log("[Arti tool] dismissAlert", params);
+        return toolsRef.current.dismissAlert(Number(params.index) || 0);
+      },
     },
   });
 
