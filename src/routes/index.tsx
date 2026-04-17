@@ -240,7 +240,6 @@ function ArtiWall({ callbacksRef }: ArtiWallProps) {
         onBackHome={() => setPhase("home")}
         onSelectCase={handleSelectCase}
         onPrompt={handlePrompt}
-        voice={voice}
       />
     );
   } else if (phase === "home") {
