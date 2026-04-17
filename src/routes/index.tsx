@@ -1,5 +1,6 @@
 import { createFileRoute } from "@tanstack/react-router";
 import { useCallback, useState } from "react";
+import { AnimatePresence, motion } from "framer-motion";
 import { SleepScreen } from "@/components/arti/SleepScreen";
 import { HomeDashboard } from "@/components/arti/HomeDashboard";
 import { CaseListScreen } from "@/components/arti/CaseListScreen";
