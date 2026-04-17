@@ -1,5 +1,6 @@
 import { useEffect, useState } from "react";
 import { RippleCanvas } from "./RippleCanvas";
+import { PromptBar } from "./PromptBar";
 
 function getGreeting(d?: Date | null) {
   if (!d) return "Hello";
@@ -15,8 +16,8 @@ interface Props {
   staffName: string;
   onWakeRequested: () => void;
   onWakeAnimationComplete: () => void;
-  /** Tap on the greeting screen advances to the dashboard. */
-  onGoToDashboard: () => void;
+  /** Free-form prompt submitted from the greeting screen. */
+  onPrompt: (text: string) => void;
 }
 
 /**
