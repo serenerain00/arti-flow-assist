@@ -70,36 +70,40 @@ export function ArtiInvoker({ onSubmit, placeholder, suggestions = [], className
     tlRef.current?.kill();
 
     if (open) {
-      // Initial state — collapsed pill, transparent
+      // Measure the panel's natural full width, then animate from orb width → full
+      gsap.set(panel, { width: "auto", pointerEvents: "auto", opacity: 0 });
+      const fullWidth = panel.getBoundingClientRect().width;
+
       gsap.set(panel, {
-        opacity: 0,
-        y: 24,
-        scale: 0.6,
-        transformOrigin: "bottom right",
-        pointerEvents: "auto",
+        opacity: 1,
+        width: 56, // matches orb width (h-14 / w-14)
+        overflow: "hidden",
       });
-      gsap.set(orb, { opacity: 1, scale: 1 });
 
       const tl = gsap.timeline({ defaults: { ease: "expo.out" } });
-      tl.to(orb, { opacity: 0, scale: 0.6, duration: 0.25, ease: "power2.in" }, 0)
-        .to(panel, { opacity: 1, duration: 0.35 }, 0.05)
-        .to(panel, { y: 0, scale: 1, duration: 0.85 }, 0.05)
+      tl.to(orb, { opacity: 0, scale: 0.6, duration: 0.2, ease: "power2.in" }, 0)
+        .to(panel, { width: fullWidth, duration: 0.7, ease: "expo.out" }, 0.05)
         .from(
           panel.querySelectorAll<HTMLElement>("[data-stagger]"),
-          { y: 12, opacity: 0, duration: 0.5, stagger: 0.05, ease: "power3.out" },
-          0.2,
-        );
+          { opacity: 0, duration: 0.4, stagger: 0.04, ease: "power3.out" },
+          0.35,
+        )
+        .set(panel, { overflow: "visible", width: "auto" });
       tlRef.current = tl;
 
       // Focus input after the panel is mostly in place
-      const focusT = setTimeout(() => inputRef.current?.focus(), 220);
+      const focusT = setTimeout(() => inputRef.current?.focus(), 250);
       return () => clearTimeout(focusT);
     } else {
       gsap.set(orb, { pointerEvents: "auto" });
+      const currentWidth = panel.getBoundingClientRect().width;
+      gsap.set(panel, { width: currentWidth, overflow: "hidden" });
       const tl = gsap.timeline({ defaults: { ease: "power3.inOut" } });
-      tl.to(panel, { opacity: 0, y: 16, scale: 0.7, duration: 0.3 }, 0)
+      tl.to(panel.querySelectorAll<HTMLElement>("[data-stagger] > *"), { opacity: 0, duration: 0.15 }, 0)
+        .to(panel, { width: 56, duration: 0.35, ease: "expo.inOut" }, 0.05)
+        .to(panel, { opacity: 0, duration: 0.15 }, 0.35)
         .set(panel, { pointerEvents: "none" })
-        .to(orb, { opacity: 1, scale: 1, duration: 0.4, ease: "back.out(1.6)" }, 0.1);
+        .to(orb, { opacity: 1, scale: 1, duration: 0.4, ease: "back.out(1.6)" }, 0.25);
       tlRef.current = tl;
     }
   }, [open]);
@@ -150,8 +154,8 @@ export function ArtiInvoker({ onSubmit, placeholder, suggestions = [], className
             scales in place. Anchored to bottom-right, expands leftward. */}
         <div
           ref={panelRef}
-          className="pointer-events-none absolute bottom-0 right-0 flex w-[min(36rem,calc(100vw-3rem))] flex-col items-end gap-3"
-          style={{ opacity: 0 }}
+          className="pointer-events-none absolute bottom-0 right-0 flex max-w-[calc(100vw-3rem)] flex-col items-end gap-3"
+          style={{ opacity: 0, width: "min(36rem, calc(100vw - 3rem))" }}
         >
           {suggestions.length > 0 && (
             <div className="flex flex-wrap items-center justify-center gap-2" data-stagger>
