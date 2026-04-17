@@ -1,4 +1,5 @@
 import { Outlet, Link, createRootRoute, HeadContent, Scripts } from "@tanstack/react-router";
+import { ConversationProvider } from "@elevenlabs/react";
 
 import appCss from "../styles.css?url";
 
@@ -69,6 +70,13 @@ function RootShell({ children }: { children: React.ReactNode }) {
 }
 
 function RootComponent() {
-  return <Outlet />;
+  // ConversationProvider is required by @elevenlabs/react's useConversation
+  // hook. Mounted at the root so any component (e.g. ArtiInvoker) can
+  // start/stop a voice session.
+  return (
+    <ConversationProvider>
+      <Outlet />
+    </ConversationProvider>
+  );
 }
 
