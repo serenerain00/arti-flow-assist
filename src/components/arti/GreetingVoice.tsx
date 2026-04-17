@@ -3,20 +3,26 @@ import { useConversation } from "@elevenlabs/react";
 
 interface Props {
   staffName: string;
-  /** Fires once Arti has finished speaking the greeting (or on hard timeout). */
-  onGreetingComplete?: () => void;
+  /**
+   * Fires exactly once after Arti finishes speaking the greeting,
+   * or after a hard safety timeout if the agent never responds.
+   * The parent is responsible for not re-triggering this component.
+   */
+  onGreetingComplete: () => void;
 }
 
 /**
- * Headless component that connects to ElevenLabs and lets Arti speak the
- * greeting on the wake/greeting screen — no UI of its own.
+ * Headless one-shot greeting. No UI of its own.
  *
- * Calls onGreetingComplete after Arti finishes speaking (detected via
- * isSpeaking transitioning true -> false), so the parent can transition
- * to the dashboard without cutting the audio off mid-sentence.
+ * Guarantees:
+ *  - startSession is called at most once per mount (startedRef guard)
+ *  - onGreetingComplete fires at most once (completedRef guard)
+ *  - never auto-reconnects on disconnect or error — single-shot only
+ *  - on unmount, the session is ended cleanly
  *
- * A safety timeout fires onGreetingComplete after 12s in case the agent
- * never connects or never speaks.
+ * The parent (route-level state machine) is the only thing that
+ * decides when this component mounts/unmounts, which prevents
+ * greeting loops on re-renders, modal opens, or reconnects.
  */
 export function GreetingVoice({ staffName, onGreetingComplete }: Props) {
   const startedRef = useRef(false);
@@ -28,13 +34,17 @@ export function GreetingVoice({ staffName, onGreetingComplete }: Props) {
   const complete = useCallback(() => {
     if (completedRef.current) return;
     completedRef.current = true;
-    onCompleteRef.current?.();
+    onCompleteRef.current();
   }, []);
 
   const conversation = useConversation({
     onError: (err) => {
-      console.warn("[Arti greeting] error", err);
+      console.warn("[Arti greeting] error — completing", err);
       complete();
+    },
+    onDisconnect: () => {
+      // If we disconnect before ever speaking, just move on — never retry.
+      if (!hasSpokenRef.current) complete();
     },
   });
 
@@ -52,29 +62,34 @@ export function GreetingVoice({ staffName, onGreetingComplete }: Props) {
         return;
       }
 
-      conversation.startSession({
+      await conversation.startSession({
         signedUrl,
         connectionType: "websocket",
         overrides: {
           agent: {
+            // Short, one-line, no follow-up question — Arti must not
+            // keep talking after this. The agent prompt should be
+            // configured to stay silent until spoken to.
             firstMessage: `Good morning, ${staffName.split(" ")[0]}.`,
           },
           tts: { voiceId: "6sFKzaJr574YWVu4UuJF" },
         },
       });
     } catch (err) {
-      console.warn("[Arti greeting] failed to start", err);
+      console.warn("[Arti greeting] failed to start — completing", err);
       complete();
     }
   }, [conversation, staffName, complete]);
 
   // Watch isSpeaking: once Arti has spoken and then stops, signal complete.
+  // A small tail delay prevents clipping the last syllable on unmount.
   useEffect(() => {
     if (conversation.isSpeaking) {
       hasSpokenRef.current = true;
-    } else if (hasSpokenRef.current) {
-      // Small delay so the tail of the audio isn't clipped on unmount.
-      const t = setTimeout(complete, 400);
+      return;
+    }
+    if (hasSpokenRef.current) {
+      const t = setTimeout(complete, 450);
       return () => clearTimeout(t);
     }
   }, [conversation.isSpeaking, complete]);
@@ -84,7 +99,7 @@ export function GreetingVoice({ staffName, onGreetingComplete }: Props) {
     startedRef.current = true;
     start();
 
-    // Hard safety net — if nothing happens in 12s, move on anyway.
+    // Hard safety net — if connection or speech never happens, advance anyway.
     const safety = setTimeout(complete, 12000);
 
     return () => {

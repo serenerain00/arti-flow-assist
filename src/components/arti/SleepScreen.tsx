@@ -12,19 +12,34 @@ function getGreeting(d?: Date | null) {
 }
 
 interface Props {
-  onWake: () => void;
+  /** "sleep" | "waking" | "greeting" — owned by the parent so transitions are explicit. */
+  phase: "sleep" | "waking" | "greeting";
   staffName: string;
+  /** User asked to wake Arti (tap / wake-word). Parent decides whether to honor. */
+  onWakeRequested: () => void;
+  /** Wake ripple animation has played enough — parent advances to greeting. */
+  onWakeAnimationComplete: () => void;
+  /** Greeting playback finished — parent advances to dashboard. */
+  onGreetingComplete: () => void;
 }
 
 /**
- * Ambient sleep state. A single tap/click anywhere wakes Arti.
- * Sequence:
- *   1. asleep — gentle ripples, faint "ARTI" wordmark, time
- *   2. waking — ripple expands, greeting types in
- *   3. wake complete -> onWake() fires after greeting settles
+ * Ambient sleep state. Owns only its own clock & UI; phase comes from
+ * the parent route so we can never accidentally loop sleep → wake → sleep
+ * from local state.
+ *
+ * Phases:
+ *   1. sleep    — gentle ripples, faint wordmark, time. Voice OFF.
+ *   2. waking   — ripple expands; after 1.1s parent advances to greeting.
+ *   3. greeting — Arti speaks once, then parent advances to dashboard.
  */
-export function SleepScreen({ onWake, staffName }: Props) {
-  const [phase, setPhase] = useState<"asleep" | "waking" | "greeting">("asleep");
+export function SleepScreen({
+  phase,
+  staffName,
+  onWakeRequested,
+  onWakeAnimationComplete,
+  onGreetingComplete,
+}: Props) {
   const [time, setTime] = useState<Date | null>(null);
 
   useEffect(() => {
@@ -33,15 +48,12 @@ export function SleepScreen({ onWake, staffName }: Props) {
     return () => clearInterval(i);
   }, []);
 
+  // Wake animation runs for ~1.1s then we hand off to greeting.
   useEffect(() => {
-    if (phase === "waking") {
-      const t = setTimeout(() => setPhase("greeting"), 1100);
-      return () => clearTimeout(t);
-    }
-    // Note: phase "greeting" no longer auto-advances on a fixed timer.
-    // GreetingVoice fires onGreetingComplete when Arti finishes speaking
-    // (with a 12s safety net), which then triggers onWake.
-  }, [phase]);
+    if (phase !== "waking") return;
+    const t = setTimeout(onWakeAnimationComplete, 1100);
+    return () => clearTimeout(t);
+  }, [phase, onWakeAnimationComplete]);
 
   const greeting = getGreeting(time ?? undefined);
   const timeStr = time
@@ -51,11 +63,11 @@ export function SleepScreen({ onWake, staffName }: Props) {
   return (
     <button
       type="button"
-      onClick={() => phase === "asleep" && setPhase("waking")}
+      onClick={onWakeRequested}
       className="group fixed inset-0 z-50 block h-full w-full cursor-pointer overflow-hidden bg-background text-left"
       aria-label="Wake Arti"
     >
-      <RippleCanvas intensity={phase === "asleep" ? 0.6 : 2.2} />
+      <RippleCanvas intensity={phase === "sleep" ? 0.6 : 2.2} />
 
       {/* Center mark */}
       <div className="pointer-events-none absolute inset-0 flex items-center justify-center">
@@ -64,12 +76,12 @@ export function SleepScreen({ onWake, staffName }: Props) {
           <div
             className="ripple-core"
             style={{
-              transform: phase === "asleep" ? undefined : "scale(2.2)",
+              transform: phase === "sleep" ? undefined : "scale(2.2)",
               transition: "transform 1.6s cubic-bezier(.2,.8,.2,1)",
             }}
           />
           {/* expanding rings on wake */}
-          {phase !== "asleep" && (
+          {phase !== "sleep" && (
             <>
               <span
                 className="absolute left-1/2 top-1/2 -ml-[300px] -mt-[300px] h-[600px] w-[600px] rounded-full border border-primary/40"
@@ -87,7 +99,7 @@ export function SleepScreen({ onWake, staffName }: Props) {
           )}
 
           <div className="relative z-10 flex flex-col items-center gap-6 px-8 text-center">
-            {phase === "asleep" && (
+            {phase === "sleep" && (
               <>
                 <div className="font-mono text-[11px] uppercase tracking-[0.5em] text-muted-foreground/60">
                   Arti · standing by
@@ -96,7 +108,7 @@ export function SleepScreen({ onWake, staffName }: Props) {
                   {timeStr}
                 </div>
                 <div className="mt-12 font-mono text-[10px] uppercase tracking-[0.4em] text-muted-foreground/40 opacity-0 transition-opacity duration-500 group-hover:opacity-100">
-                  Tap anywhere to wake
+                  Tap anywhere or say "Hi Arti"
                 </div>
               </>
             )}
@@ -109,7 +121,16 @@ export function SleepScreen({ onWake, staffName }: Props) {
 
             {phase === "greeting" && (
               <div className="flex flex-col items-center gap-4 animate-fade-in">
-                <GreetingVoice staffName={staffName} onGreetingComplete={onWake} />
+                {/*
+                  GreetingVoice mounts ONCE for the greeting phase.
+                  It speaks a single short greeting, then calls
+                  onGreetingComplete which advances the parent to dashboard.
+                  The dashboard then mounts its own VoiceBar fresh.
+                */}
+                <GreetingVoice
+                  staffName={staffName}
+                  onGreetingComplete={onGreetingComplete}
+                />
                 <div className="font-mono text-[11px] uppercase tracking-[0.5em] text-primary">
                   Arti
                 </div>
@@ -133,7 +154,7 @@ export function SleepScreen({ onWake, staffName }: Props) {
         OR 326 · sterile field calibrated · 21.4°C
       </div>
       <div className="pointer-events-none absolute bottom-8 right-8 font-mono text-[10px] uppercase tracking-[0.3em] text-muted-foreground/50">
-        Arti v2.1 · listening
+        Arti v2.1 · {phase === "sleep" ? "standing by" : "waking"}
       </div>
     </button>
   );
