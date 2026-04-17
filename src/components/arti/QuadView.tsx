@@ -214,7 +214,7 @@ export function QuadView({
                 ) : (
                   <div
                     className="origin-top-left"
-                    style={{ transform: "scale(0.78)", width: "128.2%", height: "128.2%" }}
+                    style={{ transform: "scale(0.7)", width: "142.86%", height: "142.86%" }}
                   >
                     {renderPanel(id)}
                   </div>
