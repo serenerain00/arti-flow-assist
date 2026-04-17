@@ -156,11 +156,11 @@ export function ArtiInvoker({ onSubmit, placeholder, suggestions = [], className
           <span
             className={cn(
               "pointer-events-none absolute inset-0 rounded-full border",
-              v.isAgentSpeaking
+              v?.isAgentSpeaking
                 ? "border-primary/70 [animation:ripple-pulse_0.9s_ease-out_infinite]"
-                : v.isConnected
+                : v?.isConnected
                   ? "border-primary/55 [animation:ripple-pulse_1.6s_ease-out_infinite]"
-                  : v.wakeListening
+                  : v?.wakeListening
                     ? "border-primary/40 [animation:ripple-pulse_2s_ease-out_infinite]"
                     : "border-primary/30 [animation:ripple-pulse_3s_ease-out_infinite]",
             )}
@@ -173,11 +173,11 @@ export function ArtiInvoker({ onSubmit, placeholder, suggestions = [], className
           <Sparkles className="relative h-5 w-5 text-white" strokeWidth={1.8} />
           {/* Hint */}
           <span className="pointer-events-none absolute -top-8 right-0 whitespace-nowrap rounded-full border border-border bg-surface/90 px-2.5 py-1 font-mono text-[9px] uppercase tracking-[0.25em] text-muted-foreground opacity-0 backdrop-blur transition-opacity group-hover:opacity-100">
-            {v.isAgentSpeaking
+            {v?.isAgentSpeaking
               ? "Arti speaking"
-              : v.isConnected
+              : v?.isConnected
                 ? "Listening · tap to end"
-                : v.wakeListening
+                : v?.wakeListening
                   ? "Say “Hey Arti”"
                   : "Ask Arti · /"}
           </span>
