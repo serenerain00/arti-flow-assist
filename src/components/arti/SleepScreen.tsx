@@ -60,15 +60,25 @@ export function SleepScreen({
   // sitting idle. Silently no-ops in browsers without support (e.g. Firefox).
   useEffect(() => {
     if (phase !== "sleep") return;
-    const SR =
-      (window as unknown as { SpeechRecognition?: new () => SpeechRecognition })
+    type SR = {
+      continuous: boolean;
+      interimResults: boolean;
+      lang: string;
+      onresult: ((e: SpeechRecognitionEvent) => void) | null;
+      onend: (() => void) | null;
+      onerror: (() => void) | null;
+      start: () => void;
+      stop: () => void;
+    };
+    const Ctor =
+      (window as unknown as { SpeechRecognition?: new () => SR })
         .SpeechRecognition ??
-      (window as unknown as { webkitSpeechRecognition?: new () => SpeechRecognition })
+      (window as unknown as { webkitSpeechRecognition?: new () => SR })
         .webkitSpeechRecognition;
-    if (!SR) return;
+    if (!Ctor) return;
 
     let stopped = false;
-    const recognition = new SR();
+    const recognition = new Ctor();
     recognition.continuous = true;
     recognition.interimResults = true;
     recognition.lang = "en-US";
