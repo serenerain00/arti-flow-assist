@@ -177,6 +177,7 @@ function ArtiWall() {
         onBackHome={() => setPhase("home")}
         onSelectCase={handleSelectCase}
         onPrompt={handlePrompt}
+        voice={voice}
       />
     );
   } else if (phase === "home") {
@@ -187,6 +188,7 @@ function ArtiWall() {
         initials={staff.initials}
         onSleep={handleSleep}
         onPrompt={handlePrompt}
+        voice={voice}
       />
     );
   } else {
@@ -197,6 +199,7 @@ function ArtiWall() {
         onWakeRequested={handleWakeRequested}
         onWakeAnimationComplete={handleWakeAnimationComplete}
         onPrompt={handlePrompt}
+        voice={voice}
       />
     );
   }
