@@ -33,7 +33,7 @@ export function CaseHeader({ cockpitMode, onOpenPatientDetails }: Props) {
               Next Case · Pre-Op
             </div>
             <span className="rounded-full border border-border bg-surface-3/60 px-2 py-0.5 font-mono text-[9px] uppercase tracking-wider text-muted-foreground">
-              Arthrex VIP plan
+              Medtronix VIP plan
             </span>
           </div>
 

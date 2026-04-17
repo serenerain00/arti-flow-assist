@@ -50,7 +50,7 @@ export function HowToVideoModal({ open, onClose, title }: Props) {
         <div className="flex items-center justify-between border-b border-border px-6 py-4">
           <div>
             <div className="font-mono text-[10px] uppercase tracking-[0.3em] text-primary">
-              Arthrex Surgical Library · Pulled by Arti
+              Medtronix Surgical Library · Pulled by Arti
             </div>
             <h3 className="mt-1 text-xl font-light">{title}</h3>
           </div>
