@@ -1,4 +1,4 @@
-import { useCallback, useMemo, useState } from "react";
+import { useEffect, useMemo } from "react";
 import { Sidebar } from "./Sidebar";
 import { TopBar } from "./TopBar";
 import { CaseHeader } from "./CaseHeader";
@@ -12,25 +12,32 @@ import { QuadView, type QuadPanelId } from "./QuadView";
 import { PreferenceCard } from "./PreferenceCard";
 import { PatientDetailsModal } from "./PatientDetailsModal";
 import { LayoutGrid } from "lucide-react";
+import { useArtiVoice, type VoiceTools } from "./ArtiVoiceProvider";
+
+export type TimeOutId = "patient" | "site" | "procedure" | "allergies";
+export type InstrumentId = "raytec" | "lap" | "needle" | "blade" | "clamps";
 
 interface Props {
   staffName: string;
   staffRole: string;
   initials: string;
   onSleep: () => void;
+  cockpit: boolean;
+  setCockpit: React.Dispatch<React.SetStateAction<boolean>>;
+  howToOpen: boolean;
+  setHowToOpen: React.Dispatch<React.SetStateAction<boolean>>;
+  howToTitle: string;
+  timeOutChecked: Set<TimeOutId>;
+  counts: Record<InstrumentId, number>;
+  dismissedAlerts: Set<number>;
+  quadOpen: boolean;
+  quadFocused: QuadPanelId | null;
+  setQuadFocused: React.Dispatch<React.SetStateAction<QuadPanelId | null>>;
+  patientDetailsOpen: boolean;
+  setPatientDetailsOpen: React.Dispatch<React.SetStateAction<boolean>>;
+  tools: VoiceTools;
 }
 
-export type TimeOutId = "patient" | "site" | "procedure" | "allergies";
-export type InstrumentId = "raytec" | "lap" | "needle" | "blade" | "clamps";
-
-const VIDEO_TITLES: Record<string, string> = {
-  rotator: "Rotator cuff repair — Suture anchor technique",
-  glenoid: "Univers Revers™ — Glenoid baseplate placement",
-  reverse: "Reverse Total Shoulder Arthroplasty — Step-by-step",
-  default: "Univers Revers™ — Glenoid baseplate placement",
-};
-
-// Demo case — would come from OR scheduling in production
 const CASE_CONTEXT = {
   patient: "Jane Doe, 64F",
   procedure: "Right reverse total shoulder arthroplasty",
@@ -39,113 +46,54 @@ const CASE_CONTEXT = {
   nextPatient: "Robert Lin, 58M — Left rotator cuff repair, 11:30 AM",
 };
 
-export function AwakeDashboard({ staffName, staffRole, initials, onSleep }: Props) {
-  const [cockpit, setCockpit] = useState(false);
-  const [howToOpen, setHowToOpen] = useState(false);
-  const [howToTitle, setHowToTitle] = useState(VIDEO_TITLES.default);
-  const [timeOutChecked, setTimeOutChecked] = useState<Set<TimeOutId>>(new Set());
-  const [counts, setCounts] = useState<Record<InstrumentId, number>>({
-    raytec: 20,
-    lap: 9,
-    needle: 14,
-    blade: 3,
-    clamps: 12,
-  });
-  const [dismissedAlerts, setDismissedAlerts] = useState<Set<number>>(new Set());
-  const [quadOpen, setQuadOpen] = useState(false);
-  const [quadFocused, setQuadFocused] = useState<QuadPanelId | null>(null);
-  const [patientDetailsOpen, setPatientDetailsOpen] = useState(false);
-  // ───────── Voice tool handlers (called by ElevenLabs agent) ─────────
-  const openHowToVideo = useCallback((title?: string) => {
-    const lookup = (title ?? "").toLowerCase();
-    const matched =
-      Object.entries(VIDEO_TITLES).find(([k]) => k !== "default" && lookup.includes(k))?.[1] ??
-      title ??
-      VIDEO_TITLES.default;
-    setHowToTitle(matched);
-    setHowToOpen(true);
-    return `Opened video: ${matched}`;
-  }, []);
+export function AwakeDashboard({
+  staffName,
+  staffRole,
+  initials,
+  onSleep,
+  cockpit,
+  setCockpit,
+  howToOpen,
+  setHowToOpen,
+  howToTitle,
+  timeOutChecked,
+  counts,
+  dismissedAlerts,
+  quadOpen,
+  quadFocused,
+  setQuadFocused,
+  patientDetailsOpen,
+  setPatientDetailsOpen,
+  tools,
+}: Props) {
+  const { connected, sendContext, stop } = useArtiVoice();
 
-  const toggleTimeOutItem = useCallback((id: TimeOutId) => {
-    setTimeOutChecked((prev) => {
-      const next = new Set(prev);
-      if (next.has(id)) next.delete(id);
-      else next.add(id);
-      return next;
-    });
-    return `Toggled time-out item: ${id}`;
-  }, []);
-
-  const adjustInstrumentCount = useCallback((item: InstrumentId, delta: number) => {
-    setCounts((prev) => ({
-      ...prev,
-      [item]: Math.max(0, prev[item] + delta),
-    }));
-    return `Adjusted ${item} by ${delta}`;
-  }, []);
-
-  const toggleSterileCockpit = useCallback((enabled?: boolean) => {
-    setCockpit((c) => (typeof enabled === "boolean" ? enabled : !c));
-    return `Sterile cockpit ${enabled ?? !cockpit ? "on" : "off"}`;
-  }, [cockpit]);
-
-  const dismissAlert = useCallback((index: number) => {
-    setDismissedAlerts((prev) => new Set(prev).add(index));
-    return `Dismissed alert ${index}`;
-  }, []);
-
-  const openQuadView = useCallback(() => {
-    setQuadFocused(null);
-    setQuadOpen(true);
-    return "Opened quad view";
-  }, []);
-
-  const focusQuadPanel = useCallback((panel: QuadPanelId) => {
-    setQuadOpen(true);
-    setQuadFocused(panel);
-    return `Focused panel: ${panel}`;
-  }, []);
-
-  const closeQuadView = useCallback(() => {
-    setQuadOpen(false);
-    setQuadFocused(null);
-    return "Closed quad view";
-  }, []);
-
-  const showPreferenceCard = useCallback(() => {
-    // Scroll to preference card section
-    document.getElementById("preference-card")?.scrollIntoView({ behavior: "smooth" });
-    return "Showing preference card";
-  }, []);
-
-  const showPatientDetails = useCallback(() => {
-    setPatientDetailsOpen(true);
-    return "Opened patient details";
-  }, []);
-
-  // ───────── Context for Arti ─────────
-  const initialContext = useMemo(
-    () =>
+  // Push initial case context to Arti once we're connected on the dashboard.
+  // Single send — agent already has it in conversation memory after that.
+  useEffect(() => {
+    if (!connected) return;
+    sendContext(
       [
         `You are Arti, an ambient OR voice assistant on the wall display.`,
         `Active staff member: ${staffName} (${staffRole}).`,
         `Current case: ${CASE_CONTEXT.procedure} for ${CASE_CONTEXT.patient}, surgeon ${CASE_CONTEXT.surgeon}.`,
         `Allergies: ${CASE_CONTEXT.allergies}.`,
         `Next patient on the board: ${CASE_CONTEXT.nextPatient}.`,
-        `IMPORTANT BEHAVIOR: Do NOT greet the user — they have already been greeted on the wake screen. Do NOT speak unless spoken to or asked a question. Do NOT volunteer information or suggestions unsolicited. When you do respond, keep it short, calm, and professional. You may briefly confirm tool actions in one short sentence. Never repeat yourself.`,
-        `Available client tools: openHowToVideo, toggleTimeOutItem, adjustInstrumentCount, toggleSterileCockpit, dismissAlert, openQuadView, focusQuadPanel (panels: timeout, instruments, alerts, team), closeQuadView, showPreferenceCard, showPatientDetails.`,
-      ].join(" "),
-    [staffName, staffRole]
-  );
+        `IMPORTANT: Do NOT greet the user — they have already been greeted on the wake screen. Do NOT speak unless asked. Keep responses short, calm, and professional.`,
+      ].join(" ")
+    );
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [connected]);
 
+  // Push live state changes (debounced naturally by React batching) so Arti
+  // always has the latest UI state when answering.
   const liveContext = useMemo(() => {
     const checked = Array.from(timeOutChecked).join(", ") || "none";
     const activeAlerts = 3 - dismissedAlerts.size;
     const view = quadOpen
       ? quadFocused
         ? `Quad view focused on ${quadFocused}.`
-        : `Quad view open (2x2 overview).`
+        : `Quad view open.`
       : `Standard dashboard view.`;
     return [
       `Time-out checked items: ${checked}.`,
@@ -156,9 +104,19 @@ export function AwakeDashboard({ staffName, staffRole, initials, onSleep }: Prop
     ].join(" ");
   }, [timeOutChecked, dismissedAlerts, cockpit, counts, quadOpen, quadFocused]);
 
+  useEffect(() => {
+    if (!connected) return;
+    sendContext(liveContext);
+  }, [connected, liveContext, sendContext]);
+
+  const handleSleep = () => {
+    stop();
+    onSleep();
+  };
+
   return (
     <div className="flex h-screen w-full overflow-hidden bg-background">
-      <Sidebar onSleep={onSleep} />
+      <Sidebar onSleep={handleSleep} />
 
       <div className="flex min-w-0 flex-1 flex-col">
         <TopBar
@@ -176,15 +134,15 @@ export function AwakeDashboard({ staffName, staffRole, initials, onSleep }: Prop
             <div className="space-y-5 xl:col-span-2">
               <TimeOutPanel
                 checked={timeOutChecked as Set<string>}
-                onToggle={(id) => toggleTimeOutItem(id as TimeOutId)}
+                onToggle={(id) => tools.toggleTimeOutItem(id as TimeOutId)}
               />
               <InstrumentCount
                 counts={counts}
-                onAdjust={(id, delta) => adjustInstrumentCount(id as InstrumentId, delta)}
+                onAdjust={(id, delta) => tools.adjustInstrumentCount(id as InstrumentId, delta)}
               />
             </div>
             <div className="space-y-5">
-              <AlertStack dismissed={dismissedAlerts} onDismiss={dismissAlert} />
+              <AlertStack dismissed={dismissedAlerts} onDismiss={tools.dismissAlert} />
               <TeamRoster />
             </div>
           </div>
@@ -194,9 +152,8 @@ export function AwakeDashboard({ staffName, staffRole, initials, onSleep }: Prop
           <div className="h-24" />
         </main>
 
-        {/* Quad view trigger (also voice-triggerable) */}
         <button
-          onClick={openQuadView}
+          onClick={() => tools.openQuadView()}
           className="absolute right-8 top-24 z-30 flex h-11 w-11 items-center justify-center rounded-full bg-surface-2 text-muted-foreground border border-border hover:text-foreground hover:border-primary/40 transition-colors"
           aria-label="Open quad view"
           title="Quad view"
@@ -205,32 +162,11 @@ export function AwakeDashboard({ staffName, staffRole, initials, onSleep }: Prop
         </button>
 
         <div className="absolute bottom-6 left-32 right-8 z-40">
-          <VoiceBar
-            staffName={staffName}
-            autoStart
-            initialContext={initialContext}
-            liveContext={liveContext}
-            tools={{
-              openHowToVideo,
-              toggleTimeOutItem,
-              adjustInstrumentCount,
-              toggleSterileCockpit,
-              dismissAlert,
-              openQuadView,
-              focusQuadPanel,
-              closeQuadView,
-              showPreferenceCard,
-              showPatientDetails,
-            }}
-          />
+          <VoiceBar />
         </div>
       </div>
 
-      <HowToVideoModal
-        open={howToOpen}
-        onClose={() => setHowToOpen(false)}
-        title={howToTitle}
-      />
+      <HowToVideoModal open={howToOpen} onClose={() => setHowToOpen(false)} title={howToTitle} />
 
       <PatientDetailsModal
         open={patientDetailsOpen}
@@ -241,13 +177,13 @@ export function AwakeDashboard({ staffName, staffRole, initials, onSleep }: Prop
         open={quadOpen}
         focused={quadFocused}
         onFocus={setQuadFocused}
-        onClose={closeQuadView}
+        onClose={() => tools.closeQuadView()}
         timeOutChecked={timeOutChecked}
-        toggleTimeOutItem={toggleTimeOutItem}
+        toggleTimeOutItem={tools.toggleTimeOutItem}
         counts={counts}
-        adjustInstrumentCount={adjustInstrumentCount}
+        adjustInstrumentCount={tools.adjustInstrumentCount}
         dismissedAlerts={dismissedAlerts}
-        dismissAlert={dismissAlert}
+        dismissAlert={tools.dismissAlert}
       />
     </div>
   );
