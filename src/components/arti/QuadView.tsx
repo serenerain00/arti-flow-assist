@@ -50,7 +50,7 @@ export function QuadView({
 }: Props) {
   const containerRef = useRef<HTMLDivElement>(null);
   const gridRef = useRef<HTMLDivElement>(null);
-  const tilesRef = useRef<Map<QuadPanelId, HTMLButtonElement>>(new Map());
+  const tilesRef = useRef<Map<QuadPanelId, HTMLDivElement>>(new Map());
 
   // Esc to close / unfocus
   useEffect(() => {
