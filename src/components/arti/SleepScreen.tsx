@@ -142,6 +142,7 @@ export function SleepScreen({
         <ArtiInvoker
           placeholder="Ask Arti anything…"
           onSubmit={onPrompt}
+          voice={voice}
           suggestions={[
             "Show me the case list",
             "Open the next case",
