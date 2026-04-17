@@ -19,8 +19,8 @@ interface Props {
   onWakeRequested: () => void;
   /** Wake ripple animation has played enough — parent advances to greeting. */
   onWakeAnimationComplete: () => void;
-  /** Greeting playback finished — parent advances to dashboard. */
-  onGreetingComplete: () => void;
+  /** User said "show me the dashboard" — Arti's tool fires this to advance. */
+  onGoToDashboard: () => void;
 }
 
 /**
@@ -38,7 +38,7 @@ export function SleepScreen({
   staffName,
   onWakeRequested,
   onWakeAnimationComplete,
-  onGreetingComplete,
+  onGoToDashboard,
 }: Props) {
   const [time, setTime] = useState<Date | null>(null);
 
@@ -129,7 +129,7 @@ export function SleepScreen({
                 */}
                 <GreetingVoice
                   staffName={staffName}
-                  onGreetingComplete={onGreetingComplete}
+                  onGoToDashboard={onGoToDashboard}
                 />
                 <div className="font-mono text-[11px] uppercase tracking-[0.5em] text-primary">
                   Arti
