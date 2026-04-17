@@ -26,7 +26,7 @@ interface Props {
  * The agent prompt should be configured to call `goToDashboard` when
  * the user asks to proceed/open the dashboard, and otherwise stay quiet.
  */
-export function GreetingVoice({ staffName, onGoToDashboard }: Props) {
+export function GreetingVoice({ staffName, greeting, onGoToDashboard }: Props) {
   const startedRef = useRef(false);
   const onGoRef = useRef(onGoToDashboard);
   onGoRef.current = onGoToDashboard;
@@ -41,6 +41,8 @@ export function GreetingVoice({ staffName, onGoToDashboard }: Props) {
     },
   });
 
+  const firstName = staffName.split(" ")[0];
+
   const start = useCallback(async () => {
     try {
       await navigator.mediaDevices.getUserMedia({ audio: true });
@@ -54,7 +56,7 @@ export function GreetingVoice({ staffName, onGoToDashboard }: Props) {
         connectionType: "websocket",
         overrides: {
           agent: {
-            firstMessage: `Good morning, ${staffName.split(" ")[0]}.`,
+            firstMessage: `${greeting}, ${firstName}. I'm here whenever you're ready. Just say "show me the dashboard" to begin.`,
           },
           tts: { voiceId: "6sFKzaJr574YWVu4UuJF" },
         },
@@ -62,7 +64,7 @@ export function GreetingVoice({ staffName, onGoToDashboard }: Props) {
     } catch (err) {
       console.warn("[Arti greeting] failed to start", err);
     }
-  }, [conversation, staffName]);
+  }, [conversation, firstName, greeting]);
 
   useEffect(() => {
     if (startedRef.current) return;
