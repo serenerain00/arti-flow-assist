@@ -34,7 +34,13 @@ const VIDEO_TITLES: Record<string, string> = {
   default: "Univers Revers™ — Glenoid baseplate placement",
 };
 
-export function AwakeDashboard({ staffName, staffRole, initials, onSleep }: Props) {
+export function AwakeDashboard({
+  staffName,
+  staffRole,
+  initials,
+  onSleep,
+  onBackToCases,
+}: Props) {
   const [cockpit, setCockpit] = useState(false);
   const [howToOpen, setHowToOpen] = useState(false);
   const [howToTitle] = useState(VIDEO_TITLES.default);
