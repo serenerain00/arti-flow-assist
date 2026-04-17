@@ -1,5 +1,6 @@
 import { createFileRoute } from "@tanstack/react-router";
 import { useCallback, useState } from "react";
+import { AnimatePresence, motion } from "framer-motion";
 import { SleepScreen } from "@/components/arti/SleepScreen";
 import { HomeDashboard } from "@/components/arti/HomeDashboard";
 import { CaseListScreen } from "@/components/arti/CaseListScreen";
@@ -113,8 +114,26 @@ function ArtiWall() {
     setPhase("preop");
   }, []);
 
+  /**
+   * Each phase mounts a different full-screen component. We wrap them in
+   * AnimatePresence so swapping phases plays a smooth zoom+fade cross-fade
+   * instead of an instant cut. `mode="wait"` would feel laggy at this scale,
+   * so we let outgoing/incoming overlap with absolute positioning.
+   */
+  const screenTransition = {
+    type: "tween" as const,
+    ease: [0.22, 1, 0.36, 1] as [number, number, number, number],
+    duration: 0.55,
+  };
+  const screenVariants = {
+    initial: { opacity: 0, scale: 1.04, filter: "blur(8px)" },
+    animate: { opacity: 1, scale: 1, filter: "blur(0px)" },
+    exit: { opacity: 0, scale: 0.97, filter: "blur(6px)" },
+  };
+
+  let screen: React.ReactNode;
   if (phase === "preop") {
-    return (
+    screen = (
       <AwakeDashboard
         staffName={staff.name}
         staffRole={staff.role}
@@ -124,10 +143,8 @@ function ArtiWall() {
         onBackToCases={() => setPhase("cases")}
       />
     );
-  }
-
-  if (phase === "cases") {
-    return (
+  } else if (phase === "cases") {
+    screen = (
       <CaseListScreen
         staffName={staff.name}
         staffRole={staff.role}
@@ -138,10 +155,8 @@ function ArtiWall() {
         onPrompt={handlePrompt}
       />
     );
-  }
-
-  if (phase === "home") {
-    return (
+  } else if (phase === "home") {
+    screen = (
       <HomeDashboard
         staffName={staff.name}
         staffRole={staff.role}
@@ -150,15 +165,38 @@ function ArtiWall() {
         onPrompt={handlePrompt}
       />
     );
+  } else {
+    screen = (
+      <SleepScreen
+        phase={phase}
+        staffName={staff.name}
+        onWakeRequested={handleWakeRequested}
+        onWakeAnimationComplete={handleWakeAnimationComplete}
+        onPrompt={handlePrompt}
+      />
+    );
   }
 
+  // Group sleep/waking/greeting under one key so the SleepScreen doesn't
+  // remount mid-wake animation; phase-internal transitions stay smooth.
+  const screenKey =
+    phase === "sleep" || phase === "waking" || phase === "greeting" ? "sleep" : phase;
+
   return (
-    <SleepScreen
-      phase={phase}
-      staffName={staff.name}
-      onWakeRequested={handleWakeRequested}
-      onWakeAnimationComplete={handleWakeAnimationComplete}
-      onPrompt={handlePrompt}
-    />
+    <div className="relative h-screen w-screen overflow-hidden bg-background">
+      <AnimatePresence mode="sync" initial={false}>
+        <motion.div
+          key={screenKey}
+          variants={screenVariants}
+          initial="initial"
+          animate="animate"
+          exit="exit"
+          transition={screenTransition}
+          className="absolute inset-0"
+        >
+          {screen}
+        </motion.div>
+      </AnimatePresence>
+    </div>
   );
 }
