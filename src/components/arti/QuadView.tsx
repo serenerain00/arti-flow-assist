@@ -209,7 +209,16 @@ export function QuadView({
                   isFocused ? "overflow-y-auto" : "overflow-hidden"
                 )}
               >
-                {renderPanel(id)}
+                {isFocused ? (
+                  renderPanel(id)
+                ) : (
+                  <div
+                    className="origin-top-left"
+                    style={{ transform: "scale(0.78)", width: "128.2%", height: "128.2%" }}
+                  >
+                    {renderPanel(id)}
+                  </div>
+                )}
               </div>
             </div>
           );
