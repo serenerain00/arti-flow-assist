@@ -205,20 +205,11 @@ export function QuadView({
               </button>
               <div
                 className={cn(
-                  "no-scrollbar min-h-0 flex-1 pt-10",
-                  isFocused ? "overflow-y-auto" : "overflow-hidden"
+                  "min-h-0 flex-1 pt-10",
+                  isFocused ? "overflow-visible" : "no-scrollbar overflow-y-auto"
                 )}
               >
-                {isFocused ? (
-                  renderPanel(id)
-                ) : (
-                  <div
-                    className="origin-top-left"
-                    style={{ transform: "scale(0.66)", width: "151.51%", height: "151.51%" }}
-                  >
-                    {renderPanel(id)}
-                  </div>
-                )}
+                {renderPanel(id)}
               </div>
             </div>
           );
