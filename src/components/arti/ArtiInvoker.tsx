@@ -33,15 +33,27 @@ interface Props {
  *   3. Voice + keyboard inputs are mutually exclusive UX-wise; this is the
  *      single surface that hosts both.
  */
-export function ArtiInvoker({ onSubmit, placeholder, suggestions = [], className }: Props) {
+export function ArtiInvoker({ onSubmit, placeholder, suggestions = [], className, voice }: Props) {
   const [open, setOpen] = useState(false);
   const [value, setValue] = useState("");
-  const [listening, setListening] = useState(false);
 
   const orbRef = useRef<HTMLButtonElement>(null);
   const panelRef = useRef<HTMLDivElement>(null);
   const inputRef = useRef<HTMLInputElement>(null);
   const tlRef = useRef<gsap.core.Timeline | null>(null);
+
+  /* ---------------- voice (ElevenLabs + wake word) ---------------- */
+  // Always call the hook (rules of hooks); pass no-op callbacks if voice
+  // wasn't provided so the hook stays inert.
+  const noopVoice: ArtiVoiceCallbacks = {
+    onGoHome: () => {},
+    onShowCases: () => {},
+    onOpenCase: () => {},
+    onSleep: () => {},
+  };
+  const v = useArtiVoice(voice ?? noopVoice);
+  const voiceEnabled = !!voice;
+  const listening = v.isConnected || v.sessionStatus === "connecting";
 
   /* ---------------- keyboard shortcut: "/" to invoke ---------------- */
   useEffect(() => {
