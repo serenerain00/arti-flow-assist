@@ -121,8 +121,8 @@ export function ArtiInvoker({ onSubmit, placeholder, suggestions = [], className
   };
 
   return (
-    <div className={cn("pointer-events-none absolute inset-x-0 bottom-0 z-40 px-6 pb-6", className)}>
-      <div className="relative mx-auto flex w-full max-w-2xl items-end justify-center">
+    <div className={cn("pointer-events-none absolute bottom-0 right-0 z-40 p-6", className)}>
+      <div className="relative flex items-end justify-end">
         {/* Collapsed orb */}
         <button
           ref={orbRef}
@@ -139,18 +139,18 @@ export function ArtiInvoker({ onSubmit, placeholder, suggestions = [], className
             className="absolute inset-1.5 rounded-full"
             style={{ background: "var(--gradient-primary)", opacity: 0.85 }}
           />
-          <Sparkles className="relative h-5 w-5 text-primary-foreground" strokeWidth={1.8} />
+          <Sparkles className="relative h-5 w-5 text-white" strokeWidth={1.8} />
           {/* Hint */}
-          <span className="pointer-events-none absolute -top-8 left-1/2 -translate-x-1/2 whitespace-nowrap rounded-full border border-border bg-surface/90 px-2.5 py-1 font-mono text-[9px] uppercase tracking-[0.25em] text-muted-foreground opacity-0 backdrop-blur transition-opacity group-hover:opacity-100">
+          <span className="pointer-events-none absolute -top-8 right-0 whitespace-nowrap rounded-full border border-border bg-surface/90 px-2.5 py-1 font-mono text-[9px] uppercase tracking-[0.25em] text-muted-foreground opacity-0 backdrop-blur transition-opacity group-hover:opacity-100">
             Ask Arti · /
           </span>
         </button>
 
         {/* Expanded panel — absolutely positioned over the orb so the morph
-            scales in place. */}
+            scales in place. Anchored to bottom-right, expands leftward. */}
         <div
           ref={panelRef}
-          className="pointer-events-none absolute inset-x-0 bottom-0 flex flex-col items-center gap-3"
+          className="pointer-events-none absolute bottom-0 right-0 flex w-[min(36rem,calc(100vw-3rem))] flex-col items-end gap-3"
           style={{ opacity: 0 }}
         >
           {suggestions.length > 0 && (
