@@ -1,6 +1,5 @@
-import { useEffect, useRef, useState } from "react";
+import { useEffect, useState } from "react";
 import { RippleCanvas } from "./RippleCanvas";
-import { useArtiVoice } from "./ArtiVoiceProvider";
 
 function getGreeting(d?: Date | null) {
   if (!d) return "Hello";
@@ -16,6 +15,8 @@ interface Props {
   staffName: string;
   onWakeRequested: () => void;
   onWakeAnimationComplete: () => void;
+  /** Tap on the greeting screen advances to the dashboard. */
+  onGoToDashboard: () => void;
 }
 
 /**
@@ -23,22 +24,19 @@ interface Props {
  * are explicit and one-directional.
  *
  * Phases:
- *   sleep     — gentle ripples, faint wordmark, time. Voice OFF.
+ *   sleep     — gentle ripples, faint wordmark, time.
  *   waking    — ripple expands; after 1.1s parent advances to greeting.
- *   greeting  — Arti's single shared session is started with the greeting
- *               as its first message. ElevenLabs owns all audio. When the
- *               user says "show me the dashboard", the agent fires the
- *               goToDashboard tool and the parent transitions.
+ *   greeting  — personalized greeting card. Tap to enter the dashboard.
+ *               (Voice was removed — to be rebuilt from scratch.)
  */
 export function SleepScreen({
   phase,
   staffName,
   onWakeRequested,
   onWakeAnimationComplete,
+  onGoToDashboard,
 }: Props) {
   const [time, setTime] = useState<Date | null>(null);
-  const voice = useArtiVoice();
-  const startedRef = useRef(false);
 
   useEffect(() => {
     setTime(new Date());
@@ -46,34 +44,28 @@ export function SleepScreen({
     return () => clearInterval(i);
   }, []);
 
-  // Wake animation runs for ~1.1s then we hand off to greeting.
   useEffect(() => {
     if (phase !== "waking") return;
     const t = setTimeout(onWakeAnimationComplete, 1100);
     return () => clearTimeout(t);
   }, [phase, onWakeAnimationComplete]);
 
-  // Start the ONE ElevenLabs session when the greeting phase begins.
-  // The first message IS the greeting — no separate TTS, no second session.
-  useEffect(() => {
-    if (phase !== "greeting" || startedRef.current) return;
-    startedRef.current = true;
-    const greeting = getGreeting(time ?? new Date());
-    const firstName = staffName.split(" ")[0];
-    voice.start(`${greeting}, ${firstName}.`);
-  }, [phase, staffName, time, voice]);
-
   const greeting = getGreeting(time ?? undefined);
   const timeStr = time
     ? time.toLocaleTimeString([], { hour: "numeric", minute: "2-digit" })
     : "";
 
+  const handleClick = () => {
+    if (phase === "sleep") onWakeRequested();
+    else if (phase === "greeting") onGoToDashboard();
+  };
+
   return (
     <button
       type="button"
-      onClick={onWakeRequested}
+      onClick={handleClick}
       className="group fixed inset-0 z-50 block h-full w-full cursor-pointer overflow-hidden bg-background text-left"
-      aria-label="Wake Arti"
+      aria-label={phase === "greeting" ? "Continue to dashboard" : "Wake Arti"}
     >
       <RippleCanvas intensity={phase === "sleep" ? 0.6 : 2.2} />
 
@@ -132,6 +124,9 @@ export function SleepScreen({
                 <p className="mt-4 max-w-md text-balance text-sm font-light text-muted-foreground">
                   Today's first case begins in 32 minutes. I have your pre-op plan ready.
                 </p>
+                <div className="mt-8 font-mono text-[10px] uppercase tracking-[0.4em] text-muted-foreground/60">
+                  Tap to continue
+                </div>
               </div>
             )}
           </div>
