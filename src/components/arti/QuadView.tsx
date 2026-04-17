@@ -203,7 +203,7 @@ export function QuadView({
               >
                 <Maximize2 className="h-4 w-4" />
               </button>
-              <div className="h-full w-full overflow-y-auto p-5 pt-14">
+              <div className="no-scrollbar h-full w-full overflow-y-auto p-4 pt-12">
                 {renderPanel(id)}
               </div>
             </div>
