@@ -98,8 +98,15 @@ export function AwakeDashboard({ staffName, staffRole, initials, onSleep }: Prop
 
           <div className="grid grid-cols-1 gap-5 xl:grid-cols-3">
             <div className="space-y-5 xl:col-span-2">
-              <TimeOutPanel checked={timeOutChecked} onToggle={toggleTimeOutItem} />
-              <InstrumentCount counts={counts} onAdjust={adjustInstrumentCount} />
+              <TimeOutPanel
+                checked={timeOutChecked as Set<string>}
+                onToggle={(id) => toggleTimeOutItem(id as TimeOutId)}
+              />
+              <InstrumentCount
+                counts={counts}
+                onAdjust={(id, delta) => adjustInstrumentCount(id as InstrumentId, delta)}
+              />
+
             </div>
             <div className="space-y-5">
               <AlertStack dismissed={dismissedAlerts} onDismiss={dismissAlert} />
