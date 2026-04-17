@@ -130,9 +130,6 @@ export function ArtiVoiceProvider({ children, tools }: Props) {
       } catch (err) {
         console.warn("[Arti] failed to start session", err);
         startingRef.current = false;
-      } finally {
-        // Allow another attempt if the start truly failed (status not connected).
-        if (conversation.status !== "connected") startingRef.current = false;
       }
     },
     [conversation, started]
