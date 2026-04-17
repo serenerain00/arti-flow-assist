@@ -23,6 +23,8 @@ interface Props {
   activeCase?: CaseItem;
   /** When provided, shows a "back to cases" affordance. */
   onBackToCases?: () => void;
+  /** Free-text prompt handler (drives navigation + voice). */
+  onPrompt: (text: string) => void;
 }
 
 export type TimeOutId = "patient" | "site" | "procedure" | "allergies";
