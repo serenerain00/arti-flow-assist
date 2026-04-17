@@ -39,7 +39,7 @@ export function ArtiInvoker({ onSubmit, placeholder, suggestions = [], className
 
   /* ---------------- voice (consumed from shared provider) ---------------- */
   const v = useArtiVoiceContext();
-  const voiceEnabled = !!v;
+  // (`voiceEnabled` previously tracked prop-based opt-in; now derived from `!!v`.)
   const listening = !!v && (v.isConnected || v.sessionStatus === "connecting");
 
   /* ---------------- keyboard shortcut: "/" to invoke ---------------- */
