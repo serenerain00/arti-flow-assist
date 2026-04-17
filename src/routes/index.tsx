@@ -116,6 +116,29 @@ function ArtiWall() {
   }, []);
 
   /**
+   * Voice tool callbacks. The agent invokes these via ElevenLabs client
+   * tools to navigate the wall hands-free. Memoized so the conversation
+   * session doesn't see a new identity on every render.
+   */
+  const voice = useMemo<ArtiVoiceCallbacks>(
+    () => ({
+      onGoHome: () => setPhase("home"),
+      onShowCases: () => setPhase("cases"),
+      onOpenCase: (query: string) => {
+        const match = findCase(query);
+        if (match) {
+          setActiveCase(match);
+          setPhase("preop");
+        } else {
+          setPhase("cases");
+        }
+      },
+      onSleep: () => setPhase("sleep"),
+    }),
+    [findCase]
+  );
+
+  /**
    * Each phase mounts a different full-screen component. We wrap them in
    * AnimatePresence so swapping phases plays a smooth zoom+fade cross-fade
    * instead of an instant cut. `mode="wait"` would feel laggy at this scale,
