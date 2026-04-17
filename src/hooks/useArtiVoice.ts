@@ -38,9 +38,9 @@ type SpeechRecognitionLike = {
   stop: () => void;
   abort: () => void;
   onresult: ((ev: { results: ArrayLike<ArrayLike<{ transcript: string }>> }) => void) | null;
-  onerror: ((ev: unknown) => void) | null;
-  onend: (() => void) | null;
-};
+    onerror: ((ev: { error?: string; message?: string }) => void) | null;
+    onend: (() => void) | null;
+  };
 
 function getSpeechRecognitionCtor(): (new () => SpeechRecognitionLike) | null {
   if (typeof window === "undefined") return null;
