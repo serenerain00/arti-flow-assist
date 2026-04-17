@@ -1,6 +1,6 @@
-import { useEffect, useState } from "react";
+import { useEffect, useRef, useState } from "react";
 import { RippleCanvas } from "./RippleCanvas";
-import { GreetingVoice } from "./GreetingVoice";
+import { useArtiVoice } from "./ArtiVoiceProvider";
 
 function getGreeting(d?: Date | null) {
   if (!d) return "Hello";
@@ -12,35 +12,33 @@ function getGreeting(d?: Date | null) {
 }
 
 interface Props {
-  /** "sleep" | "waking" | "greeting" — owned by the parent so transitions are explicit. */
   phase: "sleep" | "waking" | "greeting";
   staffName: string;
-  /** User asked to wake Arti (tap / wake-word). Parent decides whether to honor. */
   onWakeRequested: () => void;
-  /** Wake ripple animation has played enough — parent advances to greeting. */
   onWakeAnimationComplete: () => void;
-  /** User said "show me the dashboard" — Arti's tool fires this to advance. */
-  onGoToDashboard: () => void;
 }
 
 /**
- * Ambient sleep state. Owns only its own clock & UI; phase comes from
- * the parent route so we can never accidentally loop sleep → wake → sleep
- * from local state.
+ * Ambient sleep state. Phase comes from the parent route so transitions
+ * are explicit and one-directional.
  *
  * Phases:
- *   1. sleep    — gentle ripples, faint wordmark, time. Voice OFF.
- *   2. waking   — ripple expands; after 1.1s parent advances to greeting.
- *   3. greeting — Arti speaks once, then parent advances to dashboard.
+ *   sleep     — gentle ripples, faint wordmark, time. Voice OFF.
+ *   waking    — ripple expands; after 1.1s parent advances to greeting.
+ *   greeting  — Arti's single shared session is started with the greeting
+ *               as its first message. ElevenLabs owns all audio. When the
+ *               user says "show me the dashboard", the agent fires the
+ *               goToDashboard tool and the parent transitions.
  */
 export function SleepScreen({
   phase,
   staffName,
   onWakeRequested,
   onWakeAnimationComplete,
-  onGoToDashboard,
 }: Props) {
   const [time, setTime] = useState<Date | null>(null);
+  const voice = useArtiVoice();
+  const startedRef = useRef(false);
 
   useEffect(() => {
     setTime(new Date());
@@ -55,11 +53,15 @@ export function SleepScreen({
     return () => clearTimeout(t);
   }, [phase, onWakeAnimationComplete]);
 
-  // NOTE: We intentionally do NOT run an always-on "Hi Arti" wake-word
-  // listener here. Browser Web Speech API requires a user gesture to start,
-  // and holding the mic from this screen would conflict with ElevenLabs
-  // acquiring it during the greeting. Tap-to-wake is the user gesture; from
-  // there ElevenLabs owns the mic cleanly for the entire conversation.
+  // Start the ONE ElevenLabs session when the greeting phase begins.
+  // The first message IS the greeting — no separate TTS, no second session.
+  useEffect(() => {
+    if (phase !== "greeting" || startedRef.current) return;
+    startedRef.current = true;
+    const greeting = getGreeting(time ?? new Date());
+    const firstName = staffName.split(" ")[0];
+    voice.start(`${greeting}, ${firstName}.`);
+  }, [phase, staffName, time, voice]);
 
   const greeting = getGreeting(time ?? undefined);
   const timeStr = time
@@ -75,10 +77,8 @@ export function SleepScreen({
     >
       <RippleCanvas intensity={phase === "sleep" ? 0.6 : 2.2} />
 
-      {/* Center mark */}
       <div className="pointer-events-none absolute inset-0 flex items-center justify-center">
         <div className="relative flex flex-col items-center">
-          {/* breathing core */}
           <div
             className="ripple-core"
             style={{
@@ -86,20 +86,15 @@ export function SleepScreen({
               transition: "transform 1.6s cubic-bezier(.2,.8,.2,1)",
             }}
           />
-          {/* expanding rings on wake */}
           {phase !== "sleep" && (
             <>
               <span
                 className="absolute left-1/2 top-1/2 -ml-[300px] -mt-[300px] h-[600px] w-[600px] rounded-full border border-primary/40"
-                style={{
-                  animation: "ripple-pulse 3s ease-out forwards",
-                }}
+                style={{ animation: "ripple-pulse 3s ease-out forwards" }}
               />
               <span
                 className="absolute left-1/2 top-1/2 -ml-[300px] -mt-[300px] h-[600px] w-[600px] rounded-full border border-primary/30"
-                style={{
-                  animation: "ripple-pulse 3s ease-out 0.4s forwards",
-                }}
+                style={{ animation: "ripple-pulse 3s ease-out 0.4s forwards" }}
               />
             </>
           )}
@@ -120,24 +115,11 @@ export function SleepScreen({
             )}
 
             {phase === "waking" && (
-              <div className="text-2xl font-light text-foreground/60 animate-pulse">
-                ◌
-              </div>
+              <div className="text-2xl font-light text-foreground/60 animate-pulse">◌</div>
             )}
 
             {phase === "greeting" && (
               <div className="flex flex-col items-center gap-4 animate-fade-in">
-                {/*
-                  GreetingVoice mounts ONCE for the greeting phase.
-                  It speaks a single short greeting, then calls
-                  onGreetingComplete which advances the parent to dashboard.
-                  The dashboard then mounts its own VoiceBar fresh.
-                */}
-                <GreetingVoice
-                  staffName={staffName}
-                  greeting={greeting}
-                  onGoToDashboard={onGoToDashboard}
-                />
                 <div className="font-mono text-[11px] uppercase tracking-[0.5em] text-primary">
                   Arti
                 </div>
@@ -156,7 +138,6 @@ export function SleepScreen({
         </div>
       </div>
 
-      {/* Corner metadata — preserved during sleep */}
       <div className="pointer-events-none absolute bottom-8 left-8 font-mono text-[10px] uppercase tracking-[0.3em] text-muted-foreground/50">
         OR 326 · sterile field calibrated · 21.4°C
       </div>

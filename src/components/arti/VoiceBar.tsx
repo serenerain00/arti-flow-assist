@@ -1,35 +1,15 @@
-import { Mic, MicOff, Sparkles, Loader2 } from "lucide-react";
-import { useCallback, useEffect, useRef, useState } from "react";
-import { useConversation } from "@elevenlabs/react";
+import { Mic, MicOff, Sparkles } from "lucide-react";
+import { useEffect, useState } from "react";
+import { useArtiVoice } from "./ArtiVoiceProvider";
 import { cn } from "@/lib/utils";
-import { toast } from "sonner";
-import type { InstrumentId, TimeOutId } from "./AwakeDashboard";
-import type { QuadPanelId } from "./QuadView";
 
-interface VoiceTools {
-  openHowToVideo: (title?: string) => string;
-  toggleTimeOutItem: (id: TimeOutId) => string;
-  adjustInstrumentCount: (item: InstrumentId, delta: number) => string;
-  toggleSterileCockpit: (enabled?: boolean) => string;
-  dismissAlert: (index: number) => string;
-  openQuadView: () => string;
-  focusQuadPanel: (panel: QuadPanelId) => string;
-  closeQuadView: () => string;
-  showPreferenceCard: () => string;
-  showPatientDetails: () => string;
-}
-
-interface Props {
-  staffName: string;
-  tools: VoiceTools;
-  /** Auto-start session on mount (e.g. straight from greeting -> dashboard) */
-  autoStart?: boolean;
-  /** Initial context fed to Arti once connected (case info, etc.) */
-  initialContext?: string;
-  /** Live context that re-fires sendContextualUpdate when it changes */
-  liveContext?: string;
-}
-
+/**
+ * Presentational voice bar. Reads state from the shared ArtiVoiceProvider —
+ * does NOT own a session, never starts a second one. The mic button only
+ * stops the existing session (going back to sleep would be the more typical
+ * way to end it). It cannot re-start because there's no fresh greeting to
+ * speak — that's the wake screen's job.
+ */
 const SUGGESTED = [
   '"Show me the rotator cuff repair video"',
   '"Check off patient identity in the time-out"',
@@ -38,229 +18,33 @@ const SUGGESTED = [
   '"Focus alerts"',
 ];
 
-/**
- * Live voice bar powered by ElevenLabs Conversational AI (WebSocket).
- *
- * Behavioral rules:
- *  - Never injects a firstMessage. Arti only speaks when spoken to or
- *    when responding to a tool call. Greeting is owned by GreetingVoice
- *    on the wake screen.
- *  - Auto-starts at most once on mount (autoStartedRef guard).
- *  - One single retry on a failed start, then gives up — no infinite
- *    reconnect loop on transient errors.
- *  - Visually quiet when idle: wave bars only animate when Arti is
- *    actively speaking or the user has triggered a transcript.
- *  - Ignores the noisy "Arti is listening" toast on every reconnect —
- *    only toasts when the user explicitly turns Arti off.
- */
-export function VoiceBar({
-  staffName: _staffName,
-  tools,
-  autoStart = false,
-  initialContext,
-  liveContext,
-}: Props) {
+export function VoiceBar() {
+  const { connected, isSpeaking, transcript, stop } = useArtiVoice();
   const [hint, setHint] = useState(0);
-  const [connecting, setConnecting] = useState(false);
-  const [transcript, setTranscript] = useState("");
-  const toolsRef = useRef(tools);
-  toolsRef.current = tools;
-  const autoStartedRef = useRef(false);
-  const initialContextSentRef = useRef(false);
-  // The user has explicitly turned Arti off via the mic button.
-  // While true, no retries or visibility-based restarts will happen.
-  const userStoppedRef = useRef(false);
-  // We only allow ONE automatic retry per session attempt to avoid loops.
-  const retryUsedRef = useRef(false);
-  const retryTimerRef = useRef<ReturnType<typeof setTimeout> | null>(null);
-  const startRef = useRef<() => Promise<void>>(() => Promise.resolve());
 
-  const conversation = useConversation({
-    onConnect: () => {
-      setConnecting(false);
-      // Reset retry budget for the next disconnect.
-      retryUsedRef.current = false;
-    },
-    onDisconnect: () => {
-      setTranscript("");
-      initialContextSentRef.current = false;
-      // No automatic reconnect — we'll only come back if the tab
-      // becomes visible again or the user taps the mic.
-    },
-    onError: (err) => {
-      console.warn("[Arti] conversation error", err);
-    },
-    onMessage: (msg: { source?: string; message?: string }) => {
-      if (msg?.message) setTranscript(msg.message);
-    },
-    clientTools: {
-      openHowToVideo: (params: { title?: string }) =>
-        toolsRef.current.openHowToVideo(params?.title),
-      toggleTimeOutItem: (params: { id: TimeOutId }) =>
-        toolsRef.current.toggleTimeOutItem(params.id),
-      adjustInstrumentCount: (params: { item: InstrumentId; delta: number }) =>
-        toolsRef.current.adjustInstrumentCount(
-          params.item,
-          Number(params.delta) || 0
-        ),
-      toggleSterileCockpit: (params: { enabled?: boolean }) =>
-        toolsRef.current.toggleSterileCockpit(params?.enabled),
-      dismissAlert: (params: { index: number }) =>
-        toolsRef.current.dismissAlert(Number(params.index) || 0),
-      openQuadView: () => toolsRef.current.openQuadView(),
-      focusQuadPanel: (params: { panel: QuadPanelId }) =>
-        toolsRef.current.focusQuadPanel(params.panel),
-      closeQuadView: () => toolsRef.current.closeQuadView(),
-      showPreferenceCard: () => toolsRef.current.showPreferenceCard(),
-      showPatientDetails: () => toolsRef.current.showPatientDetails(),
-    },
-  });
-
-  const isConnected = conversation.status === "connected";
-
-  // Cycle suggestion hints only when disconnected — keeps the idle state alive.
   useEffect(() => {
-    if (isConnected) return;
+    if (connected) return;
     const i = setInterval(() => setHint((h) => (h + 1) % SUGGESTED.length), 4500);
     return () => clearInterval(i);
-  }, [isConnected]);
+  }, [connected]);
 
-  const start = useCallback(async () => {
-    if (conversation.status === "connected") return;
-    userStoppedRef.current = false;
-    setConnecting(true);
-    try {
-      await navigator.mediaDevices.getUserMedia({ audio: true });
-
-      const res = await fetch("/api/elevenlabs/token");
-      if (!res.ok) throw new Error(`Token request failed: ${res.status}`);
-      const { signedUrl, error } = (await res.json()) as {
-        signedUrl?: string;
-        error?: string;
-      };
-      if (!signedUrl) throw new Error(error ?? "No signed URL received");
-
-      await conversation.startSession({
-        signedUrl,
-        connectionType: "websocket",
-        overrides: {
-          agent: {
-            // CRITICAL: empty firstMessage. Greeting is handled exclusively
-            // by GreetingVoice on the wake screen. VoiceBar must never speak
-            // unprompted — that's what caused the "Good morning Melissa" loop.
-            firstMessage: "",
-          },
-          tts: { voiceId: "6sFKzaJr574YWVu4UuJF" },
-        },
-      });
-    } catch (err) {
-      console.error("[Arti] failed to start session", err);
-      setConnecting(false);
-      // Single bounded retry — never an infinite loop.
-      if (!userStoppedRef.current && !retryUsedRef.current) {
-        retryUsedRef.current = true;
-        if (retryTimerRef.current) clearTimeout(retryTimerRef.current);
-        retryTimerRef.current = setTimeout(() => {
-          if (!userStoppedRef.current) startRef.current();
-        }, 2500);
-      } else {
-        toast.error(
-          err instanceof Error ? err.message : "Could not start voice session"
-        );
-      }
-    }
-  }, [conversation]);
-
-  // Keep startRef fresh for retry timer.
-  useEffect(() => {
-    startRef.current = start;
-  }, [start]);
-
-  // Auto-start exactly once on mount when requested.
-  useEffect(() => {
-    if (!autoStart || autoStartedRef.current) return;
-    autoStartedRef.current = true;
-    start();
-  }, [autoStart, start]);
-
-  // Push initial context once per connection.
-  useEffect(() => {
-    if (!isConnected || initialContextSentRef.current || !initialContext) return;
-    initialContextSentRef.current = true;
-    try {
-      conversation.sendContextualUpdate(initialContext);
-    } catch (err) {
-      console.warn("[Arti] sendContextualUpdate (initial) failed", err);
-    }
-  }, [isConnected, initialContext, conversation]);
-
-  // Re-push live context when it changes.
-  useEffect(() => {
-    if (!isConnected || !liveContext) return;
-    try {
-      conversation.sendContextualUpdate(liveContext);
-    } catch (err) {
-      console.warn("[Arti] sendContextualUpdate (live) failed", err);
-    }
-  }, [isConnected, liveContext, conversation]);
-
-  // Tab returned to foreground — quietly bring Arti back if she should be on
-  // and isn't. Never re-greet, never re-toast.
-  useEffect(() => {
-    const onVisible = () => {
-      if (document.visibilityState !== "visible") return;
-      if (userStoppedRef.current) return;
-      if (conversation.status !== "connected" && !connecting) {
-        startRef.current();
-      }
-    };
-    document.addEventListener("visibilitychange", onVisible);
-    return () => document.removeEventListener("visibilitychange", onVisible);
-  }, [conversation.status, connecting]);
-
-  useEffect(() => {
-    return () => {
-      if (retryTimerRef.current) clearTimeout(retryTimerRef.current);
-    };
-  }, []);
-
-  const stop = useCallback(() => {
-    userStoppedRef.current = true;
-    if (retryTimerRef.current) {
-      clearTimeout(retryTimerRef.current);
-      retryTimerRef.current = null;
-    }
-    conversation.endSession();
-    toast("Arti is off");
-  }, [conversation]);
-
-  const isSpeaking = isConnected && conversation.isSpeaking;
-  const hasTranscript = isConnected && transcript.length > 0;
-  // Visually quiet by default — only "active" when Arti is speaking,
-  // or when there's live transcript activity.
-  const isActive = isSpeaking || hasTranscript;
+  const hasTranscript = connected && transcript.length > 0;
+  const isActive = (connected && isSpeaking) || hasTranscript;
 
   return (
     <div className="glass relative flex items-center gap-4 overflow-hidden rounded-2xl px-5 py-4">
       <button
-        onClick={isConnected ? stop : start}
-        disabled={connecting}
+        onClick={connected ? stop : undefined}
+        disabled={!connected}
         className={cn(
           "flex h-12 w-12 shrink-0 items-center justify-center rounded-full transition-colors",
-          isConnected
+          connected
             ? "bg-primary text-primary-foreground glow-primary"
-            : "bg-surface-3 text-muted-foreground hover:bg-surface-3/80",
-          connecting && "opacity-60"
+            : "bg-surface-3 text-muted-foreground/60 cursor-default"
         )}
-        aria-label={isConnected ? "Turn Arti off" : "Wake Arti"}
+        aria-label={connected ? "Turn Arti off" : "Arti is offline"}
       >
-        {connecting ? (
-          <Loader2 className="h-5 w-5 animate-spin" />
-        ) : isConnected ? (
-          <Mic className="h-5 w-5" />
-        ) : (
-          <MicOff className="h-5 w-5 opacity-70" />
-        )}
+        {connected ? <Mic className="h-5 w-5" /> : <MicOff className="h-5 w-5 opacity-70" />}
       </button>
 
       <div className="flex min-w-0 flex-1 items-center gap-4">
@@ -272,10 +56,8 @@ export function VoiceBar({
               style={{
                 height: "100%",
                 animationDelay: `${i * 0.07}s`,
-                // Only animate when Arti is genuinely active.
                 animationPlayState: isActive ? "running" : "paused",
-                // Subtle when idle, even when connected.
-                opacity: isActive ? 1 : isConnected ? 0.35 : 0.2,
+                opacity: isActive ? 1 : connected ? 0.35 : 0.2,
               }}
             />
           ))}
@@ -283,21 +65,17 @@ export function VoiceBar({
 
         <div className="min-w-0 flex-1">
           {hasTranscript ? (
-            <div className="truncate text-sm font-light text-foreground">
-              {transcript}
-            </div>
+            <div className="truncate text-sm font-light text-foreground">{transcript}</div>
           ) : isSpeaking ? (
             <div className="flex items-center gap-2 font-mono text-sm text-primary">
               <Sparkles className="h-3.5 w-3.5 animate-pulse" />
               Arti is speaking…
             </div>
-          ) : isConnected ? (
-            <div className="text-sm font-light text-muted-foreground">
-              Ready when you are.
-            </div>
+          ) : connected ? (
+            <div className="text-sm font-light text-muted-foreground">Ready when you are.</div>
           ) : (
             <div className="text-sm font-light text-muted-foreground">
-              Tap the mic to wake Arti.{" "}
+              Arti is asleep.{" "}
               <span key={hint} className="text-foreground/70 animate-fade-in">
                 {SUGGESTED[hint]}
               </span>
@@ -308,12 +86,12 @@ export function VoiceBar({
 
       <div className="hidden items-center gap-2 lg:flex">
         <span className="font-mono text-[10px] uppercase tracking-wider text-muted-foreground">
-          {isConnected ? "Live" : "Idle"}
+          {connected ? "Live" : "Idle"}
         </span>
         <span
           className={cn(
             "h-2 w-2 rounded-full",
-            isConnected
+            connected
               ? isActive
                 ? "bg-success animate-pulse"
                 : "bg-success/60"
