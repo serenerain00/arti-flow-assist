@@ -56,7 +56,7 @@ export function RippleCanvas({ intensity = 1 }: { intensity?: number }) {
       ctx.fillStyle = grad;
       ctx.fillRect(0, 0, w, h);
 
-      if (now - last > 1400 / intensity) {
+      if (now - last > 2800 / intensity) {
         spawn();
         last = now;
       }
