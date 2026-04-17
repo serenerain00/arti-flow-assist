@@ -10,44 +10,33 @@
 
 import { Route as rootRouteImport } from './routes/__root'
 import { Route as IndexRouteImport } from './routes/index'
-import { Route as ApiElevenlabsConversationTokenRouteImport } from './routes/api/elevenlabs.conversation-token'
 
 const IndexRoute = IndexRouteImport.update({
   id: '/',
   path: '/',
   getParentRoute: () => rootRouteImport,
 } as any)
-const ApiElevenlabsConversationTokenRoute =
-  ApiElevenlabsConversationTokenRouteImport.update({
-    id: '/api/elevenlabs/conversation-token',
-    path: '/api/elevenlabs/conversation-token',
-    getParentRoute: () => rootRouteImport,
-  } as any)
 
 export interface FileRoutesByFullPath {
   '/': typeof IndexRoute
-  '/api/elevenlabs/conversation-token': typeof ApiElevenlabsConversationTokenRoute
 }
 export interface FileRoutesByTo {
   '/': typeof IndexRoute
-  '/api/elevenlabs/conversation-token': typeof ApiElevenlabsConversationTokenRoute
 }
 export interface FileRoutesById {
   __root__: typeof rootRouteImport
   '/': typeof IndexRoute
-  '/api/elevenlabs/conversation-token': typeof ApiElevenlabsConversationTokenRoute
 }
 export interface FileRouteTypes {
   fileRoutesByFullPath: FileRoutesByFullPath
-  fullPaths: '/' | '/api/elevenlabs/conversation-token'
+  fullPaths: '/'
   fileRoutesByTo: FileRoutesByTo
-  to: '/' | '/api/elevenlabs/conversation-token'
-  id: '__root__' | '/' | '/api/elevenlabs/conversation-token'
+  to: '/'
+  id: '__root__' | '/'
   fileRoutesById: FileRoutesById
 }
 export interface RootRouteChildren {
   IndexRoute: typeof IndexRoute
-  ApiElevenlabsConversationTokenRoute: typeof ApiElevenlabsConversationTokenRoute
 }
 
 declare module '@tanstack/react-router' {
@@ -59,19 +48,11 @@ declare module '@tanstack/react-router' {
       preLoaderRoute: typeof IndexRouteImport
       parentRoute: typeof rootRouteImport
     }
-    '/api/elevenlabs/conversation-token': {
-      id: '/api/elevenlabs/conversation-token'
-      path: '/api/elevenlabs/conversation-token'
-      fullPath: '/api/elevenlabs/conversation-token'
-      preLoaderRoute: typeof ApiElevenlabsConversationTokenRouteImport
-      parentRoute: typeof rootRouteImport
-    }
   }
 }
 
 const rootRouteChildren: RootRouteChildren = {
   IndexRoute: IndexRoute,
-  ApiElevenlabsConversationTokenRoute: ApiElevenlabsConversationTokenRoute,
 }
 export const routeTree = rootRouteImport
   ._addFileChildren(rootRouteChildren)
