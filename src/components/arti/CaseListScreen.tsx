@@ -98,7 +98,6 @@ export function CaseListScreen({
         <ArtiInvoker
           placeholder="Ask Arti to open a case…"
           onSubmit={onPrompt}
-          voice={voice}
           suggestions={["Open Marcus Chen's case", "Next case", "Go home"]}
         />
       </div>
