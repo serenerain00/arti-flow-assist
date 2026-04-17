@@ -55,16 +55,33 @@ export function VoiceBar({
   toolsRef.current = tools;
   const autoStartedRef = useRef(false);
   const initialContextSentRef = useRef(false);
+  // Tracks whether the user has explicitly turned Arti off via the mic button.
+  // Only an explicit stop should keep Arti silent — every other disconnect
+  // (network blip, tab visibility, agent timeout) auto-reconnects.
+  const userStoppedRef = useRef(false);
+  const reconnectTimerRef = useRef<ReturnType<typeof setTimeout> | null>(null);
+  const startRef = useRef<() => Promise<void>>(() => Promise.resolve());
 
   const conversation = useConversation({
-    onConnect: () => toast.success("Arti is listening"),
+    onConnect: () => {
+      setConnecting(false);
+      toast.success("Arti is listening");
+    },
     onDisconnect: () => {
       setTranscript("");
       initialContextSentRef.current = false;
+      // If the user didn't intentionally stop, try to come back online.
+      if (!userStoppedRef.current) {
+        if (reconnectTimerRef.current) clearTimeout(reconnectTimerRef.current);
+        reconnectTimerRef.current = setTimeout(() => {
+          if (!userStoppedRef.current) startRef.current();
+        }, 800);
+      }
     },
     onError: (err) => {
       console.error("[Arti] conversation error", err);
-      toast.error("Voice connection error");
+      // Don't toast on every transient error — only surface if user is offline-ish.
+      // Reconnect logic in onDisconnect will handle recovery.
     },
     onMessage: (msg: { source?: string; message?: string }) => {
       if (msg?.message) setTranscript(msg.message);
@@ -115,6 +132,9 @@ export function VoiceBar({
   }, [isConnected]);
 
   const start = useCallback(async () => {
+    // Guard: don't start if already connected/connecting
+    if (conversation.status === "connected") return;
+    userStoppedRef.current = false;
     setConnecting(true);
     try {
       await navigator.mediaDevices.getUserMedia({ audio: true });
@@ -127,7 +147,7 @@ export function VoiceBar({
       };
       if (!signedUrl) throw new Error(error ?? "No signed URL received");
 
-      conversation.startSession({
+      await conversation.startSession({
         signedUrl,
         connectionType: "websocket",
         overrides: {
@@ -145,13 +165,21 @@ export function VoiceBar({
         err instanceof Error ? err.message : "Could not start voice session"
       );
       setConnecting(false);
+      // Schedule a retry unless user explicitly stopped
+      if (!userStoppedRef.current) {
+        if (reconnectTimerRef.current) clearTimeout(reconnectTimerRef.current);
+        reconnectTimerRef.current = setTimeout(() => {
+          if (!userStoppedRef.current) startRef.current();
+        }, 2000);
+      }
     }
   }, [conversation, staffName]);
 
-  // Once the SDK reports connected, clear the connecting state.
+  // Keep a ref to the latest start fn so reconnect timers can call it
+  // without stale closures.
   useEffect(() => {
-    if (conversation.status === "connected") setConnecting(false);
-  }, [conversation.status]);
+    startRef.current = start;
+  }, [start]);
 
   // Auto-start once on mount if requested
   useEffect(() => {
@@ -181,8 +209,36 @@ export function VoiceBar({
     }
   }, [isConnected, liveContext, conversation]);
 
+  // When the tab becomes visible again, ensure Arti is back online
+  // (browsers can suspend AudioContext / drop WS on background tabs).
+  useEffect(() => {
+    const onVisible = () => {
+      if (document.visibilityState !== "visible") return;
+      if (userStoppedRef.current) return;
+      if (conversation.status !== "connected") {
+        startRef.current();
+      }
+    };
+    document.addEventListener("visibilitychange", onVisible);
+    return () => document.removeEventListener("visibilitychange", onVisible);
+  }, [conversation.status]);
+
+  // Cleanup any pending reconnect on unmount
+  useEffect(() => {
+    return () => {
+      if (reconnectTimerRef.current) clearTimeout(reconnectTimerRef.current);
+    };
+  }, []);
+
   const stop = useCallback(() => {
+    // Mark intent so onDisconnect doesn't auto-reconnect.
+    userStoppedRef.current = true;
+    if (reconnectTimerRef.current) {
+      clearTimeout(reconnectTimerRef.current);
+      reconnectTimerRef.current = null;
+    }
     conversation.endSession();
+    toast("Arti is off");
   }, [conversation]);
 
   return (
