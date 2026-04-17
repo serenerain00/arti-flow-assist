@@ -38,6 +38,7 @@ export function SleepScreen({
   onWakeRequested,
   onWakeAnimationComplete,
   onPrompt,
+  voice,
 }: Props) {
   const [time, setTime] = useState<Date | null>(null);
 
