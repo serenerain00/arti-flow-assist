@@ -38,12 +38,10 @@ export function SleepScreen({ onWake, staffName }: Props) {
       const t = setTimeout(() => setPhase("greeting"), 1100);
       return () => clearTimeout(t);
     }
-    if (phase === "greeting") {
-      // Hold the greeting longer so Arti's spoken "Good morning" can play.
-      const t = setTimeout(() => onWake(), 6500);
-      return () => clearTimeout(t);
-    }
-  }, [phase, onWake]);
+    // Note: phase "greeting" no longer auto-advances on a fixed timer.
+    // GreetingVoice fires onGreetingComplete when Arti finishes speaking
+    // (with a 12s safety net), which then triggers onWake.
+  }, [phase]);
 
   const greeting = getGreeting(time ?? undefined);
   const timeStr = time
@@ -111,7 +109,7 @@ export function SleepScreen({ onWake, staffName }: Props) {
 
             {phase === "greeting" && (
               <div className="flex flex-col items-center gap-4 animate-fade-in">
-                <GreetingVoice staffName={staffName} />
+                <GreetingVoice staffName={staffName} onGreetingComplete={onWake} />
                 <div className="font-mono text-[11px] uppercase tracking-[0.5em] text-primary">
                   Arti
                 </div>

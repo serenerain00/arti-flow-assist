@@ -1,34 +1,56 @@
-import { useCallback, useEffect, useRef, useState } from "react";
+import { useCallback, useEffect, useRef } from "react";
 import { useConversation } from "@elevenlabs/react";
 
 interface Props {
   staffName: string;
+  /** Fires once Arti has finished speaking the greeting (or on hard timeout). */
+  onGreetingComplete?: () => void;
 }
 
 /**
  * Headless component that connects to ElevenLabs and lets Arti speak the
- * greeting on the wake/greeting screen — no UI of its own. The session
- * ends when this component unmounts (i.e. when we transition to the
- * dashboard, where a fresh VoiceBar takes over).
+ * greeting on the wake/greeting screen — no UI of its own.
  *
- * Note: a quick reconnect on dashboard mount is intentional — gives the
- * user a clean handoff and avoids juggling shared session state.
+ * Calls onGreetingComplete after Arti finishes speaking (detected via
+ * isSpeaking transitioning true -> false), so the parent can transition
+ * to the dashboard without cutting the audio off mid-sentence.
+ *
+ * A safety timeout fires onGreetingComplete after 12s in case the agent
+ * never connects or never speaks.
  */
-export function GreetingVoice({ staffName }: Props) {
+export function GreetingVoice({ staffName, onGreetingComplete }: Props) {
   const startedRef = useRef(false);
-  const [, setStarted] = useState(false);
+  const hasSpokenRef = useRef(false);
+  const completedRef = useRef(false);
+  const onCompleteRef = useRef(onGreetingComplete);
+  onCompleteRef.current = onGreetingComplete;
+
+  const complete = useCallback(() => {
+    if (completedRef.current) return;
+    completedRef.current = true;
+    onCompleteRef.current?.();
+  }, []);
 
   const conversation = useConversation({
-    onError: (err) => console.warn("[Arti greeting] error", err),
+    onError: (err) => {
+      console.warn("[Arti greeting] error", err);
+      complete();
+    },
   });
 
   const start = useCallback(async () => {
     try {
       await navigator.mediaDevices.getUserMedia({ audio: true });
       const res = await fetch("/api/elevenlabs/token");
-      if (!res.ok) return;
+      if (!res.ok) {
+        complete();
+        return;
+      }
       const { signedUrl } = (await res.json()) as { signedUrl?: string };
-      if (!signedUrl) return;
+      if (!signedUrl) {
+        complete();
+        return;
+      }
 
       conversation.startSession({
         signedUrl,
@@ -42,15 +64,31 @@ export function GreetingVoice({ staffName }: Props) {
       });
     } catch (err) {
       console.warn("[Arti greeting] failed to start", err);
+      complete();
     }
-  }, [conversation, staffName]);
+  }, [conversation, staffName, complete]);
+
+  // Watch isSpeaking: once Arti has spoken and then stops, signal complete.
+  useEffect(() => {
+    if (conversation.isSpeaking) {
+      hasSpokenRef.current = true;
+    } else if (hasSpokenRef.current) {
+      // Small delay so the tail of the audio isn't clipped on unmount.
+      const t = setTimeout(complete, 400);
+      return () => clearTimeout(t);
+    }
+  }, [conversation.isSpeaking, complete]);
 
   useEffect(() => {
     if (startedRef.current) return;
     startedRef.current = true;
-    setStarted(true);
     start();
+
+    // Hard safety net — if nothing happens in 12s, move on anyway.
+    const safety = setTimeout(complete, 12000);
+
     return () => {
+      clearTimeout(safety);
       try {
         conversation.endSession();
       } catch {
