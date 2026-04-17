@@ -1,6 +1,6 @@
 import { useEffect, useState } from "react";
 import { RippleCanvas } from "./RippleCanvas";
-import { PromptBar } from "./PromptBar";
+import { ArtiInvoker } from "./ArtiInvoker";
 
 function getGreeting(d?: Date | null) {
   if (!d) return "Hello";
@@ -135,21 +135,17 @@ export function SleepScreen({
         </div>
       </div>
 
-      {phase !== "waking" && (
-        <div className="pointer-events-none absolute inset-x-0 bottom-16 z-20 flex justify-center px-8">
-          <div className="pointer-events-auto w-full max-w-xl animate-fade-in">
-            <PromptBar
-              autoFocus={phase === "greeting"}
-              placeholder={phase === "sleep" ? 'Say "Hi Arti" to begin…' : "Ask Arti anything…"}
-              onSubmit={onPrompt}
-              suggestions={
-                phase === "greeting"
-                  ? ["Show me the case list", "Open the next case", "What's my day look like?"]
-                  : []
-              }
-            />
-          </div>
-        </div>
+      {phase === "greeting" && (
+        <ArtiInvoker
+          placeholder="Ask Arti anything…"
+          onSubmit={onPrompt}
+          suggestions={[
+            "Show me the case list",
+            "Open the next case",
+            "What's my day look like?",
+          ]}
+          className="bottom-12"
+        />
       )}
 
       <div className="pointer-events-none absolute bottom-4 left-8 font-mono text-[10px] uppercase tracking-[0.3em] text-muted-foreground/50">
