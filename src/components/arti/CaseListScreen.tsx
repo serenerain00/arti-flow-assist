@@ -30,6 +30,7 @@ export function CaseListScreen({
   onBackHome,
   onSelectCase,
   onPrompt,
+  voice,
 }: Props) {
   const today = new Date().toLocaleDateString(undefined, {
     weekday: "long",
