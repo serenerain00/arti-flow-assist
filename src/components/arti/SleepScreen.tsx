@@ -23,9 +23,10 @@ interface Props {
  */
 export function SleepScreen({ onWake, staffName }: Props) {
   const [phase, setPhase] = useState<"asleep" | "waking" | "greeting">("asleep");
-  const [time, setTime] = useState(new Date());
+  const [time, setTime] = useState<Date | null>(null);
 
   useEffect(() => {
+    setTime(new Date());
     const i = setInterval(() => setTime(new Date()), 1000 * 30);
     return () => clearInterval(i);
   }, []);
@@ -40,8 +41,10 @@ export function SleepScreen({ onWake, staffName }: Props) {
     };
   }, [phase, onWake]);
 
-  const greeting = getGreeting(time);
-  const timeStr = time.toLocaleTimeString([], { hour: "numeric", minute: "2-digit" });
+  const greeting = getGreeting(time ?? undefined);
+  const timeStr = time
+    ? time.toLocaleTimeString([], { hour: "numeric", minute: "2-digit" })
+    : "";
 
   return (
     <button
