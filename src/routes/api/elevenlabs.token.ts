@@ -1,7 +1,7 @@
 import { createFileRoute } from "@tanstack/react-router";
 import "@tanstack/react-start";
 
-const AGENT_ID = "B9PDs7mcHTMxHUw5U8Cf";
+const AGENT_ID = "agent_9301kpe2x3y2e31a8wwvsbxcm9nh";
 
 /**
  * Issues a single-use WebRTC conversation token for the ElevenLabs agent.
