@@ -249,8 +249,9 @@ export function VoiceBar({
   }, []);
 
   const stop = useCallback(() => {
-    // Mark intent so onDisconnect doesn't auto-reconnect.
     userStoppedRef.current = true;
+    // Next manual start should greet again
+    hasGreetedRef.current = false;
     if (reconnectTimerRef.current) {
       clearTimeout(reconnectTimerRef.current);
       reconnectTimerRef.current = null;
