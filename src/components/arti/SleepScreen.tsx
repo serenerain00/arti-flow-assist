@@ -129,6 +129,7 @@ export function SleepScreen({
                 */}
                 <GreetingVoice
                   staffName={staffName}
+                  greeting={greeting}
                   onGoToDashboard={onGoToDashboard}
                 />
                 <div className="font-mono text-[11px] uppercase tracking-[0.5em] text-primary">
