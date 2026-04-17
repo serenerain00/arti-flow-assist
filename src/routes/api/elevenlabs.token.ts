@@ -10,6 +10,7 @@ export const Route = createFileRoute("/api/elevenlabs/token")({
   server: {
     handlers: {
       GET: async () => {
+
         const apiKey = process.env.ELEVENLABS_API_KEY;
         if (!apiKey) {
           return new Response(
