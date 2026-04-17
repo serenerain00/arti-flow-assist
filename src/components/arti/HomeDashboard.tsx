@@ -80,19 +80,19 @@ export function HomeDashboard({ staffName, staffRole, initials, onSleep, onPromp
           onToggleCockpit={() => {}}
         />
 
-        <main className="relative flex min-h-0 flex-1 flex-col overflow-y-auto px-8 pt-8 pb-40 animate-fade-in">
+        <main className="relative flex min-h-0 flex-1 flex-col gap-6 overflow-y-auto px-8 pt-10 pb-40 animate-fade-in">
           {/* Hero */}
-          <section className="relative overflow-hidden rounded-3xl border border-border bg-surface/50 p-10">
+          <section className="relative overflow-hidden rounded-3xl border border-border bg-surface/50 p-8 md:p-10">
             <div
               className="pointer-events-none absolute inset-0 opacity-60"
               style={{ background: "var(--gradient-deep)" }}
             />
-            <div className="relative flex flex-wrap items-end justify-between gap-8">
-              <div>
+            <div className="relative flex flex-wrap items-start justify-between gap-x-10 gap-y-6">
+              <div className="min-w-0 flex-1">
                 <div className="font-mono text-[10px] uppercase tracking-[0.5em] text-primary">
                   Arti · ready
                 </div>
-                <h1 className="mt-3 text-5xl font-extralight tracking-tight md:text-6xl">
+                <h1 className="mt-3 text-4xl font-extralight leading-[1.1] tracking-tight md:text-5xl lg:text-6xl">
                   {greeting},{" "}
                   <span className="text-primary">{staffName.split(" ")[0]}</span>.
                 </h1>
@@ -101,7 +101,7 @@ export function HomeDashboard({ staffName, staffRole, initials, onSleep, onPromp
                   cases remain on today's board.
                 </p>
               </div>
-              <div className="flex items-center gap-6">
+              <div className="flex shrink-0 items-end gap-8 self-end">
                 <Stat label="Cases today" value={String(TODAY_CASES.length)} />
                 <Stat label="Completed" value={String(completed)} accent="success" />
                 <Stat label="Remaining" value={String(remaining)} accent="primary" />
