@@ -170,7 +170,7 @@ export function QuadView({
       <div
         ref={gridRef}
         className={cn(
-          "grid min-h-0 flex-1 gap-5 px-8 py-6 pb-32",
+          "grid min-h-0 flex-1 gap-4 px-6 py-4 pb-24",
           focused ? "grid-cols-1 grid-rows-1" : "grid-cols-2 grid-rows-2"
         )}
       >
@@ -185,7 +185,7 @@ export function QuadView({
                 else tilesRef.current.delete(id);
               }}
               className={cn(
-                "group relative overflow-hidden rounded-3xl border border-border bg-surface-2 text-left transition-shadow",
+                "group relative flex min-h-0 flex-col overflow-hidden rounded-3xl border border-border bg-surface-2 text-left transition-shadow",
                 "hover:border-primary/40 hover:shadow-[0_0_40px_-10px_hsl(var(--primary)/0.4)]",
                 isHidden && "pointer-events-none"
               )}
@@ -203,7 +203,12 @@ export function QuadView({
               >
                 <Maximize2 className="h-4 w-4" />
               </button>
-              <div className="no-scrollbar h-full w-full overflow-y-auto p-4 pt-12">
+              <div
+                className={cn(
+                  "no-scrollbar min-h-0 flex-1 pt-10",
+                  isFocused ? "overflow-y-auto" : "overflow-hidden"
+                )}
+              >
                 {renderPanel(id)}
               </div>
             </div>
