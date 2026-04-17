@@ -50,7 +50,7 @@ export function QuadView({
 }: Props) {
   const containerRef = useRef<HTMLDivElement>(null);
   const gridRef = useRef<HTMLDivElement>(null);
-  const tilesRef = useRef<Map<QuadPanelId, HTMLButtonElement>>(new Map());
+  const tilesRef = useRef<Map<QuadPanelId, HTMLDivElement>>(new Map());
 
   // Esc to close / unfocus
   useEffect(() => {
@@ -178,34 +178,35 @@ export function QuadView({
           const isFocused = focused === id;
           const isHidden = focused !== null && !isFocused;
           return (
-            <button
+            <div
               key={id}
               ref={(el) => {
                 if (el) tilesRef.current.set(id, el);
                 else tilesRef.current.delete(id);
               }}
-              onClick={() => onFocus(isFocused ? null : id)}
               className={cn(
-                "group relative overflow-hidden rounded-3xl border border-border bg-surface-2 text-left",
+                "group relative overflow-hidden rounded-3xl border border-border bg-surface-2 text-left transition-shadow",
                 "hover:border-primary/40 hover:shadow-[0_0_40px_-10px_hsl(var(--primary)/0.4)]",
                 isHidden && "pointer-events-none"
               )}
-              aria-label={`Focus ${label}`}
             >
               <div className="absolute left-4 top-4 z-10 flex items-center gap-2">
                 <span className="rounded-full bg-background/70 px-2.5 py-1 font-mono text-[10px] uppercase tracking-wider text-muted-foreground backdrop-blur">
                   {label}
                 </span>
               </div>
-              {!isFocused && (
-                <div className="absolute right-4 top-4 z-10 opacity-0 transition-opacity group-hover:opacity-100">
-                  <Maximize2 className="h-4 w-4 text-muted-foreground" />
-                </div>
-              )}
+              <button
+                type="button"
+                onClick={() => onFocus(isFocused ? null : id)}
+                className="absolute right-4 top-4 z-10 flex h-8 w-8 items-center justify-center rounded-full bg-background/70 text-muted-foreground backdrop-blur opacity-0 transition-opacity hover:text-foreground group-hover:opacity-100"
+                aria-label={isFocused ? `Unfocus ${label}` : `Focus ${label}`}
+              >
+                <Maximize2 className="h-4 w-4" />
+              </button>
               <div className="h-full w-full overflow-y-auto p-5 pt-14">
                 {renderPanel(id)}
               </div>
-            </button>
+            </div>
           );
         })}
       </div>
