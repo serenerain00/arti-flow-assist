@@ -187,9 +187,10 @@ export function QuadView({
                 else tilesRef.current.delete(id);
               }}
               className={cn(
-                "group relative flex min-h-0 flex-col overflow-hidden rounded-3xl border border-border bg-surface-2 text-left transition-shadow",
+                "group relative flex flex-col overflow-hidden rounded-3xl border border-border bg-surface-2 text-left transition-shadow",
                 "hover:border-primary/40 hover:shadow-[0_0_40px_-10px_hsl(var(--primary)/0.4)]",
-                isHidden && "pointer-events-none"
+                isFocused ? "w-full" : "min-h-0",
+                isHidden && "pointer-events-none hidden"
               )}
             >
               <div className="absolute left-4 top-4 z-10 flex items-center gap-2">
