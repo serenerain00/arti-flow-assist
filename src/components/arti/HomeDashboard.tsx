@@ -44,7 +44,7 @@ interface Props {
  *   2. Surface the next case + quick environment vitals.
  *   3. Invite the next instruction via the prompt.
  */
-export function HomeDashboard({ staffName, staffRole, initials, onSleep, onPrompt }: Props) {
+export function HomeDashboard({ staffName, staffRole, initials, onSleep, onPrompt, voice }: Props) {
   const [time, setTime] = useState<Date>(new Date());
   useEffect(() => {
     const i = setInterval(() => setTime(new Date()), 1000 * 30);
