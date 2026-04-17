@@ -109,7 +109,7 @@ export function SleepScreen({ onWake, staffName }: Props) {
 
             {phase === "greeting" && (
               <div className="flex flex-col items-center gap-4 animate-fade-in">
-                <GreetingVoice staffName={staffName} />
+                <GreetingVoice staffName={staffName} onGreetingComplete={onWake} />
                 <div className="font-mono text-[11px] uppercase tracking-[0.5em] text-primary">
                   Arti
                 </div>
