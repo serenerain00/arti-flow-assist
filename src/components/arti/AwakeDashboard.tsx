@@ -10,6 +10,7 @@ import { HowToVideoModal } from "./HowToVideoModal";
 import { QuadView, type QuadPanelId } from "./QuadView";
 import { PreferenceCard } from "./PreferenceCard";
 import { PatientDetailsModal } from "./PatientDetailsModal";
+import { ArtiInvoker } from "./ArtiInvoker";
 import { ArrowLeft, LayoutGrid } from "lucide-react";
 import type { CaseItem } from "./cases";
 
