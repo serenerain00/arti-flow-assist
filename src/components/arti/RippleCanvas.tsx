@@ -37,7 +37,7 @@ export function RippleCanvas({ intensity = 1 }: { intensity?: number }) {
         x: w / 2 + (Math.random() - 0.5) * w * 0.5,
         y: h / 2 + (Math.random() - 0.5) * h * 0.4,
         t: 0,
-        life: 320 + Math.random() * 200,
+        life: 640 + Math.random() * 400,
         hue: 210 + Math.random() * 30,
       });
     };
@@ -56,7 +56,7 @@ export function RippleCanvas({ intensity = 1 }: { intensity?: number }) {
       ctx.fillStyle = grad;
       ctx.fillRect(0, 0, w, h);
 
-      if (now - last > 1400 / intensity) {
+      if (now - last > 2800 / intensity) {
         spawn();
         last = now;
       }
