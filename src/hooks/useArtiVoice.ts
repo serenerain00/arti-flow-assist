@@ -216,7 +216,14 @@ export function useArtiVoice(callbacks: ArtiVoiceCallbacks) {
   useEffect(() => {
     return () => {
       stopWakeWord();
-      void conversation.endSession().catch(() => {});
+      try {
+        const p = conversation.endSession() as unknown;
+        if (p && typeof (p as Promise<unknown>).then === "function") {
+          (p as Promise<unknown>).catch(() => {});
+        }
+      } catch {
+        /* ignore */
+      }
     };
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, []);
