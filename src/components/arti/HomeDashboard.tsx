@@ -7,8 +7,20 @@ import {
   ListChecks,
   Sparkles,
   Thermometer,
+  TrendingUp,
   Wind,
 } from "lucide-react";
+import {
+  Bar,
+  BarChart,
+  Cell,
+  Pie,
+  PieChart,
+  ResponsiveContainer,
+  Tooltip,
+  XAxis,
+  YAxis,
+} from "recharts";
 import { Sidebar } from "./Sidebar";
 import { TopBar } from "./TopBar";
 import { PromptBar } from "./PromptBar";
