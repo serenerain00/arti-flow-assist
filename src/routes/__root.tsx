@@ -70,6 +70,13 @@ function RootShell({ children }: { children: React.ReactNode }) {
 }
 
 function RootComponent() {
-  return <Outlet />;
+  // ConversationProvider is required by @elevenlabs/react's useConversation
+  // hook. Mounted at the root so any component (e.g. ArtiInvoker) can
+  // start/stop a voice session.
+  return (
+    <ConversationProvider>
+      <Outlet />
+    </ConversationProvider>
+  );
 }
 
