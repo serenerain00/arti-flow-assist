@@ -98,6 +98,15 @@ export function AwakeDashboard({
         />
 
         <main className="flex min-h-0 flex-1 flex-col gap-5 overflow-y-auto px-8 py-6 animate-fade-in">
+          {onBackToCases && (
+            <button
+              onClick={onBackToCases}
+              className="-mb-2 inline-flex w-fit items-center gap-1.5 font-mono text-[10px] uppercase tracking-[0.3em] text-muted-foreground transition-colors hover:text-foreground"
+            >
+              <ArrowLeft className="h-3 w-3" /> Today's cases
+            </button>
+          )}
+
           <CaseHeader
             cockpitMode={cockpit}
             onOpenPatientDetails={() => setPatientDetailsOpen(true)}
