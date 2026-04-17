@@ -170,8 +170,10 @@ export function QuadView({
       <div
         ref={gridRef}
         className={cn(
-          "grid min-h-0 flex-1 gap-4 px-6 py-4 pb-24",
-          focused ? "grid-cols-1 grid-rows-1" : "grid-cols-2 grid-rows-2"
+          "min-h-0 flex-1 gap-4 px-6 py-4 pb-24",
+          focused
+            ? "no-scrollbar flex overflow-y-auto"
+            : "grid grid-cols-2 grid-rows-2 overflow-hidden"
         )}
       >
         {PANELS.map(({ id, label }) => {
@@ -185,9 +187,10 @@ export function QuadView({
                 else tilesRef.current.delete(id);
               }}
               className={cn(
-                "group relative flex min-h-0 flex-col overflow-hidden rounded-3xl border border-border bg-surface-2 text-left transition-shadow",
+                "group relative flex flex-col overflow-hidden rounded-3xl border border-border bg-surface-2 text-left transition-shadow",
                 "hover:border-primary/40 hover:shadow-[0_0_40px_-10px_hsl(var(--primary)/0.4)]",
-                isHidden && "pointer-events-none"
+                isFocused ? "w-full" : "min-h-0",
+                isHidden && "pointer-events-none hidden"
               )}
             >
               <div className="absolute left-4 top-4 z-10 flex items-center gap-2">
@@ -205,20 +208,11 @@ export function QuadView({
               </button>
               <div
                 className={cn(
-                  "no-scrollbar min-h-0 flex-1 pt-10",
-                  isFocused ? "overflow-y-auto" : "overflow-hidden"
+                  "min-h-0 flex-1 pt-10",
+                  isFocused ? "overflow-visible" : "no-scrollbar overflow-y-auto"
                 )}
               >
-                {isFocused ? (
-                  renderPanel(id)
-                ) : (
-                  <div
-                    className="origin-top-left"
-                    style={{ transform: "scale(0.66)", width: "151.51%", height: "151.51%" }}
-                  >
-                    {renderPanel(id)}
-                  </div>
-                )}
+                {renderPanel(id)}
               </div>
             </div>
           );
