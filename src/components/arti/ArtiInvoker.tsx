@@ -69,8 +69,11 @@ export function ArtiInvoker({ onSubmit, placeholder, suggestions = [], className
     // Build (or rebuild) the timeline each time `open` flips.
     tlRef.current?.kill();
 
+    const staggerEls = panel.querySelectorAll<HTMLElement>("[data-stagger]");
+
     if (open) {
-      // Measure the panel's natural full width, then animate from orb width → full
+      // Reset any lingering state from a prior close animation
+      gsap.set(staggerEls, { clearProps: "opacity" });
       gsap.set(panel, { width: "auto", pointerEvents: "auto", opacity: 0 });
       const fullWidth = panel.getBoundingClientRect().width;
 
@@ -79,19 +82,15 @@ export function ArtiInvoker({ onSubmit, placeholder, suggestions = [], className
         width: 56, // matches orb width (h-14 / w-14)
         overflow: "hidden",
       });
+      gsap.set(staggerEls, { opacity: 0, y: 8 });
 
       const tl = gsap.timeline({ defaults: { ease: "expo.out" } });
       tl.to(orb, { opacity: 0, scale: 0.6, duration: 0.2, ease: "power2.in" }, 0)
-        .to(panel, { width: fullWidth, duration: 0.7, ease: "expo.out" }, 0.05)
-        .from(
-          panel.querySelectorAll<HTMLElement>("[data-stagger]"),
-          { opacity: 0, duration: 0.4, stagger: 0.04, ease: "power3.out" },
-          0.35,
-        )
+        .to(panel, { width: fullWidth, duration: 0.65, ease: "expo.out" }, 0.05)
+        .to(staggerEls, { opacity: 1, y: 0, duration: 0.4, stagger: 0.05, ease: "power3.out" }, 0.35)
         .set(panel, { overflow: "visible", width: "auto" });
       tlRef.current = tl;
 
-      // Focus input after the panel is mostly in place
       const focusT = setTimeout(() => inputRef.current?.focus(), 250);
       return () => clearTimeout(focusT);
     } else {
@@ -99,11 +98,11 @@ export function ArtiInvoker({ onSubmit, placeholder, suggestions = [], className
       const currentWidth = panel.getBoundingClientRect().width;
       gsap.set(panel, { width: currentWidth, overflow: "hidden" });
       const tl = gsap.timeline({ defaults: { ease: "power3.inOut" } });
-      tl.to(panel.querySelectorAll<HTMLElement>("[data-stagger] > *"), { opacity: 0, duration: 0.15 }, 0)
-        .to(panel, { width: 56, duration: 0.35, ease: "expo.inOut" }, 0.05)
-        .to(panel, { opacity: 0, duration: 0.15 }, 0.35)
+      tl.to(staggerEls, { opacity: 0, duration: 0.15 }, 0)
+        .to(panel, { width: 56, duration: 0.35, ease: "expo.inOut" }, 0.1)
+        .to(panel, { opacity: 0, duration: 0.15 }, 0.4)
         .set(panel, { pointerEvents: "none" })
-        .to(orb, { opacity: 1, scale: 1, duration: 0.4, ease: "back.out(1.6)" }, 0.25);
+        .to(orb, { opacity: 1, scale: 1, duration: 0.4, ease: "back.out(1.6)" }, 0.3);
       tlRef.current = tl;
     }
   }, [open]);
