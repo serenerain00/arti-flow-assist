@@ -88,6 +88,9 @@ export function VoiceBar({ staffName, tools }: Props) {
           agent: {
             firstMessage: `Good morning, ${staffName.split(" ")[0]}. I'm here whenever you need me.`,
           },
+          tts: {
+            voiceId: "6sFKzaJr574YWVu4UuJF",
+          },
         },
       });
     } catch (err) {
