@@ -61,9 +61,9 @@ export function SleepScreen({
   useEffect(() => {
     if (phase !== "sleep") return;
     const SR =
-      (window as unknown as { SpeechRecognition?: typeof window.SpeechRecognition })
+      (window as unknown as { SpeechRecognition?: new () => SpeechRecognition })
         .SpeechRecognition ??
-      (window as unknown as { webkitSpeechRecognition?: typeof window.SpeechRecognition })
+      (window as unknown as { webkitSpeechRecognition?: new () => SpeechRecognition })
         .webkitSpeechRecognition;
     if (!SR) return;
 
