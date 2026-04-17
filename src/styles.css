@@ -87,19 +87,12 @@
   --input: oklch(1 0 0 / 0.12);
   --ring: oklch(0.72 0.16 235 / 0.6);
 
-  --gradient-deep: radial-gradient(
-      ellipse at 20% 0%,
-      oklch(0.24 0.04 240 / 0.6) 0%,
-      transparent 50%
-    ),
+  --gradient-deep:
+    radial-gradient(ellipse at 20% 0%, oklch(0.24 0.04 240 / 0.6) 0%, transparent 50%),
     radial-gradient(ellipse at 80% 100%, oklch(0.22 0.05 220 / 0.5) 0%, transparent 50%),
     linear-gradient(180deg, oklch(0.14 0.012 250) 0%, oklch(0.18 0.014 250) 100%);
 
-  --gradient-primary: linear-gradient(
-    135deg,
-    oklch(0.72 0.16 235),
-    oklch(0.78 0.14 195)
-  );
+  --gradient-primary: linear-gradient(135deg, oklch(0.72 0.16 235), oklch(0.78 0.14 195));
 
   --ripple-color: oklch(0.72 0.16 235);
 }

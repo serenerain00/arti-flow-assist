@@ -29,9 +29,7 @@ export function Sidebar({ onSleep }: Props) {
             key={it.label}
             className={cn(
               "group flex w-full flex-col items-center gap-1.5 px-2 py-3 transition-colors",
-              it.active
-                ? "text-primary"
-                : "text-muted-foreground/70 hover:text-foreground"
+              it.active ? "text-primary" : "text-muted-foreground/70 hover:text-foreground",
             )}
           >
             <it.icon className="h-5 w-5" strokeWidth={1.5} />

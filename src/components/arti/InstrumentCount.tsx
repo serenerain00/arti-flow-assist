@@ -45,22 +45,18 @@ export function InstrumentCount({ counts: countsProp, onAdjust }: Props = {}) {
       arr.map((i) =>
         i.id === id
           ? { ...i, returned: Math.max(0, Math.min(i.initial + 5, i.returned + delta)) }
-          : i
-      )
+          : i,
+      ),
     );
   };
 
-  const discrepancy = useMemo(
-    () => items.filter((i) => i.returned !== i.initial),
-    [items]
-  );
-
+  const discrepancy = useMemo(() => items.filter((i) => i.returned !== i.initial), [items]);
 
   return (
     <section
       className={cn(
         "glass rounded-2xl p-6 transition-colors",
-        discrepancy.length > 0 && "ring-1 ring-warning/40"
+        discrepancy.length > 0 && "ring-1 ring-warning/40",
       )}
     >
       <div className="mb-5 flex items-end justify-between">
@@ -93,7 +89,7 @@ export function InstrumentCount({ counts: countsProp, onAdjust }: Props = {}) {
               key={it.id}
               className={cn(
                 "flex items-center gap-4 rounded-lg bg-surface-2/40 px-4 py-3",
-                off && "bg-warning/5"
+                off && "bg-warning/5",
               )}
             >
               <div className="flex-1">

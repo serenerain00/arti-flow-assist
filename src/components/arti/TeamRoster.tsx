@@ -18,9 +18,7 @@ export function TeamRoster() {
     <section className="glass rounded-2xl p-6">
       <div className="mb-4 flex items-center justify-between">
         <div>
-          <div className="font-mono text-[10px] uppercase tracking-[0.3em] text-primary">
-            Team
-          </div>
+          <div className="font-mono text-[10px] uppercase tracking-[0.3em] text-primary">Team</div>
           <h2 className="mt-1 text-lg font-light">In the room</h2>
         </div>
         <div className="font-mono text-xs text-muted-foreground">

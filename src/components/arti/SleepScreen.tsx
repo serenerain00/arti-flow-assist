@@ -2,7 +2,6 @@ import { useEffect, useState } from "react";
 import { RippleCanvas } from "./RippleCanvas";
 import { ArtiInvoker } from "./ArtiInvoker";
 
-
 function getGreeting(d?: Date | null) {
   if (!d) return "Hello";
   const h = d.getHours();
@@ -53,9 +52,7 @@ export function SleepScreen({
   }, [phase, onWakeAnimationComplete]);
 
   const greeting = getGreeting(time ?? undefined);
-  const timeStr = time
-    ? time.toLocaleTimeString([], { hour: "numeric", minute: "2-digit" })
-    : "";
+  const timeStr = time ? time.toLocaleTimeString([], { hour: "numeric", minute: "2-digit" }) : "";
 
   return (
     <div
@@ -103,9 +100,7 @@ export function SleepScreen({
                 <div className="font-mono text-[11px] uppercase tracking-[0.5em] text-muted-foreground/60">
                   Arti · standing by
                 </div>
-                <div className="text-7xl font-thin tabular-nums text-foreground/40">
-                  {timeStr}
-                </div>
+                <div className="text-7xl font-thin tabular-nums text-foreground/40">{timeStr}</div>
                 <div className="mt-12 font-mono text-[10px] uppercase tracking-[0.4em] text-muted-foreground/40 opacity-0 transition-opacity duration-500 group-hover:opacity-100">
                   Tap anywhere · or say "Hi Arti"
                 </div>
@@ -140,11 +135,7 @@ export function SleepScreen({
         <ArtiInvoker
           placeholder="Ask Arti anything…"
           onSubmit={onPrompt}
-          suggestions={[
-            "Show me the case list",
-            "Open the next case",
-            "What's my day look like?",
-          ]}
+          suggestions={["Show me the case list", "Open the next case", "What's my day look like?"]}
           className="bottom-12"
         />
       )}

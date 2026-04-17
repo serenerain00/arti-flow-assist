@@ -72,7 +72,10 @@ export function PreferenceCard() {
   const [expanded, setExpanded] = useState(true);
 
   return (
-    <Card id="preference-card" className="border-border/60 bg-surface/80 backdrop-blur-md">
+    <Card
+      id="preference-card"
+      className="scroll-mt-24 border-border/60 bg-surface/80 backdrop-blur-md"
+    >
       <CardHeader className="cursor-pointer pb-3" onClick={() => setExpanded((e) => !e)}>
         <div className="flex items-center justify-between">
           <div className="flex items-center gap-3">
@@ -93,7 +96,7 @@ export function PreferenceCard() {
       {expanded && (
         <CardContent className="grid gap-5 sm:grid-cols-2">
           {/* Surgical Table Layout */}
-          <div className="sm:col-span-2">
+          <div id="preference-card-layout-images" className="sm:col-span-2 scroll-mt-24">
             <Section icon={LayoutGrid} title="Surgical Table Layout">
               <div className="grid gap-3 sm:grid-cols-2">
                 <figure className="overflow-hidden rounded-xl border border-border/60 bg-surface-2">
@@ -130,7 +133,8 @@ export function PreferenceCard() {
           <Section icon={ArrowUpDown} title="Positioning">
             <ul className="space-y-1 text-sm text-muted-foreground">
               <li>
-                <span className="text-foreground/80">Position:</span> {PREF_CARD.positioning.position}
+                <span className="text-foreground/80">Position:</span>{" "}
+                {PREF_CARD.positioning.position}
               </li>
               <li>
                 <span className="text-foreground/80">Arm:</span> {PREF_CARD.positioning.arm}

@@ -94,12 +94,11 @@ export function HomeDashboard({ staffName, staffRole, initials, onSleep, onPromp
                   Arti · ready
                 </div>
                 <h1 className="mt-3 text-4xl font-extralight leading-[1.1] tracking-tight md:text-5xl lg:text-6xl">
-                  {greeting},{" "}
-                  <span className="text-primary">{staffName.split(" ")[0]}</span>.
+                  {greeting}, <span className="text-primary">{staffName.split(" ")[0]}</span>.
                 </h1>
                 <p className="mt-3 max-w-xl text-base font-light text-muted-foreground">
-                  {dateStr} · {timeStr} · OR 326 is calibrated and sterile. {remaining}{" "}
-                  cases remain on today's board.
+                  {dateStr} · {timeStr} · OR 326 is calibrated and sterile. {remaining} cases remain
+                  on today's board.
                 </p>
               </div>
               <div className="flex shrink-0 items-end gap-8 self-end">
@@ -121,13 +120,13 @@ export function HomeDashboard({ staffName, staffRole, initials, onSleep, onPromp
                 <span
                   className={cn(
                     "inline-flex items-center gap-1.5 rounded-full border px-2.5 py-0.5 font-mono text-[9px] uppercase tracking-wider",
-                    STATUS_META[upNext.status].tone
+                    STATUS_META[upNext.status].tone,
                   )}
                 >
                   <span
                     className={cn(
                       "h-1.5 w-1.5 rounded-full heartbeat",
-                      STATUS_META[upNext.status].dot
+                      STATUS_META[upNext.status].dot,
                     )}
                   />
                   {STATUS_META[upNext.status].label}
@@ -152,9 +151,7 @@ export function HomeDashboard({ staffName, staffRole, initials, onSleep, onPromp
                   </div>
                   <div className="mt-1 flex items-baseline gap-2">
                     <Clock className="h-5 w-5 text-primary" />
-                    <span className="font-mono text-4xl font-thin tabular-nums">
-                      {upNext.time}
-                    </span>
+                    <span className="font-mono text-4xl font-thin tabular-nums">{upNext.time}</span>
                   </div>
                 </div>
                 <div className="h-12 w-px bg-border" />
@@ -187,10 +184,25 @@ export function HomeDashboard({ staffName, staffRole, initials, onSleep, onPromp
                   Room Vitals · OR 326
                 </div>
                 <div className="mt-4 space-y-4">
-                  <Vital icon={Thermometer} label="Temperature" value="21.4°C" sub="target 21–23°C" />
+                  <Vital
+                    icon={Thermometer}
+                    label="Temperature"
+                    value="21.4°C"
+                    sub="target 21–23°C"
+                  />
                   <Vital icon={Wind} label="Humidity" value="48%" sub="target 30–60%" />
-                  <Vital icon={Activity} label="Air exchanges" value="20 / hr" sub="ASHRAE compliant" />
-                  <Vital icon={HeartPulse} label="Sterile field" value="Calibrated" sub="checked 06:42" />
+                  <Vital
+                    icon={Activity}
+                    label="Air exchanges"
+                    value="20 / hr"
+                    sub="ASHRAE compliant"
+                  />
+                  <Vital
+                    icon={HeartPulse}
+                    label="Sterile field"
+                    value="Calibrated"
+                    sub="checked 06:42"
+                  />
                 </div>
               </div>
             </aside>
@@ -207,10 +219,7 @@ export function HomeDashboard({ staffName, staffRole, initials, onSleep, onPromp
               <CasesPerDayChart />
             </ChartCard>
 
-            <ChartCard
-              eyebrow="Mix · today"
-              title="Procedure mix"
-            >
+            <ChartCard eyebrow="Mix · today" title="Procedure mix">
               <ProcedureMixChart />
             </ChartCard>
           </section>
@@ -244,11 +253,7 @@ export function HomeDashboard({ staffName, staffRole, initials, onSleep, onPromp
         <ArtiInvoker
           placeholder="Ask Arti anything…"
           onSubmit={onPrompt}
-          suggestions={[
-            "Show me the case list",
-            "Open the next case",
-            "What's my day look like?",
-          ]}
+          suggestions={["Show me the case list", "Open the next case", "What's my day look like?"]}
         />
       </div>
     </div>
@@ -273,7 +278,7 @@ function Stat({
         className={cn(
           "mt-1 text-4xl font-thin tabular-nums",
           accent === "primary" && "text-primary",
-          accent === "success" && "text-success"
+          accent === "success" && "text-success",
         )}
       >
         {value}
@@ -318,7 +323,7 @@ function ReadinessPip({ label, ok }: { label: string; ok?: boolean }) {
         "inline-flex items-center gap-1.5 rounded-full border px-2.5 py-1 font-mono text-[9px] uppercase tracking-wider",
         ok
           ? "border-success/40 bg-success/10 text-success"
-          : "border-warning/40 bg-warning/10 text-warning"
+          : "border-warning/40 bg-warning/10 text-warning",
       )}
     >
       <span className={cn("h-1.5 w-1.5 rounded-full", ok ? "bg-success" : "bg-warning")} />
@@ -432,9 +437,7 @@ function ChartTooltipBox({
       <div className="font-mono text-[9px] uppercase tracking-wider text-muted-foreground">
         {label ?? item.payload?.name ?? item.name}
       </div>
-      <div className="mt-0.5 font-mono text-sm tabular-nums text-foreground">
-        {item.value}
-      </div>
+      <div className="mt-0.5 font-mono text-sm tabular-nums text-foreground">{item.value}</div>
     </div>
   );
 }
@@ -463,7 +466,9 @@ function CasesPerDayChart() {
           {CASES_PER_DAY.map((d, i) => (
             <Cell
               key={d.day}
-              fill={i === 3 ? "var(--primary)" : "color-mix(in oklab, var(--primary) 55%, transparent)"}
+              fill={
+                i === 3 ? "var(--primary)" : "color-mix(in oklab, var(--primary) 55%, transparent)"
+              }
             />
           ))}
         </Bar>
@@ -499,14 +504,15 @@ function ProcedureMixChart() {
           <div className="font-mono text-[9px] uppercase tracking-wider text-muted-foreground">
             Total
           </div>
-          <div className="font-mono text-2xl font-thin tabular-nums text-foreground">
-            {total}
-          </div>
+          <div className="font-mono text-2xl font-thin tabular-nums text-foreground">{total}</div>
         </div>
       </div>
       <ul className="space-y-2 pr-1">
         {PROCEDURE_MIX.map((d) => (
-          <li key={d.name} className="flex items-center gap-2 text-xs font-light text-muted-foreground">
+          <li
+            key={d.name}
+            className="flex items-center gap-2 text-xs font-light text-muted-foreground"
+          >
             <span
               className="h-2.5 w-2.5 shrink-0 rounded-sm"
               style={{ backgroundColor: d.color }}

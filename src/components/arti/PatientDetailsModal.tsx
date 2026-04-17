@@ -59,7 +59,11 @@ const PATIENT = {
     { label: "Glucose", value: "148 mg/dL", flag: true },
     { label: "K+", value: "4.2 mEq/L", flag: false },
   ],
-  consents: ["Surgical consent — signed", "Anesthesia consent — signed", "Blood transfusion — declined"],
+  consents: [
+    "Surgical consent — signed",
+    "Anesthesia consent — signed",
+    "Blood transfusion — declined",
+  ],
   notes: [
     "Interscalene nerve block planned — confirm with anesthesia team.",
     "Patient requests minimal narcotics post-op.",
@@ -73,7 +77,9 @@ const SeverityBadge = ({ severity }: { severity: string }) => {
       ? "bg-destructive/15 text-destructive border-destructive/30"
       : "bg-warning/15 text-warning-foreground border-warning/30";
   return (
-    <span className={`ml-2 rounded-full border px-2 py-0.5 text-[10px] font-semibold uppercase ${cls}`}>
+    <span
+      className={`ml-2 rounded-full border px-2 py-0.5 text-[10px] font-semibold uppercase ${cls}`}
+    >
       {severity}
     </span>
   );
@@ -187,9 +193,7 @@ export function PatientDetailsModal({ open, onClose }: Props) {
                 <div
                   key={l.label}
                   className={`rounded-lg border px-3 py-2 text-center text-sm ${
-                    l.flag
-                      ? "border-warning/30 bg-warning/5"
-                      : "border-border/40 bg-surface-2/50"
+                    l.flag ? "border-warning/30 bg-warning/5" : "border-border/40 bg-surface-2/50"
                   }`}
                 >
                   <div className="text-[10px] font-semibold uppercase tracking-wider text-muted-foreground">

@@ -103,15 +103,7 @@ export function CaseListScreen({
   );
 }
 
-function CaseRow({
-  c,
-  index,
-  onSelect,
-}: {
-  c: CaseItem;
-  index: number;
-  onSelect: () => void;
-}) {
+function CaseRow({ c, index, onSelect }: { c: CaseItem; index: number; onSelect: () => void }) {
   const meta = STATUS_META[c.status];
   const isUpNext = c.status === "next";
   return (
@@ -120,7 +112,7 @@ function CaseRow({
       className={cn(
         "group relative grid w-full grid-cols-[88px_1fr_auto] items-center gap-6 rounded-2xl border bg-surface/40 px-6 py-5 text-left transition-all",
         "hover:border-primary/40 hover:bg-surface/70",
-        isUpNext ? "border-primary/40 shadow-[var(--shadow-glow)]" : "border-border"
+        isUpNext ? "border-primary/40 shadow-[var(--shadow-glow)]" : "border-border",
       )}
       style={{ animationDelay: `${index * 60}ms` }}
     >
@@ -129,9 +121,7 @@ function CaseRow({
         <div className="font-mono text-[10px] uppercase tracking-[0.25em] text-muted-foreground">
           {c.time}
         </div>
-        <div className="mt-1 font-mono text-[11px] text-muted-foreground/70">
-          {c.durationMin}m
-        </div>
+        <div className="mt-1 font-mono text-[11px] text-muted-foreground/70">{c.durationMin}m</div>
       </div>
 
       {/* Patient + procedure */}
@@ -140,7 +130,7 @@ function CaseRow({
           <span
             className={cn(
               "inline-flex items-center gap-1.5 rounded-full border px-2.5 py-0.5 font-mono text-[9px] uppercase tracking-wider",
-              meta.tone
+              meta.tone,
             )}
           >
             <span className={cn("h-1.5 w-1.5 rounded-full", meta.dot, isUpNext && "heartbeat")} />
@@ -152,9 +142,7 @@ function CaseRow({
         </div>
 
         <div className="mt-2 flex flex-wrap items-baseline gap-x-3 gap-y-1">
-          <h3 className="text-xl font-light tracking-tight text-foreground">
-            {c.patientName}
-          </h3>
+          <h3 className="text-xl font-light tracking-tight text-foreground">{c.patientName}</h3>
           <span className="text-sm font-light text-muted-foreground/80">
             {c.patientAgeSex} · {c.side} · {c.patientMrn}
           </span>

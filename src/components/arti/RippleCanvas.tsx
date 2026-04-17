@@ -97,10 +97,6 @@ export function RippleCanvas({ intensity = 1 }: { intensity?: number }) {
   }, [intensity]);
 
   return (
-    <canvas
-      ref={ref}
-      aria-hidden
-      className="pointer-events-none fixed inset-0 h-full w-full"
-    />
+    <canvas ref={ref} aria-hidden className="pointer-events-none fixed inset-0 h-full w-full" />
   );
 }

@@ -13,20 +13,55 @@ import { getElevenLabsConversationToken } from "@/server/elevenlabs";
  *      streaming continuously.
  *   2. An ElevenLabs Conversational AI session (WebRTC) that opens after
  *      wake or when the user taps the mic. The agent can call client tools
- *      to navigate the wall (go_home, show_cases, open_case, sleep).
+ *      to drive the wall.
  *
  * The agent's API key never reaches the browser — we mint a short-lived
  * conversation token via a server function.
+ *
+ * Client tool names here MUST match the tool IDs configured on the
+ * ElevenLabs agent. They follow the camelCase naming in the Arti system
+ * prompt so the LLM's tool calls route 1:1.
  */
 
+/** Result shape every tool callback returns. */
+export type ArtiToolResult =
+  | { ok: true; state?: Record<string, unknown> }
+  /**
+   * Action couldn't be performed — agent should fall back to
+   * "I don't have that." per the Arti system prompt. `reason` is advisory
+   * (e.g., "not on preop screen", "critical alert", "unknown panel").
+   */
+  | { ok: false; reason: string };
+
+export type TimeOutId = "patient" | "site" | "procedure" | "allergies";
+export type InstrumentId = "raytec" | "lap" | "needle" | "blade" | "clamps";
+export type QuadPanelId = "timeout" | "instruments" | "alerts" | "team";
+
 export interface ArtiVoiceCallbacks {
+  // ---- Navigation / phase ----
   onGoHome: () => void;
   onShowCases: () => void;
   onOpenCase: (query: string) => void;
   onSleep: () => void;
-  /** Called whenever the user finishes a spoken utterance. */
+
+  // ---- Dashboard tools (only valid while on the preop dashboard) ----
+  /** Toggle a time-out checklist item. */
+  onToggleTimeOutItem?: (id: TimeOutId) => ArtiToolResult;
+  /** Adjust an instrument count by `delta` (positive = add). */
+  onAdjustInstrumentCount?: (item: InstrumentId, delta: number) => ArtiToolResult;
+  /** Toggle sterile cockpit mode. `enabled` explicit override when given. */
+  onToggleSterileCockpit?: (enabled?: boolean) => ArtiToolResult;
+  /** Dismiss a non-critical alert by index. Critical alerts are refused. */
+  onDismissAlert?: (index: number) => ArtiToolResult;
+  onOpenQuadView?: () => ArtiToolResult;
+  onFocusQuadPanel?: (panel: QuadPanelId) => ArtiToolResult;
+  onCloseQuadView?: () => ArtiToolResult;
+  onOpenHowToVideo?: (title?: string) => ArtiToolResult;
+  onShowPreferenceCard?: () => ArtiToolResult;
+  onShowPreferenceCardLayoutImages?: () => ArtiToolResult;
+
+  // ---- Observability (optional) ----
   onUserTranscript?: (text: string) => void;
-  /** Called whenever the agent finishes a spoken response. */
   onAgentResponse?: (text: string) => void;
 }
 
@@ -38,9 +73,9 @@ type SpeechRecognitionLike = {
   stop: () => void;
   abort: () => void;
   onresult: ((ev: { results: ArrayLike<ArrayLike<{ transcript: string }>> }) => void) | null;
-    onerror: ((ev: { error?: string; message?: string }) => void) | null;
-    onend: (() => void) | null;
-  };
+  onerror: ((ev: { error?: string; message?: string }) => void) | null;
+  onend: (() => void) | null;
+};
 
 function getSpeechRecognitionCtor(): (new () => SpeechRecognitionLike) | null {
   if (typeof window === "undefined") return null;
@@ -53,6 +88,28 @@ function getSpeechRecognitionCtor(): (new () => SpeechRecognitionLike) | null {
 
 const WAKE_PATTERN = /\b(hey|hi|hello|okay|ok)[\s,]+arti\b/i;
 
+/** Default failure when a dashboard tool is called while not on preop. */
+const NOT_AVAILABLE: ArtiToolResult = { ok: false, reason: "not available in current view" };
+
+/** Serialize a tool result for the ElevenLabs SDK (string-return contract). */
+function serialize(r: ArtiToolResult): string {
+  return JSON.stringify(r);
+}
+
+/**
+ * Narrow unknown tool args into strings/numbers safely. ElevenLabs passes
+ * args as loosely-typed objects; we defensively coerce rather than trust.
+ */
+function asString(v: unknown): string | undefined {
+  return typeof v === "string" && v.trim() ? v.trim() : undefined;
+}
+function asNumber(v: unknown): number | undefined {
+  return typeof v === "number" && Number.isFinite(v) ? v : undefined;
+}
+function asBool(v: unknown): boolean | undefined {
+  return typeof v === "boolean" ? v : undefined;
+}
+
 export function useArtiVoice(callbacks: ArtiVoiceCallbacks) {
   // Keep callbacks in a ref so the conversation tools always see the latest
   // closures without forcing a session reconnect on every render.
@@ -61,9 +118,9 @@ export function useArtiVoice(callbacks: ArtiVoiceCallbacks) {
     cbRef.current = callbacks;
   }, [callbacks]);
 
-  const [sessionStatus, setSessionStatus] = useState<
-    "idle" | "connecting" | "connected" | "error"
-  >("idle");
+  const [sessionStatus, setSessionStatus] = useState<"idle" | "connecting" | "connected" | "error">(
+    "idle",
+  );
   const [wakeListening, setWakeListening] = useState(false);
   const [error, setError] = useState<string | null>(null);
 
@@ -93,22 +150,82 @@ export function useArtiVoice(callbacks: ArtiVoiceCallbacks) {
         cbRef.current.onAgentResponse?.(m.message);
       }
     },
+    // Tool handlers are intentionally terse — the agent's system prompt
+    // caps responses at one short sentence, and verbose tool returns just
+    // bloat the LLM context. Returns are JSON-stringified ArtiToolResults
+    // (ok flag + optional reason) so the SDK's string-return contract is
+    // satisfied while the agent still gets structured context.
     clientTools: {
-      go_home: () => {
+      // ---- Navigation ----
+      goHome: () => {
         cbRef.current.onGoHome();
-        return "Navigated home";
+        return serialize({ ok: true });
       },
-      show_cases: () => {
+      showCases: () => {
         cbRef.current.onShowCases();
-        return "Showing today's cases";
+        return serialize({ ok: true });
       },
-      open_case: (params: { query?: string }) => {
-        cbRef.current.onOpenCase(params?.query ?? "");
-        return `Opening case: ${params?.query ?? "next"}`;
+      openCase: (params: Record<string, unknown>) => {
+        cbRef.current.onOpenCase(asString(params?.query) ?? "");
+        return serialize({ ok: true });
       },
       sleep: () => {
         cbRef.current.onSleep();
-        return "Going to sleep";
+        return serialize({ ok: true });
+      },
+
+      // ---- Dashboard ----
+      toggleTimeOutItem: (params: Record<string, unknown>) => {
+        const id = asString(params?.id) as TimeOutId | undefined;
+        if (!id || !["patient", "site", "procedure", "allergies"].includes(id)) {
+          return serialize({ ok: false, reason: "unknown checklist item" });
+        }
+        return serialize(cbRef.current.onToggleTimeOutItem?.(id) ?? NOT_AVAILABLE);
+      },
+      adjustInstrumentCount: (params: Record<string, unknown>) => {
+        const item = asString(params?.item) as InstrumentId | undefined;
+        const delta = asNumber(params?.delta);
+        if (!item || !["raytec", "lap", "needle", "blade", "clamps"].includes(item)) {
+          return serialize({ ok: false, reason: "unknown instrument" });
+        }
+        if (delta === undefined || delta === 0) {
+          return serialize({ ok: false, reason: "delta required" });
+        }
+        return serialize(cbRef.current.onAdjustInstrumentCount?.(item, delta) ?? NOT_AVAILABLE);
+      },
+      toggleSterileCockpit: (params: Record<string, unknown>) => {
+        const enabled = asBool(params?.enabled);
+        return serialize(cbRef.current.onToggleSterileCockpit?.(enabled) ?? NOT_AVAILABLE);
+      },
+      dismissAlert: (params: Record<string, unknown>) => {
+        const index = asNumber(params?.index);
+        if (index === undefined || index < 0) {
+          return serialize({ ok: false, reason: "index required" });
+        }
+        return serialize(cbRef.current.onDismissAlert?.(index) ?? NOT_AVAILABLE);
+      },
+      openQuadView: () => {
+        return serialize(cbRef.current.onOpenQuadView?.() ?? NOT_AVAILABLE);
+      },
+      focusQuadPanel: (params: Record<string, unknown>) => {
+        const panel = asString(params?.panel) as QuadPanelId | undefined;
+        if (!panel || !["timeout", "instruments", "alerts", "team"].includes(panel)) {
+          return serialize({ ok: false, reason: "unknown panel" });
+        }
+        return serialize(cbRef.current.onFocusQuadPanel?.(panel) ?? NOT_AVAILABLE);
+      },
+      closeQuadView: () => {
+        return serialize(cbRef.current.onCloseQuadView?.() ?? NOT_AVAILABLE);
+      },
+      openHowToVideo: (params: Record<string, unknown>) => {
+        const title = asString(params?.title);
+        return serialize(cbRef.current.onOpenHowToVideo?.(title) ?? NOT_AVAILABLE);
+      },
+      showPreferenceCard: () => {
+        return serialize(cbRef.current.onShowPreferenceCard?.() ?? NOT_AVAILABLE);
+      },
+      showPreferenceCardLayoutImages: () => {
+        return serialize(cbRef.current.onShowPreferenceCardLayoutImages?.() ?? NOT_AVAILABLE);
       },
     },
   });
@@ -127,16 +244,15 @@ export function useArtiVoice(callbacks: ArtiVoiceCallbacks) {
         // matching toggles ("First message" + "System prompt") MUST be
         // enabled in the ElevenLabs agent's Security tab for these to
         // take effect — otherwise the SDK silently ignores them.
-        const overrides = opts?.firstMessage || opts?.promptAddition
-          ? {
-              agent: {
-                ...(opts.firstMessage ? { firstMessage: opts.firstMessage } : {}),
-                ...(opts.promptAddition
-                  ? { prompt: { prompt: opts.promptAddition } }
-                  : {}),
-              },
-            }
-          : undefined;
+        const overrides =
+          opts?.firstMessage || opts?.promptAddition
+            ? {
+                agent: {
+                  ...(opts.firstMessage ? { firstMessage: opts.firstMessage } : {}),
+                  ...(opts.promptAddition ? { prompt: { prompt: opts.promptAddition } } : {}),
+                },
+              }
+            : undefined;
         await conversation.startSession({
           conversationToken: token,
           connectionType: "webrtc",
@@ -179,7 +295,6 @@ export function useArtiVoice(callbacks: ArtiVoiceCallbacks) {
   const startWakeWord = useCallback(() => {
     const Ctor = getSpeechRecognitionCtor();
     if (!Ctor) {
-      // Browser doesn't support Web Speech — silently skip.
       return;
     }
     if (recognitionRef.current) return;
@@ -191,7 +306,6 @@ export function useArtiVoice(callbacks: ArtiVoiceCallbacks) {
     rec.lang = "en-US";
 
     rec.onresult = (ev) => {
-      // Scan all results for the wake phrase.
       let heard = "";
       for (let i = 0; i < ev.results.length; i++) {
         const alt = ev.results[i][0];
@@ -211,24 +325,17 @@ export function useArtiVoice(callbacks: ArtiVoiceCallbacks) {
       // Without this guard, onend kept restarting the recognizer in a
       // tight loop and prevented the WebRTC session from ever grabbing
       // the mic.
-      if (
-        code === "not-allowed" ||
-        code === "service-not-allowed" ||
-        code === "audio-capture"
-      ) {
+      if (code === "not-allowed" || code === "service-not-allowed" || code === "audio-capture") {
         console.warn("[arti-voice] wake recognizer disabled:", code);
         wakeEnabledRef.current = false;
         setWakeListening(false);
         return;
       }
-      // "no-speech" / "aborted" are routine — onend will restart.
       if (code !== "no-speech" && code !== "aborted") {
         console.warn("[arti-voice] wake recognizer error:", code);
       }
     };
     rec.onend = () => {
-      // Browsers stop continuous recognition after silence; restart if we
-      // still want to listen.
       if (wakeEnabledRef.current) {
         try {
           rec.start();
@@ -249,7 +356,6 @@ export function useArtiVoice(callbacks: ArtiVoiceCallbacks) {
     }
   }, [startSession, stopWakeWord]);
 
-  // Tear down on unmount.
   useEffect(() => {
     return () => {
       stopWakeWord();
@@ -269,7 +375,6 @@ export function useArtiVoice(callbacks: ArtiVoiceCallbacks) {
   const isConnected = sessionStatus === "connected";
 
   return {
-    /** 'idle' | 'connecting' | 'connected' | 'error' */
     sessionStatus,
     isConnected,
     isAgentSpeaking,
@@ -279,7 +384,6 @@ export function useArtiVoice(callbacks: ArtiVoiceCallbacks) {
     endSession,
     startWakeWord,
     stopWakeWord,
-    /** True if browser supports Web Speech wake word. */
     wakeWordSupported: typeof window !== "undefined" && getSpeechRecognitionCtor() !== null,
   };
 }

@@ -1,11 +1,24 @@
-import { ShieldAlert, Pill, ThermometerSnowflake } from "lucide-react";
+import { ShieldAlert, Pill, ThermometerSnowflake, type LucideIcon } from "lucide-react";
+
+export type AlertTier = "Critical" | "Advisory" | "Info";
+
+export interface AlertDef {
+  icon: LucideIcon;
+  tier: AlertTier;
+  title: string;
+  body: string;
+  tone: "destructive" | "primary" | "muted";
+}
 
 /**
  * Smart alert prioritization (vs. flat alarm streams).
  * Three tiers — critical / advisory / informational — visually distinct
  * to combat alarm fatigue (Miller, Endsley situational awareness).
+ *
+ * Exported so the dashboard can inspect tier metadata (e.g., to refuse
+ * dismissing Critical-tier alerts per the Arti safety rules).
  */
-const ALERTS = [
+export const ALERTS: AlertDef[] = [
   {
     icon: ShieldAlert,
     tier: "Critical",
@@ -51,7 +64,7 @@ interface Props {
 
 export function AlertStack({ dismissed, onDismiss }: Props = {}) {
   const visible = ALERTS.map((a, i) => ({ ...a, index: i })).filter(
-    (a) => !dismissed?.has(a.index)
+    (a) => !dismissed?.has(a.index),
   );
   const dismissedCount = dismissed?.size ?? 0;
 
@@ -117,4 +130,3 @@ export function AlertStack({ dismissed, onDismiss }: Props = {}) {
     </section>
   );
 }
-

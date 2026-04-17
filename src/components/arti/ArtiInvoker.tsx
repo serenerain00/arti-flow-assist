@@ -46,7 +46,8 @@ export function ArtiInvoker({ onSubmit, placeholder, suggestions = [], className
   useEffect(() => {
     const onKey = (e: KeyboardEvent) => {
       const tag = (e.target as HTMLElement | null)?.tagName?.toLowerCase();
-      const isTyping = tag === "input" || tag === "textarea" || (e.target as HTMLElement)?.isContentEditable;
+      const isTyping =
+        tag === "input" || tag === "textarea" || (e.target as HTMLElement)?.isContentEditable;
       if (e.key === "Escape" && open) {
         e.preventDefault();
         setOpen(false);
@@ -92,7 +93,11 @@ export function ArtiInvoker({ onSubmit, placeholder, suggestions = [], className
       const tl = gsap.timeline({ defaults: { ease: "expo.out" } });
       tl.to(orb, { opacity: 0, scale: 0.6, duration: 0.2, ease: "power2.in" }, 0)
         .to(panel, { width: fullWidth, duration: 0.65, ease: "expo.out" }, 0.05)
-        .to(staggerEls, { opacity: 1, y: 0, duration: 0.4, stagger: 0.05, ease: "power3.out" }, 0.35)
+        .to(
+          staggerEls,
+          { opacity: 1, y: 0, duration: 0.4, stagger: 0.05, ease: "power3.out" },
+          0.35,
+        )
         .set(panel, { overflow: "visible", width: "auto" });
       tlRef.current = tl;
 

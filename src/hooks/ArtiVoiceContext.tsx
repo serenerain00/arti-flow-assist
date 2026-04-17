@@ -19,18 +19,21 @@ export function ArtiVoiceProvider({ callbacks, children }: ProviderProps) {
   const value = useArtiVoice(callbacks);
   // Memoize the object identity so consumers don't re-render unnecessarily
   // — but the underlying primitives still update.
-  const memo = useMemo(() => value, [
-    value.sessionStatus,
-    value.isConnected,
-    value.isAgentSpeaking,
-    value.wakeListening,
-    value.error,
-    value.startSession,
-    value.endSession,
-    value.startWakeWord,
-    value.stopWakeWord,
-    value.wakeWordSupported,
-  ]);
+  const memo = useMemo(
+    () => value,
+    [
+      value.sessionStatus,
+      value.isConnected,
+      value.isAgentSpeaking,
+      value.wakeListening,
+      value.error,
+      value.startSession,
+      value.endSession,
+      value.startWakeWord,
+      value.stopWakeWord,
+      value.wakeWordSupported,
+    ],
+  );
   return <ArtiVoiceContext.Provider value={memo}>{children}</ArtiVoiceContext.Provider>;
 }
 

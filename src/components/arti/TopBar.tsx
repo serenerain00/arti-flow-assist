@@ -28,8 +28,7 @@ export function TopBar({ staffName, staffRole, initials, cockpitMode, onToggleCo
     return () => clearInterval(i);
   }, []);
 
-  const noiseColor =
-    noise > 65 ? "text-warning" : noise > 55 ? "text-foreground" : "text-success";
+  const noiseColor = noise > 65 ? "text-warning" : noise > 55 ? "text-foreground" : "text-success";
 
   return (
     <header className="flex items-center justify-between border-b border-border bg-surface/40 px-8 py-4">
@@ -65,7 +64,7 @@ export function TopBar({ staffName, staffRole, initials, cockpitMode, onToggleCo
                         : i > 6
                           ? "bg-foreground/70"
                           : "bg-success"
-                      : "bg-surface-3"
+                      : "bg-surface-3",
                   )}
                 />
               );
@@ -86,7 +85,7 @@ export function TopBar({ staffName, staffRole, initials, cockpitMode, onToggleCo
           onClick={onToggleCockpit}
           className={cn(
             "glass flex items-center gap-2 rounded-full px-4 py-2 text-sm font-light transition-colors",
-            cockpitMode && "border-primary/50 text-primary"
+            cockpitMode && "border-primary/50 text-primary",
           )}
           aria-pressed={cockpitMode}
         >
@@ -95,7 +94,7 @@ export function TopBar({ staffName, staffRole, initials, cockpitMode, onToggleCo
           <span
             className={cn(
               "ml-1 inline-block h-1.5 w-1.5 rounded-full",
-              cockpitMode ? "bg-primary" : "bg-muted-foreground/40"
+              cockpitMode ? "bg-primary" : "bg-muted-foreground/40",
             )}
           />
         </button>

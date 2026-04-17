@@ -71,7 +71,7 @@ export function QuadView({
       gsap.fromTo(
         containerRef.current,
         { autoAlpha: 0 },
-        { autoAlpha: 1, duration: 0.3, ease: "power2.out" }
+        { autoAlpha: 1, duration: 0.3, ease: "power2.out" },
       );
       gsap.fromTo(
         Array.from(tilesRef.current.values()),
@@ -83,7 +83,7 @@ export function QuadView({
           duration: 0.55,
           ease: "power3.out",
           stagger: 0.07,
-        }
+        },
       );
     }, containerRef);
     return () => ctx.revert();
@@ -133,10 +133,7 @@ export function QuadView({
   };
 
   return (
-    <div
-      ref={containerRef}
-      className="fixed inset-0 z-30 flex flex-col bg-background"
-    >
+    <div ref={containerRef} className="fixed inset-0 z-30 flex flex-col bg-background">
       {/* Header bar */}
       <div className="flex items-center justify-between border-b border-border/40 px-8 py-5">
         <div className="flex items-center gap-3">
@@ -173,7 +170,7 @@ export function QuadView({
           "min-h-0 flex-1 gap-4 px-6 py-4 pb-24",
           focused
             ? "no-scrollbar flex overflow-y-auto"
-            : "grid grid-cols-2 grid-rows-2 overflow-hidden"
+            : "grid grid-cols-2 grid-rows-2 overflow-hidden",
         )}
       >
         {PANELS.map(({ id, label }) => {
@@ -190,7 +187,7 @@ export function QuadView({
                 "group relative flex flex-col overflow-hidden rounded-3xl border border-border bg-surface-2 text-left transition-shadow",
                 "hover:border-primary/40 hover:shadow-[0_0_40px_-10px_hsl(var(--primary)/0.4)]",
                 isFocused ? "w-full" : "min-h-0",
-                isHidden && "pointer-events-none hidden"
+                isHidden && "pointer-events-none hidden",
               )}
             >
               <div className="absolute left-4 top-4 z-10 flex items-center gap-2">
@@ -209,7 +206,7 @@ export function QuadView({
               <div
                 className={cn(
                   "min-h-0 flex-1 pt-10",
-                  isFocused ? "overflow-visible" : "no-scrollbar overflow-y-auto"
+                  isFocused ? "overflow-visible" : "no-scrollbar overflow-y-auto",
                 )}
               >
                 {renderPanel(id)}

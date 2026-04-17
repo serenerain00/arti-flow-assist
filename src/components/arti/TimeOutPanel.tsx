@@ -65,7 +65,6 @@ export function TimeOutPanel({ onComplete, checked: checkedProp, onToggle }: Pro
 
   const progress = (checked.size / ITEMS.length) * 100;
 
-
   return (
     <section className="glass rounded-2xl p-6">
       <div className="mb-5 flex items-end justify-between">
@@ -102,7 +101,7 @@ export function TimeOutPanel({ onComplete, checked: checkedProp, onToggle }: Pro
                 className={cn(
                   "group flex w-full items-start gap-4 rounded-xl border border-transparent bg-surface-2/40 p-4 text-left transition-all",
                   "hover:border-border hover:bg-surface-2",
-                  isChecked && "border-success/30 bg-success/5"
+                  isChecked && "border-success/30 bg-success/5",
                 )}
               >
                 <div
@@ -112,7 +111,7 @@ export function TimeOutPanel({ onComplete, checked: checkedProp, onToggle }: Pro
                       ? "bg-success text-success-foreground"
                       : it.warning
                         ? "bg-warning/15 text-warning"
-                        : "bg-surface-3 text-muted-foreground"
+                        : "bg-surface-3 text-muted-foreground",
                   )}
                 >
                   {isChecked ? (
@@ -131,15 +130,13 @@ export function TimeOutPanel({ onComplete, checked: checkedProp, onToggle }: Pro
                       {it.confirmer}
                     </span>
                   </div>
-                  <div className="mt-1 text-sm font-light text-muted-foreground">
-                    {it.detail}
-                  </div>
+                  <div className="mt-1 text-sm font-light text-muted-foreground">{it.detail}</div>
                 </div>
 
                 <div
                   className={cn(
                     "flex h-6 w-6 shrink-0 items-center justify-center rounded-full border-2 transition-colors",
-                    isChecked ? "border-success bg-success" : "border-muted-foreground/40"
+                    isChecked ? "border-success bg-success" : "border-muted-foreground/40",
                   )}
                 >
                   {isChecked && (

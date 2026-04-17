@@ -4,14 +4,14 @@ export type CaseStatus = "in-progress" | "next" | "scheduled" | "completed" | "d
 
 export interface CaseItem {
   id: string;
-  time: string;            // "07:30"
+  time: string; // "07:30"
   durationMin: number;
-  room: string;            // "OR 326"
+  room: string; // "OR 326"
   patientName: string;
   patientMrn: string;
-  patientAgeSex: string;   // "62M"
+  patientAgeSex: string; // "62M"
   procedure: string;
-  procedureShort: string;  // "RSA"
+  procedureShort: string; // "RSA"
   surgeon: string;
   status: CaseStatus;
   side?: "Left" | "Right";
@@ -90,10 +90,7 @@ export const TODAY_CASES: CaseItem[] = [
   },
 ];
 
-export const STATUS_META: Record<
-  CaseStatus,
-  { label: string; tone: string; dot: string }
-> = {
+export const STATUS_META: Record<CaseStatus, { label: string; tone: string; dot: string }> = {
   "in-progress": {
     label: "In Progress",
     tone: "text-primary border-primary/40 bg-primary/10",
