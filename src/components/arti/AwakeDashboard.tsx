@@ -43,6 +43,7 @@ export function AwakeDashboard({
   initials,
   onSleep,
   onBackToCases,
+  onPrompt,
 }: Props) {
   const [cockpit, setCockpit] = useState(false);
   const [howToOpen, setHowToOpen] = useState(false);
