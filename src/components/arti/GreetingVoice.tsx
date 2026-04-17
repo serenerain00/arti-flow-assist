@@ -4,47 +4,38 @@ import { useConversation } from "@elevenlabs/react";
 interface Props {
   staffName: string;
   /**
-   * Fires exactly once after Arti finishes speaking the greeting,
-   * or after a hard safety timeout if the agent never responds.
-   * The parent is responsible for not re-triggering this component.
+   * Fires when the user explicitly asks to go to the dashboard
+   * (e.g. "show me the dashboard", "open the dashboard", "let's go").
+   * Triggered via the `goToDashboard` client tool.
    */
-  onGreetingComplete: () => void;
+  onGoToDashboard: () => void;
 }
 
 /**
- * Headless one-shot greeting. No UI of its own.
+ * Headless greeting + listening session on the wake screen.
  *
- * Guarantees:
- *  - startSession is called at most once per mount (startedRef guard)
- *  - onGreetingComplete fires at most once (completedRef guard)
- *  - never auto-reconnects on disconnect or error — single-shot only
- *  - on unmount, the session is ended cleanly
+ * Behavior:
+ *  - Speaks "Good morning, {first name}." once on mount.
+ *  - Then stays connected and silent, listening for the user to say
+ *    something like "show me the dashboard" — at which point the
+ *    `goToDashboard` client tool fires and the parent transitions.
+ *  - Never auto-transitions. Never re-greets. No reconnect loops.
  *
- * The parent (route-level state machine) is the only thing that
- * decides when this component mounts/unmounts, which prevents
- * greeting loops on re-renders, modal opens, or reconnects.
+ * The agent prompt should be configured to call `goToDashboard` when
+ * the user asks to proceed/open the dashboard, and otherwise stay quiet.
  */
-export function GreetingVoice({ staffName, onGreetingComplete }: Props) {
+export function GreetingVoice({ staffName, onGoToDashboard }: Props) {
   const startedRef = useRef(false);
-  const hasSpokenRef = useRef(false);
-  const completedRef = useRef(false);
-  const onCompleteRef = useRef(onGreetingComplete);
-  onCompleteRef.current = onGreetingComplete;
-
-  const complete = useCallback(() => {
-    if (completedRef.current) return;
-    completedRef.current = true;
-    onCompleteRef.current();
-  }, []);
+  const onGoRef = useRef(onGoToDashboard);
+  onGoRef.current = onGoToDashboard;
 
   const conversation = useConversation({
-    onError: (err) => {
-      console.warn("[Arti greeting] error — completing", err);
-      complete();
-    },
-    onDisconnect: () => {
-      // If we disconnect before ever speaking, just move on — never retry.
-      if (!hasSpokenRef.current) complete();
+    onError: (err) => console.warn("[Arti greeting] error", err),
+    clientTools: {
+      goToDashboard: () => {
+        onGoRef.current();
+        return "Opening the dashboard.";
+      },
     },
   });
 
@@ -52,58 +43,30 @@ export function GreetingVoice({ staffName, onGreetingComplete }: Props) {
     try {
       await navigator.mediaDevices.getUserMedia({ audio: true });
       const res = await fetch("/api/elevenlabs/token");
-      if (!res.ok) {
-        complete();
-        return;
-      }
+      if (!res.ok) return;
       const { signedUrl } = (await res.json()) as { signedUrl?: string };
-      if (!signedUrl) {
-        complete();
-        return;
-      }
+      if (!signedUrl) return;
 
       await conversation.startSession({
         signedUrl,
         connectionType: "websocket",
         overrides: {
           agent: {
-            // Short, one-line, no follow-up question — Arti must not
-            // keep talking after this. The agent prompt should be
-            // configured to stay silent until spoken to.
             firstMessage: `Good morning, ${staffName.split(" ")[0]}.`,
           },
           tts: { voiceId: "6sFKzaJr574YWVu4UuJF" },
         },
       });
     } catch (err) {
-      console.warn("[Arti greeting] failed to start — completing", err);
-      complete();
+      console.warn("[Arti greeting] failed to start", err);
     }
-  }, [conversation, staffName, complete]);
-
-  // Watch isSpeaking: once Arti has spoken and then stops, signal complete.
-  // A small tail delay prevents clipping the last syllable on unmount.
-  useEffect(() => {
-    if (conversation.isSpeaking) {
-      hasSpokenRef.current = true;
-      return;
-    }
-    if (hasSpokenRef.current) {
-      const t = setTimeout(complete, 450);
-      return () => clearTimeout(t);
-    }
-  }, [conversation.isSpeaking, complete]);
+  }, [conversation, staffName]);
 
   useEffect(() => {
     if (startedRef.current) return;
     startedRef.current = true;
     start();
-
-    // Hard safety net — if connection or speech never happens, advance anyway.
-    const safety = setTimeout(complete, 12000);
-
     return () => {
-      clearTimeout(safety);
       try {
         conversation.endSession();
       } catch {
