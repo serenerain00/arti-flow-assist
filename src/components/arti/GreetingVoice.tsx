@@ -3,6 +3,8 @@ import { useConversation } from "@elevenlabs/react";
 
 interface Props {
   staffName: string;
+  /** Time-of-day greeting, e.g. "Good morning". Must match on-screen text. */
+  greeting: string;
   /**
    * Fires when the user explicitly asks to go to the dashboard
    * (e.g. "show me the dashboard", "open the dashboard", "let's go").
