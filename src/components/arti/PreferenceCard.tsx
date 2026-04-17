@@ -92,6 +92,40 @@ export function PreferenceCard() {
 
       {expanded && (
         <CardContent className="grid gap-5 sm:grid-cols-2">
+          {/* Surgical Table Layout */}
+          <div className="sm:col-span-2">
+            <Section icon={LayoutGrid} title="Surgical Table Layout">
+              <div className="grid gap-3 sm:grid-cols-2">
+                <figure className="overflow-hidden rounded-xl border border-border/60 bg-surface-2">
+                  <img
+                    src={surgicalTableOverview}
+                    alt="Overhead view of sterile back table with orthopedic instruments arranged in rows"
+                    width={1024}
+                    height={640}
+                    loading="lazy"
+                    className="aspect-[16/10] w-full object-cover"
+                  />
+                  <figcaption className="px-3 py-2 font-mono text-[10px] uppercase tracking-wider text-muted-foreground">
+                    Back Table · Standard RSA Setup
+                  </figcaption>
+                </figure>
+                <figure className="overflow-hidden rounded-xl border border-border/60 bg-surface-2">
+                  <img
+                    src={surgicalTableMayo}
+                    alt="Mayo stand layout for shoulder arthroplasty showing reamers, trials, and impactors"
+                    width={1024}
+                    height={640}
+                    loading="lazy"
+                    className="aspect-[16/10] w-full object-cover"
+                  />
+                  <figcaption className="px-3 py-2 font-mono text-[10px] uppercase tracking-wider text-muted-foreground">
+                    Mayo Stand · Shoulder Arthroplasty
+                  </figcaption>
+                </figure>
+              </div>
+            </Section>
+          </div>
+
           {/* Positioning */}
           <Section icon={ArrowUpDown} title="Positioning">
             <ul className="space-y-1 text-sm text-muted-foreground">
