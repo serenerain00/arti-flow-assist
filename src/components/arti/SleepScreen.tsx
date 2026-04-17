@@ -114,7 +114,7 @@ export function SleepScreen({
                   {timeStr}
                 </div>
                 <div className="mt-12 font-mono text-[10px] uppercase tracking-[0.4em] text-muted-foreground/40 opacity-0 transition-opacity duration-500 group-hover:opacity-100">
-                  Tap anywhere or say "Hi Arti"
+                  Tap anywhere to wake
                 </div>
               </>
             )}
