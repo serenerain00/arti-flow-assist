@@ -228,6 +228,7 @@ function ArtiWall({ callbacksRef }: ArtiWallProps) {
         onSleep={handleSleep}
         activeCase={activeCase}
         onBackToCases={() => setPhase("cases")}
+        onPrompt={handlePrompt}
       />
     );
   } else if (phase === "cases") {
