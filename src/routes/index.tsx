@@ -67,7 +67,11 @@ function ArtiWallRoot() {
  */
 type ArtiPhase = "sleep" | "waking" | "greeting" | "home" | "cases" | "preop";
 
-function ArtiWall() {
+interface ArtiWallProps {
+  callbacksRef: React.MutableRefObject<ArtiVoiceCallbacks>;
+}
+
+function ArtiWall({ callbacksRef }: ArtiWallProps) {
   const [phase, setPhase] = useState<ArtiPhase>("sleep");
   const [activeCase, setActiveCase] = useState<CaseItem>(
     () => TODAY_CASES.find((c) => c.status === "next") ?? TODAY_CASES[0]
