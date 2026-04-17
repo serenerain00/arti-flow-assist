@@ -1,26 +1,40 @@
 import { createFileRoute } from "@tanstack/react-router";
+import { useState } from "react";
+import { SleepScreen } from "@/components/arti/SleepScreen";
+import { AwakeDashboard } from "@/components/arti/AwakeDashboard";
 
 export const Route = createFileRoute("/")({
-  component: Index,
+  component: ArtiWall,
+  head: () => ({
+    meta: [
+      { title: "Arti Wall · Intelligent OR Companion" },
+      {
+        name: "description",
+        content:
+          "Arti Wall — an ambient LED display for the operating room. Pre-case time-outs, instrument counts, and voice-driven guidance designed to reduce cognitive load and prevent never-events.",
+      },
+    ],
+  }),
 });
 
-// IMPORTANT: Replace this placeholder. For sites with multiple pages (About, Services, Contact, etc.),
-// create separate route files (about.tsx, services.tsx, contact.tsx) — don't put all pages in this file.
-function PlaceholderIndex() {
-  return (
-    <div
-      className="flex min-h-screen items-center justify-center"
-      style={{ backgroundColor: "#fcfbf8" }}
-    >
-      <img
-        data-lovable-blank-page-placeholder="REMOVE_THIS"
-        src="https://cdn.gpteng.co/blank-app-v1.svg"
-        alt="Your app will live here!"
-      />
-    </div>
-  );
-}
+function ArtiWall() {
+  const [awake, setAwake] = useState(false);
 
-function Index() {
-  return <PlaceholderIndex />;
+  // Demo persona — in production sourced from RFID badge / OR scheduling
+  const staff = {
+    name: "Nora Quinn",
+    role: "Circulating Nurse",
+    initials: "NQ",
+  };
+
+  return awake ? (
+    <AwakeDashboard
+      staffName={staff.name}
+      staffRole={staff.role}
+      initials={staff.initials}
+      onSleep={() => setAwake(false)}
+    />
+  ) : (
+    <SleepScreen onWake={() => setAwake(true)} staffName={staff.name} />
+  );
 }
