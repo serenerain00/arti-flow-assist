@@ -28,12 +28,33 @@ export const Route = createFileRoute("/")({
 });
 
 /**
- * Root that wires the shared voice session in once. ArtiWall lives inside
- * the provider so every child (including the invoker, mounted inside each
- * screen) sees the same conversation state.
+ * Root that wires the shared voice session in once. We use a ref to bridge
+ * the agent's tool callbacks (registered up here in the provider) to the
+ * actual state setters living inside ArtiWall — that way the provider can
+ * be mounted before the inner component initializes.
  */
 function ArtiWallRoot() {
-  return <ArtiWallWithVoice />;
+  const callbacksRef = useRef<ArtiVoiceCallbacks>({
+    onGoHome: () => {},
+    onShowCases: () => {},
+    onOpenCase: () => {},
+    onSleep: () => {},
+  });
+  const stableCallbacks = useMemo<ArtiVoiceCallbacks>(
+    () => ({
+      onGoHome: () => callbacksRef.current.onGoHome(),
+      onShowCases: () => callbacksRef.current.onShowCases(),
+      onOpenCase: (q) => callbacksRef.current.onOpenCase(q),
+      onSleep: () => callbacksRef.current.onSleep(),
+    }),
+    [],
+  );
+
+  return (
+    <ArtiVoiceProvider callbacks={stableCallbacks}>
+      <ArtiWall callbacksRef={callbacksRef} />
+    </ArtiVoiceProvider>
+  );
 }
 
 /**
