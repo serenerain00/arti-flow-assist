@@ -113,6 +113,17 @@ export function AwakeDashboard({ staffName, staffRole, initials, onSleep }: Prop
     return "Closed quad view";
   }, []);
 
+  const showPreferenceCard = useCallback(() => {
+    // Scroll to preference card section
+    document.getElementById("preference-card")?.scrollIntoView({ behavior: "smooth" });
+    return "Showing preference card";
+  }, []);
+
+  const showPatientDetails = useCallback(() => {
+    setPatientDetailsOpen(true);
+    return "Opened patient details";
+  }, []);
+
   // ───────── Context for Arti ─────────
   const initialContext = useMemo(
     () =>
@@ -122,7 +133,7 @@ export function AwakeDashboard({ staffName, staffRole, initials, onSleep }: Prop
         `Current case: ${CASE_CONTEXT.procedure} for ${CASE_CONTEXT.patient}, surgeon ${CASE_CONTEXT.surgeon}.`,
         `Allergies: ${CASE_CONTEXT.allergies}.`,
         `Next patient on the board: ${CASE_CONTEXT.nextPatient}.`,
-        `You can call client tools to update the UI: openHowToVideo, toggleTimeOutItem, adjustInstrumentCount, toggleSterileCockpit, dismissAlert, openQuadView, focusQuadPanel (panels: timeout, instruments, alerts, team), closeQuadView.`,
+        `You can call client tools to update the UI: openHowToVideo, toggleTimeOutItem, adjustInstrumentCount, toggleSterileCockpit, dismissAlert, openQuadView, focusQuadPanel (panels: timeout, instruments, alerts, team), closeQuadView, showPreferenceCard, showPatientDetails.`,
       ].join(" "),
     [staffName, staffRole]
   );
@@ -207,6 +218,8 @@ export function AwakeDashboard({ staffName, staffRole, initials, onSleep }: Prop
               openQuadView,
               focusQuadPanel,
               closeQuadView,
+              showPreferenceCard,
+              showPatientDetails,
             }}
           />
         </div>

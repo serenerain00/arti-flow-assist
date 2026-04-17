@@ -69,7 +69,7 @@ export function PreferenceCard() {
   const [expanded, setExpanded] = useState(true);
 
   return (
-    <Card className="border-border/60 bg-surface/80 backdrop-blur-md">
+    <Card id="preference-card" className="border-border/60 bg-surface/80 backdrop-blur-md">
       <CardHeader className="cursor-pointer pb-3" onClick={() => setExpanded((e) => !e)}>
         <div className="flex items-center justify-between">
           <div className="flex items-center gap-3">
