@@ -159,12 +159,18 @@ export function VoiceBar({
       };
       if (!signedUrl) throw new Error(error ?? "No signed URL received");
 
+      const isFirstGreeting = !hasGreetedRef.current;
+      hasGreetedRef.current = true;
+
       await conversation.startSession({
         signedUrl,
         connectionType: "websocket",
         overrides: {
           agent: {
-            firstMessage: `Good morning, ${staffName.split(" ")[0]}. I'm here whenever you need me.`,
+            // Only greet on the very first connection — reconnects stay silent
+            ...(isFirstGreeting
+              ? { firstMessage: `Good morning, ${staffName.split(" ")[0]}. I'm here whenever you need me.` }
+              : { firstMessage: "" }),
           },
           tts: {
             voiceId: "6sFKzaJr574YWVu4UuJF",
