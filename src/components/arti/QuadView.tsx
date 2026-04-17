@@ -170,8 +170,10 @@ export function QuadView({
       <div
         ref={gridRef}
         className={cn(
-          "grid min-h-0 flex-1 gap-4 px-6 py-4 pb-24",
-          focused ? "grid-cols-1 grid-rows-1" : "grid-cols-2 grid-rows-2"
+          "min-h-0 flex-1 gap-4 px-6 py-4 pb-24",
+          focused
+            ? "no-scrollbar flex overflow-y-auto"
+            : "grid grid-cols-2 grid-rows-2 overflow-hidden"
         )}
       >
         {PANELS.map(({ id, label }) => {
