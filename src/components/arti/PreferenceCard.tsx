@@ -147,7 +147,7 @@ export function PreferenceCard() {
                 {PREF_CARD.notes.map((note) => (
                   <div
                     key={note}
-                    className="rounded-lg border border-warning/20 bg-warning/5 px-3 py-2 text-sm text-warning-foreground"
+                    className="rounded-lg border border-warning/20 bg-warning/5 px-3 py-2 text-sm text-white"
                   >
                     {note}
                   </div>
