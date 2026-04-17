@@ -41,13 +41,20 @@ const ITEMS = [
 
 interface Props {
   onComplete?: () => void;
+  checked?: Set<string>;
+  onToggle?: (id: string) => void;
 }
 
-export function TimeOutPanel({ onComplete }: Props) {
-  const [checked, setChecked] = useState<Set<string>>(new Set());
+export function TimeOutPanel({ onComplete, checked: checkedProp, onToggle }: Props) {
+  const [internal, setInternal] = useState<Set<string>>(new Set());
+  const checked = checkedProp ?? internal;
 
   const toggle = (id: string) => {
-    setChecked((prev) => {
+    if (onToggle) {
+      onToggle(id);
+      return;
+    }
+    setInternal((prev) => {
       const next = new Set(prev);
       if (next.has(id)) next.delete(id);
       else next.add(id);
@@ -57,6 +64,7 @@ export function TimeOutPanel({ onComplete }: Props) {
   };
 
   const progress = (checked.size / ITEMS.length) * 100;
+
 
   return (
     <section className="glass rounded-2xl p-6">

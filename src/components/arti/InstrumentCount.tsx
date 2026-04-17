@@ -23,11 +23,25 @@ const SEED: Item[] = [
   { id: "clamps", label: "Mosquito clamps", initial: 12, returned: 12, category: "instruments" },
 ];
 
-export function InstrumentCount() {
-  const [items, setItems] = useState(SEED);
+interface Props {
+  counts?: Record<string, number>;
+  onAdjust?: (id: string, delta: number) => void;
+}
+
+export function InstrumentCount({ counts: countsProp, onAdjust }: Props = {}) {
+  const [internal, setInternal] = useState(SEED);
+
+  // Merge external counts (from voice) into items
+  const items = countsProp
+    ? SEED.map((s) => ({ ...s, returned: countsProp[s.id] ?? s.returned }))
+    : internal;
 
   const adjust = (id: string, delta: number) => {
-    setItems((arr) =>
+    if (onAdjust) {
+      onAdjust(id, delta);
+      return;
+    }
+    setInternal((arr) =>
       arr.map((i) =>
         i.id === id
           ? { ...i, returned: Math.max(0, Math.min(i.initial + 5, i.returned + delta)) }
@@ -40,6 +54,7 @@ export function InstrumentCount() {
     () => items.filter((i) => i.returned !== i.initial),
     [items]
   );
+
 
   return (
     <section
