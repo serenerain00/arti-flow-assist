@@ -86,17 +86,12 @@ export function VoiceBar({ staffName, tools }: Props) {
 
       // Note: startSession returns void; the SDK transitions `status` to
       // "connected" asynchronously. Errors arrive via the onError callback.
+      // Overrides (firstMessage, voiceId) require explicit enablement in the
+      // ElevenLabs agent's Security tab. Omitting them so the agent's
+      // configured defaults are used and the WS handshake is not rejected.
       conversation.startSession({
         signedUrl,
         connectionType: "websocket",
-        overrides: {
-          agent: {
-            firstMessage: `Good morning, ${staffName.split(" ")[0]}. I'm here whenever you need me.`,
-          },
-          tts: {
-            voiceId: "6sFKzaJr574YWVu4UuJF",
-          },
-        },
       });
     } catch (err) {
       console.error("[Arti] failed to start session", err);
