@@ -10,13 +10,18 @@ import { HowToVideoModal } from "./HowToVideoModal";
 import { QuadView, type QuadPanelId } from "./QuadView";
 import { PreferenceCard } from "./PreferenceCard";
 import { PatientDetailsModal } from "./PatientDetailsModal";
-import { LayoutGrid } from "lucide-react";
+import { ArrowLeft, LayoutGrid } from "lucide-react";
+import type { CaseItem } from "./cases";
 
 interface Props {
   staffName: string;
   staffRole: string;
   initials: string;
   onSleep: () => void;
+  /** Optional case to display — when provided, drives the case header. */
+  activeCase?: CaseItem;
+  /** When provided, shows a "back to cases" affordance. */
+  onBackToCases?: () => void;
 }
 
 export type TimeOutId = "patient" | "site" | "procedure" | "allergies";

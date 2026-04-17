@@ -35,7 +35,7 @@ export function SleepScreen({
   staffName,
   onWakeRequested,
   onWakeAnimationComplete,
-  onGoToDashboard,
+  onPrompt,
 }: Props) {
   const [time, setTime] = useState<Date | null>(null);
 
@@ -56,19 +56,23 @@ export function SleepScreen({
     ? time.toLocaleTimeString([], { hour: "numeric", minute: "2-digit" })
     : "";
 
-  const handleClick = () => {
-    if (phase === "sleep") onWakeRequested();
-    else if (phase === "greeting") onGoToDashboard();
-  };
-
   return (
-    <button
-      type="button"
-      onClick={handleClick}
-      className="group fixed inset-0 z-50 block h-full w-full cursor-pointer overflow-hidden bg-background text-left"
-      aria-label={phase === "greeting" ? "Continue to dashboard" : "Wake Arti"}
+    <div
+      className="group fixed inset-0 z-50 block h-full w-full overflow-hidden bg-background text-left"
+      aria-label={phase === "greeting" ? "Talk to Arti" : "Wake Arti"}
     >
-      <RippleCanvas intensity={phase === "sleep" ? 0.6 : 2.2} />
+      {phase === "sleep" && (
+        <button
+          type="button"
+          onClick={onWakeRequested}
+          className="absolute inset-0 z-0 cursor-pointer"
+          aria-label="Wake Arti"
+        />
+      )}
+
+      <div className="pointer-events-none absolute inset-0">
+        <RippleCanvas intensity={phase === "sleep" ? 0.6 : 2.2} />
+      </div>
 
       <div className="pointer-events-none absolute inset-0 flex items-center justify-center">
         <div className="relative flex flex-col items-center">
@@ -102,7 +106,7 @@ export function SleepScreen({
                   {timeStr}
                 </div>
                 <div className="mt-12 font-mono text-[10px] uppercase tracking-[0.4em] text-muted-foreground/40 opacity-0 transition-opacity duration-500 group-hover:opacity-100">
-                  Tap anywhere to wake
+                  Tap anywhere · or say "Hi Arti"
                 </div>
               </>
             )}
@@ -123,23 +127,37 @@ export function SleepScreen({
                   {staffName.split(" ")[0]}.
                 </h2>
                 <p className="mt-4 max-w-md text-balance text-sm font-light text-muted-foreground">
-                  Today's first case begins in 32 minutes. I have your pre-op plan ready.
+                  Today's first case begins in 32 minutes. What can I get you?
                 </p>
-                <div className="mt-8 font-mono text-[10px] uppercase tracking-[0.4em] text-muted-foreground/60">
-                  Tap to continue
-                </div>
               </div>
             )}
           </div>
         </div>
       </div>
 
-      <div className="pointer-events-none absolute bottom-8 left-8 font-mono text-[10px] uppercase tracking-[0.3em] text-muted-foreground/50">
+      {phase !== "waking" && (
+        <div className="pointer-events-none absolute inset-x-0 bottom-16 z-20 flex justify-center px-8">
+          <div className="pointer-events-auto w-full max-w-xl animate-fade-in">
+            <PromptBar
+              autoFocus={phase === "greeting"}
+              placeholder={phase === "sleep" ? 'Say "Hi Arti" to begin…' : "Ask Arti anything…"}
+              onSubmit={onPrompt}
+              suggestions={
+                phase === "greeting"
+                  ? ["Show me the case list", "Open the next case", "What's my day look like?"]
+                  : []
+              }
+            />
+          </div>
+        </div>
+      )}
+
+      <div className="pointer-events-none absolute bottom-4 left-8 font-mono text-[10px] uppercase tracking-[0.3em] text-muted-foreground/50">
         OR 326 · sterile field calibrated · 21.4°C
       </div>
-      <div className="pointer-events-none absolute bottom-8 right-8 font-mono text-[10px] uppercase tracking-[0.3em] text-muted-foreground/50">
+      <div className="pointer-events-none absolute bottom-4 right-8 font-mono text-[10px] uppercase tracking-[0.3em] text-muted-foreground/50">
         Arti v2.1 · {phase === "sleep" ? "standing by" : "waking"}
       </div>
-    </button>
+    </div>
   );
 }
