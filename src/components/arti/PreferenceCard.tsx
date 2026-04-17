@@ -23,13 +23,13 @@ const PREF_CARD = {
     padding: "Axillary roll, head secured with gel donut",
   },
   implants: [
-    "Arthrex Univers Revers™ — Glenoid baseplate (size 25 mm)",
+    "Medtronix Univers Revers™ — Glenoid baseplate (size 25 mm)",
     "Glenosphere 38 mm",
     "Humeral stem — press-fit, size 8",
     "Poly insert — standard offset",
   ],
   instruments: [
-    "Arthrex RSA tray (full set)",
+    "Medtronix RSA tray (full set)",
     "Power reamer & drill",
     "Oscillating saw",
     "Bovie — blend 30/30",

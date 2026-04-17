@@ -10,7 +10,7 @@ const TEAM = [
   { name: "Dr. Liam Reyes", role: "Anesthesia", initials: "LR", scrubbed: true },
   { name: "Melissa Quinn", role: "Circulator", initials: "MQ", scrubbed: true },
   { name: "Sam Okafor", role: "Scrub Tech", initials: "SO", scrubbed: true },
-  { name: "Maya Chen", role: "Rep · Arthrex", initials: "MC", scrubbed: false },
+  { name: "Maya Chen", role: "Rep · Medtronix", initials: "MC", scrubbed: false },
 ];
 
 export function TeamRoster() {
