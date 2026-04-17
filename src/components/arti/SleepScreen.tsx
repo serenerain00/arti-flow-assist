@@ -143,6 +143,9 @@ export function SleepScreen({
                 <p className="mt-4 max-w-md text-balance text-sm font-light text-muted-foreground">
                   Today's first case begins in 32 minutes. I have your pre-op plan ready.
                 </p>
+                <p className="mt-6 font-mono text-[10px] uppercase tracking-[0.4em] text-muted-foreground/50">
+                  Say "show me the dashboard" when you're ready
+                </p>
               </div>
             )}
           </div>
