@@ -14,20 +14,31 @@ interface Props {
 }
 
 /**
+ * Module-level guard. React StrictMode (and any incidental parent re-render
+ * that remounts this component) would otherwise cause us to:
+ *   1. open a second WebSocket to ElevenLabs (we saw this in network logs)
+ *   2. call endSession() on the FIRST one during cleanup, killing the live
+ *      audio mid-sentence and dropping the client-tool listener
+ *
+ * By holding the "we already started" flag outside React's lifecycle, the
+ * second mount becomes a no-op and the original session keeps streaming.
+ */
+let sessionStarted = false;
+
+/**
  * Headless greeting + listening session on the wake screen.
  *
  * Behavior:
- *  - Speaks "Good morning, {first name}." once on mount.
- *  - Then stays connected and silent, listening for the user to say
- *    something like "show me the dashboard" — at which point the
- *    `goToDashboard` client tool fires and the parent transitions.
+ *  - Speaks the greeting once on first mount.
+ *  - Stays connected and listens for "show me the dashboard" — at which
+ *    point the `goToDashboard` client tool fires and the parent transitions.
  *  - Never auto-transitions. Never re-greets. No reconnect loops.
- *
- * The agent prompt should be configured to call `goToDashboard` when
- * the user asks to proceed/open the dashboard, and otherwise stay quiet.
+ *  - We intentionally do NOT call endSession() on unmount, because StrictMode
+ *    unmounts immediately after first mount in development. The session ends
+ *    naturally when the user navigates to the dashboard (parent unmounts the
+ *    whole sleep tree) or closes the tab.
  */
 export function GreetingVoice({ staffName, greeting, onGoToDashboard }: Props) {
-  const startedRef = useRef(false);
   const onGoRef = useRef(onGoToDashboard);
   onGoRef.current = onGoToDashboard;
 
@@ -63,20 +74,16 @@ export function GreetingVoice({ staffName, greeting, onGoToDashboard }: Props) {
       });
     } catch (err) {
       console.warn("[Arti greeting] failed to start", err);
+      // Allow a retry on next mount if startup itself failed.
+      sessionStarted = false;
     }
   }, [conversation, firstName, greeting]);
 
   useEffect(() => {
-    if (startedRef.current) return;
-    startedRef.current = true;
+    if (sessionStarted) return;
+    sessionStarted = true;
     start();
-    return () => {
-      try {
-        conversation.endSession();
-      } catch {
-        // no-op
-      }
-    };
+    // No cleanup: see module-level comment above.
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, []);
 
