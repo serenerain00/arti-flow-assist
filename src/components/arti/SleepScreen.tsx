@@ -55,6 +55,81 @@ export function SleepScreen({
     return () => clearTimeout(t);
   }, [phase, onWakeAnimationComplete]);
 
+  // Passive "Hi Arti" wake-word listener — only active while sleeping.
+  // Uses the browser's Web Speech API so we don't burn ElevenLabs minutes
+  // sitting idle. Silently no-ops in browsers without support (e.g. Firefox).
+  useEffect(() => {
+    if (phase !== "sleep") return;
+    type SR = {
+      continuous: boolean;
+      interimResults: boolean;
+      lang: string;
+      onresult: ((e: SpeechRecognitionEvent) => void) | null;
+      onend: (() => void) | null;
+      onerror: (() => void) | null;
+      start: () => void;
+      stop: () => void;
+    };
+    const Ctor =
+      (window as unknown as { SpeechRecognition?: new () => SR })
+        .SpeechRecognition ??
+      (window as unknown as { webkitSpeechRecognition?: new () => SR })
+        .webkitSpeechRecognition;
+    if (!Ctor) return;
+
+    let stopped = false;
+    const recognition = new Ctor();
+    recognition.continuous = true;
+    recognition.interimResults = true;
+    recognition.lang = "en-US";
+
+    recognition.onresult = (event: SpeechRecognitionEvent) => {
+      for (let i = event.resultIndex; i < event.results.length; i++) {
+        const transcript = event.results[i][0].transcript.toLowerCase().trim();
+        if (/\b(hi|hey|ok|okay)\s+arti\b/.test(transcript)) {
+          stopped = true;
+          try {
+            recognition.stop();
+          } catch {
+            // no-op
+          }
+          onWakeRequested();
+          return;
+        }
+      }
+    };
+
+    recognition.onend = () => {
+      // Auto-restart while still in sleep phase (some browsers stop after silence).
+      if (!stopped && phase === "sleep") {
+        try {
+          recognition.start();
+        } catch {
+          // no-op
+        }
+      }
+    };
+
+    recognition.onerror = () => {
+      // Permission denied or no mic — fall back to tap-to-wake silently.
+    };
+
+    try {
+      recognition.start();
+    } catch {
+      // no-op
+    }
+
+    return () => {
+      stopped = true;
+      try {
+        recognition.stop();
+      } catch {
+        // no-op
+      }
+    };
+  }, [phase, onWakeRequested]);
+
   const greeting = getGreeting(time ?? undefined);
   const timeStr = time
     ? time.toLocaleTimeString([], { hour: "numeric", minute: "2-digit" })
@@ -129,6 +204,7 @@ export function SleepScreen({
                 */}
                 <GreetingVoice
                   staffName={staffName}
+                  greeting={greeting}
                   onGoToDashboard={onGoToDashboard}
                 />
                 <div className="font-mono text-[11px] uppercase tracking-[0.5em] text-primary">
