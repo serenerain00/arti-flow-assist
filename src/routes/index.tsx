@@ -1,7 +1,11 @@
 import { createFileRoute } from "@tanstack/react-router";
 import { useCallback, useState } from "react";
 import { SleepScreen } from "@/components/arti/SleepScreen";
+import { HomeDashboard } from "@/components/arti/HomeDashboard";
+import { CaseListScreen } from "@/components/arti/CaseListScreen";
 import { AwakeDashboard } from "@/components/arti/AwakeDashboard";
+import { parseIntent } from "@/components/arti/intent";
+import { TODAY_CASES, type CaseItem } from "@/components/arti/cases";
 
 export const Route = createFileRoute("/")({
   component: ArtiWall,
@@ -19,16 +23,19 @@ export const Route = createFileRoute("/")({
 
 /**
  * Top-level state machine for the Arti wall:
- *   sleep → waking → greeting → dashboard
+ *   sleep → waking → greeting → home → cases → preop
  *
- * Voice is intentionally NOT wired up at this layer right now — we removed
- * it to start from a clean slate. The greeting screen advances to the
- * dashboard via tap (or via a brief auto-advance) until voice returns.
+ * Transitions are driven by a tiny intent parser over a free-text prompt
+ * (see ./components/arti/intent.ts). The sleep tap also wakes Arti so a
+ * silent gesture works.
  */
-type ArtiPhase = "sleep" | "waking" | "greeting" | "dashboard";
+type ArtiPhase = "sleep" | "waking" | "greeting" | "home" | "cases" | "preop";
 
 function ArtiWall() {
   const [phase, setPhase] = useState<ArtiPhase>("sleep");
+  const [activeCase, setActiveCase] = useState<CaseItem>(
+    () => TODAY_CASES.find((c) => c.status === "next") ?? TODAY_CASES[0]
+  );
 
   const staff = { name: "Melissa Quinn", role: "Circulating Nurse", initials: "MQ" };
 
@@ -38,20 +45,109 @@ function ArtiWall() {
   const handleWakeAnimationComplete = useCallback(() => {
     setPhase((p) => (p === "waking" ? "greeting" : p));
   }, []);
-  const handleGoToDashboard = useCallback(() => {
-    setPhase((p) => (p === "greeting" ? "dashboard" : p));
-  }, []);
   const handleSleep = useCallback(() => {
     setPhase("sleep");
   }, []);
 
-  if (phase === "dashboard") {
+  const findCase = useCallback((q: string): CaseItem | undefined => {
+    const text = q.toLowerCase();
+    if (/\bnext\b/.test(text)) {
+      return TODAY_CASES.find((c) => c.status === "next") ?? undefined;
+    }
+    return TODAY_CASES.find(
+      (c) =>
+        text.includes(c.patientName.toLowerCase()) ||
+        text.includes(c.patientName.split(" ")[0].toLowerCase()) ||
+        text.includes(c.procedureShort.toLowerCase())
+    );
+  }, []);
+
+  /**
+   * Single entry point for free-form prompts from any screen. Routes intent
+   * to phase changes. Unknown intents from greeting drop into Home so the
+   * user always lands somewhere useful.
+   */
+  const handlePrompt = useCallback(
+    (text: string) => {
+      const intent = parseIntent(text);
+
+      switch (intent.kind) {
+        case "wake":
+          setPhase((p) => (p === "sleep" ? "waking" : p === "waking" ? p : "greeting"));
+          return;
+        case "sleep":
+          setPhase("sleep");
+          return;
+        case "show-cases":
+          setPhase("cases");
+          return;
+        case "open-case": {
+          const match = findCase(intent.query);
+          if (match) {
+            setActiveCase(match);
+            setPhase("preop");
+          } else {
+            setPhase("cases");
+          }
+          return;
+        }
+        case "go-home":
+          setPhase("home");
+          return;
+        case "unknown":
+        default:
+          // Sleep → unknown text still wakes him.
+          setPhase((p) => {
+            if (p === "sleep") return "waking";
+            if (p === "greeting") return "home";
+            return p;
+          });
+          return;
+      }
+    },
+    [findCase]
+  );
+
+  const handleSelectCase = useCallback((c: CaseItem) => {
+    setActiveCase(c);
+    setPhase("preop");
+  }, []);
+
+  if (phase === "preop") {
     return (
       <AwakeDashboard
         staffName={staff.name}
         staffRole={staff.role}
         initials={staff.initials}
         onSleep={handleSleep}
+        activeCase={activeCase}
+        onBackToCases={() => setPhase("cases")}
+      />
+    );
+  }
+
+  if (phase === "cases") {
+    return (
+      <CaseListScreen
+        staffName={staff.name}
+        staffRole={staff.role}
+        initials={staff.initials}
+        onSleep={handleSleep}
+        onBackHome={() => setPhase("home")}
+        onSelectCase={handleSelectCase}
+        onPrompt={handlePrompt}
+      />
+    );
+  }
+
+  if (phase === "home") {
+    return (
+      <HomeDashboard
+        staffName={staff.name}
+        staffRole={staff.role}
+        initials={staff.initials}
+        onSleep={handleSleep}
+        onPrompt={handlePrompt}
       />
     );
   }
@@ -62,7 +158,7 @@ function ArtiWall() {
       staffName={staff.name}
       onWakeRequested={handleWakeRequested}
       onWakeAnimationComplete={handleWakeAnimationComplete}
-      onGoToDashboard={handleGoToDashboard}
+      onPrompt={handlePrompt}
     />
   );
 }
