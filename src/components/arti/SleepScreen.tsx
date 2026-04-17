@@ -1,7 +1,7 @@
 import { useEffect, useState } from "react";
 import { RippleCanvas } from "./RippleCanvas";
 import { ArtiInvoker } from "./ArtiInvoker";
-import type { ArtiVoiceCallbacks } from "@/hooks/useArtiVoice";
+
 
 function getGreeting(d?: Date | null) {
   if (!d) return "Hello";
@@ -19,7 +19,6 @@ interface Props {
   onWakeAnimationComplete: () => void;
   /** Free-form prompt submitted from the greeting screen. */
   onPrompt: (text: string) => void;
-  voice?: ArtiVoiceCallbacks;
 }
 
 /**
@@ -38,7 +37,6 @@ export function SleepScreen({
   onWakeRequested,
   onWakeAnimationComplete,
   onPrompt,
-  voice,
 }: Props) {
   const [time, setTime] = useState<Date | null>(null);
 
