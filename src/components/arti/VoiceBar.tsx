@@ -15,6 +15,8 @@ interface VoiceTools {
   openQuadView: () => string;
   focusQuadPanel: (panel: QuadPanelId) => string;
   closeQuadView: () => string;
+  showPreferenceCard: () => string;
+  showPatientDetails: () => string;
 }
 
 interface Props {
@@ -118,6 +120,14 @@ export function VoiceBar({
       closeQuadView: () => {
         console.log("[Arti tool] closeQuadView");
         return toolsRef.current.closeQuadView();
+      },
+      showPreferenceCard: () => {
+        console.log("[Arti tool] showPreferenceCard");
+        return toolsRef.current.showPreferenceCard();
+      },
+      showPatientDetails: () => {
+        console.log("[Arti tool] showPatientDetails");
+        return toolsRef.current.showPatientDetails();
       },
     },
   });
