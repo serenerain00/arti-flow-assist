@@ -1,4 +1,5 @@
 import { createFileRoute } from "@tanstack/react-router";
+import "@tanstack/react-start";
 
 const AGENT_ID = "B9PDs7mcHTMxHUw5U8Cf";
 
