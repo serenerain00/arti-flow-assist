@@ -24,6 +24,7 @@ import {
 import { Sidebar } from "./Sidebar";
 import { TopBar } from "./TopBar";
 import { ArtiInvoker } from "./ArtiInvoker";
+import type { ArtiVoiceCallbacks } from "@/hooks/useArtiVoice";
 import { TODAY_CASES, STATUS_META } from "./cases";
 import { cn } from "@/lib/utils";
 
@@ -33,6 +34,7 @@ interface Props {
   initials: string;
   onSleep: () => void;
   onPrompt: (text: string) => void;
+  voice?: ArtiVoiceCallbacks;
 }
 
 /**
@@ -42,7 +44,7 @@ interface Props {
  *   2. Surface the next case + quick environment vitals.
  *   3. Invite the next instruction via the prompt.
  */
-export function HomeDashboard({ staffName, staffRole, initials, onSleep, onPrompt }: Props) {
+export function HomeDashboard({ staffName, staffRole, initials, onSleep, onPrompt, voice }: Props) {
   const [time, setTime] = useState<Date>(new Date());
   useEffect(() => {
     const i = setInterval(() => setTime(new Date()), 1000 * 30);
@@ -243,6 +245,7 @@ export function HomeDashboard({ staffName, staffRole, initials, onSleep, onPromp
         <ArtiInvoker
           placeholder="Ask Arti anything…"
           onSubmit={onPrompt}
+          voice={voice}
           suggestions={[
             "Show me the case list",
             "Open the next case",

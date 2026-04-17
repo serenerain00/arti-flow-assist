@@ -1,5 +1,5 @@
 import { createFileRoute } from "@tanstack/react-router";
-import { useCallback, useState } from "react";
+import { useCallback, useMemo, useState } from "react";
 import { AnimatePresence, motion } from "framer-motion";
 import { SleepScreen } from "@/components/arti/SleepScreen";
 import { HomeDashboard } from "@/components/arti/HomeDashboard";
@@ -7,6 +7,7 @@ import { CaseListScreen } from "@/components/arti/CaseListScreen";
 import { AwakeDashboard } from "@/components/arti/AwakeDashboard";
 import { parseIntent } from "@/components/arti/intent";
 import { TODAY_CASES, type CaseItem } from "@/components/arti/cases";
+import type { ArtiVoiceCallbacks } from "@/hooks/useArtiVoice";
 
 export const Route = createFileRoute("/")({
   component: ArtiWall,
@@ -115,6 +116,29 @@ function ArtiWall() {
   }, []);
 
   /**
+   * Voice tool callbacks. The agent invokes these via ElevenLabs client
+   * tools to navigate the wall hands-free. Memoized so the conversation
+   * session doesn't see a new identity on every render.
+   */
+  const voice = useMemo<ArtiVoiceCallbacks>(
+    () => ({
+      onGoHome: () => setPhase("home"),
+      onShowCases: () => setPhase("cases"),
+      onOpenCase: (query: string) => {
+        const match = findCase(query);
+        if (match) {
+          setActiveCase(match);
+          setPhase("preop");
+        } else {
+          setPhase("cases");
+        }
+      },
+      onSleep: () => setPhase("sleep"),
+    }),
+    [findCase]
+  );
+
+  /**
    * Each phase mounts a different full-screen component. We wrap them in
    * AnimatePresence so swapping phases plays a smooth zoom+fade cross-fade
    * instead of an instant cut. `mode="wait"` would feel laggy at this scale,
@@ -153,6 +177,7 @@ function ArtiWall() {
         onBackHome={() => setPhase("home")}
         onSelectCase={handleSelectCase}
         onPrompt={handlePrompt}
+        voice={voice}
       />
     );
   } else if (phase === "home") {
@@ -163,6 +188,7 @@ function ArtiWall() {
         initials={staff.initials}
         onSleep={handleSleep}
         onPrompt={handlePrompt}
+        voice={voice}
       />
     );
   } else {
@@ -173,6 +199,7 @@ function ArtiWall() {
         onWakeRequested={handleWakeRequested}
         onWakeAnimationComplete={handleWakeAnimationComplete}
         onPrompt={handlePrompt}
+        voice={voice}
       />
     );
   }
