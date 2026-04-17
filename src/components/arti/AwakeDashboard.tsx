@@ -10,13 +10,18 @@ import { HowToVideoModal } from "./HowToVideoModal";
 import { QuadView, type QuadPanelId } from "./QuadView";
 import { PreferenceCard } from "./PreferenceCard";
 import { PatientDetailsModal } from "./PatientDetailsModal";
-import { LayoutGrid } from "lucide-react";
+import { ArrowLeft, LayoutGrid } from "lucide-react";
+import type { CaseItem } from "./cases";
 
 interface Props {
   staffName: string;
   staffRole: string;
   initials: string;
   onSleep: () => void;
+  /** Optional case to display — when provided, drives the case header. */
+  activeCase?: CaseItem;
+  /** When provided, shows a "back to cases" affordance. */
+  onBackToCases?: () => void;
 }
 
 export type TimeOutId = "patient" | "site" | "procedure" | "allergies";
@@ -29,7 +34,13 @@ const VIDEO_TITLES: Record<string, string> = {
   default: "Univers Revers™ — Glenoid baseplate placement",
 };
 
-export function AwakeDashboard({ staffName, staffRole, initials, onSleep }: Props) {
+export function AwakeDashboard({
+  staffName,
+  staffRole,
+  initials,
+  onSleep,
+  onBackToCases,
+}: Props) {
   const [cockpit, setCockpit] = useState(false);
   const [howToOpen, setHowToOpen] = useState(false);
   const [howToTitle] = useState(VIDEO_TITLES.default);
@@ -87,6 +98,15 @@ export function AwakeDashboard({ staffName, staffRole, initials, onSleep }: Prop
         />
 
         <main className="flex min-h-0 flex-1 flex-col gap-5 overflow-y-auto px-8 py-6 animate-fade-in">
+          {onBackToCases && (
+            <button
+              onClick={onBackToCases}
+              className="-mb-2 inline-flex w-fit items-center gap-1.5 font-mono text-[10px] uppercase tracking-[0.3em] text-muted-foreground transition-colors hover:text-foreground"
+            >
+              <ArrowLeft className="h-3 w-3" /> Today's cases
+            </button>
+          )}
+
           <CaseHeader
             cockpitMode={cockpit}
             onOpenPatientDetails={() => setPatientDetailsOpen(true)}
