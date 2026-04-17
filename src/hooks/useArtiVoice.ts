@@ -205,7 +205,26 @@ export function useArtiVoice(callbacks: ArtiVoiceCallbacks) {
       }
     };
     rec.onerror = (ev) => {
-      console.warn("[arti-voice] wake recognizer error", ev);
+      const code = ev?.error ?? "unknown";
+      // Fatal errors that mean we should stop trying — most importantly
+      // "not-allowed" (mic permission denied) and "service-not-allowed".
+      // Without this guard, onend kept restarting the recognizer in a
+      // tight loop and prevented the WebRTC session from ever grabbing
+      // the mic.
+      if (
+        code === "not-allowed" ||
+        code === "service-not-allowed" ||
+        code === "audio-capture"
+      ) {
+        console.warn("[arti-voice] wake recognizer disabled:", code);
+        wakeEnabledRef.current = false;
+        setWakeListening(false);
+        return;
+      }
+      // "no-speech" / "aborted" are routine — onend will restart.
+      if (code !== "no-speech" && code !== "aborted") {
+        console.warn("[arti-voice] wake recognizer error:", code);
+      }
     };
     rec.onend = () => {
       // Browsers stop continuous recognition after silence; restart if we
