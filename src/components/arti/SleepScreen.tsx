@@ -1,5 +1,6 @@
 import { useEffect, useState } from "react";
 import { RippleCanvas } from "./RippleCanvas";
+import { GreetingVoice } from "./GreetingVoice";
 
 function getGreeting(d?: Date | null) {
   if (!d) return "Hello";
