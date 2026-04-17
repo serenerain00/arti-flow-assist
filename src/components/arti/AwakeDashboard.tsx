@@ -167,6 +167,12 @@ export function AwakeDashboard({
         dismissedAlerts={dismissedAlerts}
         dismissAlert={dismissAlert}
       />
+
+      <ArtiInvoker
+        placeholder="Ask Arti about this case…"
+        onSubmit={onPrompt}
+        suggestions={["Show team", "Read time-out", "Back to cases"]}
+      />
     </div>
   );
 }
