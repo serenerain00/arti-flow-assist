@@ -14,7 +14,7 @@ import {
 import type { ArtiVoiceCallbacks } from "@/hooks/useArtiVoice";
 
 export const Route = createFileRoute("/")({
-  component: ArtiWall,
+  component: ArtiWallRoot,
   head: () => ({
     meta: [
       { title: "Arti Wall · Intelligent OR Companion" },
@@ -26,6 +26,15 @@ export const Route = createFileRoute("/")({
     ],
   }),
 });
+
+/**
+ * Root that wires the shared voice session in once. ArtiWall lives inside
+ * the provider so every child (including the invoker, mounted inside each
+ * screen) sees the same conversation state.
+ */
+function ArtiWallRoot() {
+  return <ArtiWallWithVoice />;
+}
 
 /**
  * Top-level state machine for the Arti wall:
