@@ -1,7 +1,8 @@
 import { useEffect, useState } from "react";
 import { RippleCanvas } from "./RippleCanvas";
 
-function getGreeting(d = new Date()) {
+function getGreeting(d?: Date | null) {
+  if (!d) return "Hello";
   const h = d.getHours();
   if (h < 5) return "Good evening";
   if (h < 12) return "Good morning";
