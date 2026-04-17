@@ -23,7 +23,7 @@ import {
 } from "recharts";
 import { Sidebar } from "./Sidebar";
 import { TopBar } from "./TopBar";
-import { PromptBar } from "./PromptBar";
+import { ArtiInvoker } from "./ArtiInvoker";
 import { TODAY_CASES, STATUS_META } from "./cases";
 import { cn } from "@/lib/utils";
 
@@ -240,20 +240,15 @@ export function HomeDashboard({ staffName, staffRole, initials, onSleep, onPromp
           </section>
         </main>
 
-        {/* Floating prompt */}
-        <div className="pointer-events-none absolute inset-x-0 bottom-0 z-30 flex justify-center px-8 pb-6">
-          <div className="pointer-events-auto w-full max-w-2xl">
-            <PromptBar
-              placeholder="Ask Arti anything…"
-              onSubmit={onPrompt}
-              suggestions={[
-                "Show me the case list",
-                "Open the next case",
-                "What's my day look like?",
-              ]}
-            />
-          </div>
-        </div>
+        <ArtiInvoker
+          placeholder="Ask Arti anything…"
+          onSubmit={onPrompt}
+          suggestions={[
+            "Show me the case list",
+            "Open the next case",
+            "What's my day look like?",
+          ]}
+        />
       </div>
     </div>
   );

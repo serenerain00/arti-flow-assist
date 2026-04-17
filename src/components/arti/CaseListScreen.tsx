@@ -1,7 +1,7 @@
 import { ArrowLeft, Clock, MapPin, User } from "lucide-react";
 import { Sidebar } from "./Sidebar";
 import { TopBar } from "./TopBar";
-import { PromptBar } from "./PromptBar";
+import { ArtiInvoker } from "./ArtiInvoker";
 import { TODAY_CASES, STATUS_META, type CaseItem } from "./cases";
 import { cn } from "@/lib/utils";
 
