@@ -1,5 +1,5 @@
 import { createFileRoute } from "@tanstack/react-router";
-import { useCallback, useState } from "react";
+import { useCallback, useMemo, useState } from "react";
 import { AnimatePresence, motion } from "framer-motion";
 import { SleepScreen } from "@/components/arti/SleepScreen";
 import { HomeDashboard } from "@/components/arti/HomeDashboard";
@@ -7,6 +7,7 @@ import { CaseListScreen } from "@/components/arti/CaseListScreen";
 import { AwakeDashboard } from "@/components/arti/AwakeDashboard";
 import { parseIntent } from "@/components/arti/intent";
 import { TODAY_CASES, type CaseItem } from "@/components/arti/cases";
+import type { ArtiVoiceCallbacks } from "@/hooks/useArtiVoice";
 
 export const Route = createFileRoute("/")({
   component: ArtiWall,
