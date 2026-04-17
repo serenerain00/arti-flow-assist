@@ -57,6 +57,8 @@ export function VoiceBar({
   toolsRef.current = tools;
   const autoStartedRef = useRef(false);
   const initialContextSentRef = useRef(false);
+  // Track whether Arti has already greeted so reconnects stay silent.
+  const hasGreetedRef = useRef(false);
   // Tracks whether the user has explicitly turned Arti off via the mic button.
   // Only an explicit stop should keep Arti silent — every other disconnect
   // (network blip, tab visibility, agent timeout) auto-reconnects.
