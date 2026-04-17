@@ -360,3 +360,168 @@ function QuickCard({
     </button>
   );
 }
+
+/* ----------------------------------------------------------------- */
+/*  Charts                                                            */
+/* ----------------------------------------------------------------- */
+
+const CASES_PER_DAY = [
+  { day: "Mon", cases: 4 },
+  { day: "Tue", cases: 6 },
+  { day: "Wed", cases: 5 },
+  { day: "Thu", cases: 7 },
+  { day: "Fri", cases: 5 },
+  { day: "Sat", cases: 2 },
+  { day: "Sun", cases: 0 },
+];
+
+const PROCEDURE_MIX = [
+  { name: "RSA", value: 38, color: "var(--primary)" },
+  { name: "Rotator Cuff", value: 27, color: "var(--accent)" },
+  { name: "SLAP / Bankart", value: 18, color: "var(--success)" },
+  { name: "Other", value: 17, color: "var(--surface-3)" },
+];
+
+function ChartCard({
+  eyebrow,
+  title,
+  trailing,
+  children,
+  className,
+}: {
+  eyebrow: string;
+  title: string;
+  trailing?: React.ReactNode;
+  children: React.ReactNode;
+  className?: string;
+}) {
+  return (
+    <article className={cn("glass relative overflow-hidden rounded-2xl p-6", className)}>
+      <header className="flex items-start justify-between gap-4">
+        <div>
+          <div className="font-mono text-[10px] uppercase tracking-[0.35em] text-primary">
+            {eyebrow}
+          </div>
+          <h3 className="mt-1.5 text-lg font-light tracking-tight text-foreground">{title}</h3>
+        </div>
+        {trailing}
+      </header>
+      <div className="mt-5 h-[220px] w-full">{children}</div>
+    </article>
+  );
+}
+
+function TrendingPill({ value }: { value: string }) {
+  return (
+    <span className="inline-flex items-center gap-1 rounded-full border border-success/40 bg-success/10 px-2.5 py-0.5 font-mono text-[10px] uppercase tracking-wider text-success">
+      <TrendingUp className="h-3 w-3" />
+      {value}
+    </span>
+  );
+}
+
+function ChartTooltipBox({
+  active,
+  payload,
+  label,
+}: {
+  active?: boolean;
+  payload?: Array<{ value: number; name: string; payload?: { name?: string } }>;
+  label?: string;
+}) {
+  if (!active || !payload?.length) return null;
+  const item = payload[0];
+  return (
+    <div className="rounded-lg border border-border bg-popover px-3 py-2 shadow-xl">
+      <div className="font-mono text-[9px] uppercase tracking-wider text-muted-foreground">
+        {label ?? item.payload?.name ?? item.name}
+      </div>
+      <div className="mt-0.5 font-mono text-sm tabular-nums text-foreground">
+        {item.value}
+      </div>
+    </div>
+  );
+}
+
+function CasesPerDayChart() {
+  return (
+    <ResponsiveContainer width="100%" height="100%">
+      <BarChart data={CASES_PER_DAY} margin={{ top: 8, right: 8, left: -20, bottom: 0 }}>
+        <XAxis
+          dataKey="day"
+          axisLine={false}
+          tickLine={false}
+          tick={{ fill: "var(--muted-foreground)", fontSize: 11, fontFamily: "var(--font-mono)" }}
+        />
+        <YAxis
+          axisLine={false}
+          tickLine={false}
+          tick={{ fill: "var(--muted-foreground)", fontSize: 11, fontFamily: "var(--font-mono)" }}
+          width={32}
+        />
+        <Tooltip
+          cursor={{ fill: "var(--surface-2)", opacity: 0.4 }}
+          content={<ChartTooltipBox />}
+        />
+        <Bar dataKey="cases" radius={[6, 6, 0, 0]} maxBarSize={36}>
+          {CASES_PER_DAY.map((d, i) => (
+            <Cell
+              key={d.day}
+              fill={i === 3 ? "var(--primary)" : "color-mix(in oklab, var(--primary) 55%, transparent)"}
+            />
+          ))}
+        </Bar>
+      </BarChart>
+    </ResponsiveContainer>
+  );
+}
+
+function ProcedureMixChart() {
+  const total = PROCEDURE_MIX.reduce((s, d) => s + d.value, 0);
+  return (
+    <div className="grid h-full grid-cols-[1fr_auto] items-center gap-4">
+      <div className="relative h-full">
+        <ResponsiveContainer width="100%" height="100%">
+          <PieChart>
+            <Tooltip content={<ChartTooltipBox />} />
+            <Pie
+              data={PROCEDURE_MIX}
+              dataKey="value"
+              nameKey="name"
+              innerRadius="62%"
+              outerRadius="92%"
+              paddingAngle={2}
+              stroke="none"
+            >
+              {PROCEDURE_MIX.map((d) => (
+                <Cell key={d.name} fill={d.color} />
+              ))}
+            </Pie>
+          </PieChart>
+        </ResponsiveContainer>
+        <div className="pointer-events-none absolute inset-0 flex flex-col items-center justify-center">
+          <div className="font-mono text-[9px] uppercase tracking-wider text-muted-foreground">
+            Total
+          </div>
+          <div className="font-mono text-2xl font-thin tabular-nums text-foreground">
+            {total}
+          </div>
+        </div>
+      </div>
+      <ul className="space-y-2 pr-1">
+        {PROCEDURE_MIX.map((d) => (
+          <li key={d.name} className="flex items-center gap-2 text-xs font-light text-muted-foreground">
+            <span
+              className="h-2.5 w-2.5 shrink-0 rounded-sm"
+              style={{ backgroundColor: d.color }}
+            />
+            <span className="text-foreground/80">{d.name}</span>
+            <span className="ml-auto font-mono tabular-nums text-muted-foreground/70">
+              {Math.round((d.value / total) * 100)}%
+            </span>
+          </li>
+        ))}
+      </ul>
+    </div>
+  );
+}
