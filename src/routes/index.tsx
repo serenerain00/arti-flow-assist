@@ -250,7 +250,6 @@ function ArtiWall({ callbacksRef }: ArtiWallProps) {
         initials={staff.initials}
         onSleep={handleSleep}
         onPrompt={handlePrompt}
-        voice={voice}
       />
     );
   } else {
@@ -261,7 +260,6 @@ function ArtiWall({ callbacksRef }: ArtiWallProps) {
         onWakeRequested={handleWakeRequested}
         onWakeAnimationComplete={handleWakeAnimationComplete}
         onPrompt={handlePrompt}
-        voice={voice}
       />
     );
   }
