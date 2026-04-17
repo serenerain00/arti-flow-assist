@@ -154,8 +154,8 @@ export function ArtiInvoker({ onSubmit, placeholder, suggestions = [], className
             scales in place. Anchored to bottom-right, expands leftward. */}
         <div
           ref={panelRef}
-          className="pointer-events-none absolute bottom-0 right-0 flex w-[min(36rem,calc(100vw-3rem))] flex-col items-end gap-3"
-          style={{ opacity: 0 }}
+          className="pointer-events-none absolute bottom-0 right-0 flex max-w-[calc(100vw-3rem)] flex-col items-end gap-3"
+          style={{ opacity: 0, width: "min(36rem, calc(100vw - 3rem))" }}
         >
           {suggestions.length > 0 && (
             <div className="flex flex-wrap items-center justify-center gap-2" data-stagger>
