@@ -4,6 +4,7 @@ import { useConversation } from "@elevenlabs/react";
 import { cn } from "@/lib/utils";
 import { toast } from "sonner";
 import type { InstrumentId, TimeOutId } from "./AwakeDashboard";
+import type { QuadPanelId } from "./QuadView";
 
 interface VoiceTools {
   openHowToVideo: (title?: string) => string;
@@ -11,41 +12,61 @@ interface VoiceTools {
   adjustInstrumentCount: (item: InstrumentId, delta: number) => string;
   toggleSterileCockpit: (enabled?: boolean) => string;
   dismissAlert: (index: number) => string;
+  openQuadView: () => string;
+  focusQuadPanel: (panel: QuadPanelId) => string;
+  closeQuadView: () => string;
 }
 
 interface Props {
   staffName: string;
   tools: VoiceTools;
+  /** Auto-start session on mount (e.g. straight from sleep wake) */
+  autoStart?: boolean;
+  /** Initial context fed to Arti once connected (case info, etc.) */
+  initialContext?: string;
+  /** Live context that re-fires sendContextualUpdate when it changes */
+  liveContext?: string;
 }
 
 const SUGGESTED = [
   '"Show me the rotator cuff repair video"',
   '"Check off patient identity in the time-out"',
   '"Add two needles to the count"',
-  '"Sterile cockpit on"',
+  '"Open quad view"',
+  '"Focus alerts"',
 ];
 
 /**
- * Live voice bar powered by ElevenLabs Conversational AI (WebRTC).
+ * Live voice bar powered by ElevenLabs Conversational AI (WebSocket).
  * Token is fetched server-side from /api/elevenlabs/token to keep the API key secret.
  * Client tools mutate dashboard state on agent request.
  */
-export function VoiceBar({ staffName, tools }: Props) {
+export function VoiceBar({
+  staffName,
+  tools,
+  autoStart = false,
+  initialContext,
+  liveContext,
+}: Props) {
   const [hint, setHint] = useState(0);
   const [connecting, setConnecting] = useState(false);
   const [transcript, setTranscript] = useState("");
   const toolsRef = useRef(tools);
   toolsRef.current = tools;
+  const autoStartedRef = useRef(false);
+  const initialContextSentRef = useRef(false);
 
   const conversation = useConversation({
     onConnect: () => toast.success("Arti is listening"),
-    onDisconnect: () => setTranscript(""),
+    onDisconnect: () => {
+      setTranscript("");
+      initialContextSentRef.current = false;
+    },
     onError: (err) => {
       console.error("[Arti] conversation error", err);
       toast.error("Voice connection error");
     },
     onMessage: (msg: { source?: string; message?: string }) => {
-      // Surface latest user transcript / agent message
       if (msg?.message) setTranscript(msg.message);
     },
     clientTools: {
@@ -68,6 +89,18 @@ export function VoiceBar({ staffName, tools }: Props) {
       dismissAlert: (params: { index: number }) => {
         console.log("[Arti tool] dismissAlert", params);
         return toolsRef.current.dismissAlert(Number(params.index) || 0);
+      },
+      openQuadView: () => {
+        console.log("[Arti tool] openQuadView");
+        return toolsRef.current.openQuadView();
+      },
+      focusQuadPanel: (params: { panel: QuadPanelId }) => {
+        console.log("[Arti tool] focusQuadPanel", params);
+        return toolsRef.current.focusQuadPanel(params.panel);
+      },
+      closeQuadView: () => {
+        console.log("[Arti tool] closeQuadView");
+        return toolsRef.current.closeQuadView();
       },
     },
   });
@@ -94,11 +127,6 @@ export function VoiceBar({ staffName, tools }: Props) {
       };
       if (!signedUrl) throw new Error(error ?? "No signed URL received");
 
-      // Note: startSession returns void; the SDK transitions `status` to
-      // "connected" asynchronously. Errors arrive via the onError callback.
-      // Overrides (firstMessage, voiceId) require explicit enablement in the
-      // ElevenLabs agent's Security tab. Omitting them so the agent's
-      // configured defaults are used and the WS handshake is not rejected.
       conversation.startSession({
         signedUrl,
         connectionType: "websocket",
@@ -124,6 +152,34 @@ export function VoiceBar({ staffName, tools }: Props) {
   useEffect(() => {
     if (conversation.status === "connected") setConnecting(false);
   }, [conversation.status]);
+
+  // Auto-start once on mount if requested
+  useEffect(() => {
+    if (!autoStart || autoStartedRef.current) return;
+    autoStartedRef.current = true;
+    start();
+  }, [autoStart, start]);
+
+  // Push initial context once connected
+  useEffect(() => {
+    if (!isConnected || initialContextSentRef.current || !initialContext) return;
+    initialContextSentRef.current = true;
+    try {
+      conversation.sendContextualUpdate(initialContext);
+    } catch (err) {
+      console.warn("[Arti] sendContextualUpdate (initial) failed", err);
+    }
+  }, [isConnected, initialContext, conversation]);
+
+  // Re-push live context whenever it changes
+  useEffect(() => {
+    if (!isConnected || !liveContext) return;
+    try {
+      conversation.sendContextualUpdate(liveContext);
+    } catch (err) {
+      console.warn("[Arti] sendContextualUpdate (live) failed", err);
+    }
+  }, [isConnected, liveContext, conversation]);
 
   const stop = useCallback(() => {
     conversation.endSession();
