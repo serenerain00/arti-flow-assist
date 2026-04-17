@@ -136,10 +136,8 @@ export function VoiceBar({ staffName, tools }: Props) {
       >
         {connecting ? (
           <Loader2 className="h-5 w-5 animate-spin" />
-        ) : isConnected ? (
-          <Mic className="h-5 w-5" />
         ) : (
-          <MicOff className="h-5 w-5" />
+          <Mic className={cn("h-5 w-5", !isConnected && "opacity-70")} />
         )}
       </button>
 
