@@ -134,12 +134,23 @@ export function ArtiInvoker({ onSubmit, placeholder, suggestions = [], className
   };
 
   const toggleListening = () => {
-    setListening((v) => !v);
-    // Demo behavior — real Web Speech wiring can replace this later.
-    if (!listening) {
-      setTimeout(() => setListening(false), 2400);
+    if (!voiceEnabled) return;
+    if (v.isConnected || v.sessionStatus === "connecting") {
+      void v.endSession();
+    } else {
+      void v.startSession();
     }
   };
+
+  // Auto-start the wake-word listener when voice is enabled.
+  useEffect(() => {
+    if (!voiceEnabled || !v.wakeWordSupported) return;
+    if (v.isConnected) {
+      v.stopWakeWord();
+    } else {
+      v.startWakeWord();
+    }
+  }, [voiceEnabled, v.isConnected, v.wakeWordSupported, v]);
 
   return (
     <div className={cn("pointer-events-none absolute bottom-0 right-0 z-40 p-6", className)}>
