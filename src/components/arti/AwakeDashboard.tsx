@@ -1,4 +1,4 @@
-import { useCallback, useState } from "react";
+import { useCallback, useMemo, useState } from "react";
 import { Sidebar } from "./Sidebar";
 import { TopBar } from "./TopBar";
 import { CaseHeader } from "./CaseHeader";
@@ -8,6 +8,8 @@ import { TeamRoster } from "./TeamRoster";
 import { AlertStack } from "./AlertStack";
 import { VoiceBar } from "./VoiceBar";
 import { HowToVideoModal } from "./HowToVideoModal";
+import { QuadView, type QuadPanelId } from "./QuadView";
+import { LayoutGrid } from "lucide-react";
 
 interface Props {
   staffName: string;
@@ -26,6 +28,15 @@ const VIDEO_TITLES: Record<string, string> = {
   default: "Univers Revers™ — Glenoid baseplate placement",
 };
 
+// Demo case — would come from OR scheduling in production
+const CASE_CONTEXT = {
+  patient: "Jane Doe, 64F",
+  procedure: "Right reverse total shoulder arthroplasty",
+  surgeon: "Dr. Patel",
+  allergies: "Penicillin",
+  nextPatient: "Robert Lin, 58M — Left rotator cuff repair, 11:30 AM",
+};
+
 export function AwakeDashboard({ staffName, staffRole, initials, onSleep }: Props) {
   const [cockpit, setCockpit] = useState(false);
   const [howToOpen, setHowToOpen] = useState(false);
@@ -39,6 +50,8 @@ export function AwakeDashboard({ staffName, staffRole, initials, onSleep }: Prop
     clamps: 12,
   });
   const [dismissedAlerts, setDismissedAlerts] = useState<Set<number>>(new Set());
+  const [quadOpen, setQuadOpen] = useState(false);
+  const [quadFocused, setQuadFocused] = useState<QuadPanelId | null>(null);
 
   // ───────── Voice tool handlers (called by ElevenLabs agent) ─────────
   const openHowToVideo = useCallback((title?: string) => {
@@ -80,6 +93,55 @@ export function AwakeDashboard({ staffName, staffRole, initials, onSleep }: Prop
     return `Dismissed alert ${index}`;
   }, []);
 
+  const openQuadView = useCallback(() => {
+    setQuadFocused(null);
+    setQuadOpen(true);
+    return "Opened quad view";
+  }, []);
+
+  const focusQuadPanel = useCallback((panel: QuadPanelId) => {
+    setQuadOpen(true);
+    setQuadFocused(panel);
+    return `Focused panel: ${panel}`;
+  }, []);
+
+  const closeQuadView = useCallback(() => {
+    setQuadOpen(false);
+    setQuadFocused(null);
+    return "Closed quad view";
+  }, []);
+
+  // ───────── Context for Arti ─────────
+  const initialContext = useMemo(
+    () =>
+      [
+        `You are Arti, an OR voice assistant on the wall display.`,
+        `Active staff member: ${staffName} (${staffRole}).`,
+        `Current case: ${CASE_CONTEXT.procedure} for ${CASE_CONTEXT.patient}, surgeon ${CASE_CONTEXT.surgeon}.`,
+        `Allergies: ${CASE_CONTEXT.allergies}.`,
+        `Next patient on the board: ${CASE_CONTEXT.nextPatient}.`,
+        `You can call client tools to update the UI: openHowToVideo, toggleTimeOutItem, adjustInstrumentCount, toggleSterileCockpit, dismissAlert, openQuadView, focusQuadPanel (panels: timeout, instruments, alerts, team), closeQuadView.`,
+      ].join(" "),
+    [staffName, staffRole]
+  );
+
+  const liveContext = useMemo(() => {
+    const checked = Array.from(timeOutChecked).join(", ") || "none";
+    const activeAlerts = 3 - dismissedAlerts.size;
+    const view = quadOpen
+      ? quadFocused
+        ? `Quad view focused on ${quadFocused}.`
+        : `Quad view open (2x2 overview).`
+      : `Standard dashboard view.`;
+    return [
+      `Time-out checked items: ${checked}.`,
+      `Sterile cockpit: ${cockpit ? "on" : "off"}.`,
+      `Open alerts: ${activeAlerts}.`,
+      `Instrument counts — raytec ${counts.raytec}, lap ${counts.lap}, needle ${counts.needle}, blade ${counts.blade}, clamps ${counts.clamps}.`,
+      view,
+    ].join(" ");
+  }, [timeOutChecked, dismissedAlerts, cockpit, counts, quadOpen, quadFocused]);
+
   return (
     <div className="flex h-screen w-full overflow-hidden bg-background">
       <Sidebar onSleep={onSleep} />
@@ -106,7 +168,6 @@ export function AwakeDashboard({ staffName, staffRole, initials, onSleep }: Prop
                 counts={counts}
                 onAdjust={(id, delta) => adjustInstrumentCount(id as InstrumentId, delta)}
               />
-
             </div>
             <div className="space-y-5">
               <AlertStack dismissed={dismissedAlerts} onDismiss={dismissAlert} />
@@ -117,15 +178,31 @@ export function AwakeDashboard({ staffName, staffRole, initials, onSleep }: Prop
           <div className="h-24" />
         </main>
 
+        {/* Quad view trigger (also voice-triggerable) */}
+        <button
+          onClick={openQuadView}
+          className="absolute right-8 top-24 z-30 flex h-11 w-11 items-center justify-center rounded-full bg-surface-2 text-muted-foreground border border-border hover:text-foreground hover:border-primary/40 transition-colors"
+          aria-label="Open quad view"
+          title="Quad view"
+        >
+          <LayoutGrid className="h-5 w-5" />
+        </button>
+
         <div className="absolute bottom-6 left-32 right-8 z-40">
           <VoiceBar
             staffName={staffName}
+            autoStart
+            initialContext={initialContext}
+            liveContext={liveContext}
             tools={{
               openHowToVideo,
               toggleTimeOutItem,
               adjustInstrumentCount,
               toggleSterileCockpit,
               dismissAlert,
+              openQuadView,
+              focusQuadPanel,
+              closeQuadView,
             }}
           />
         </div>
@@ -135,6 +212,19 @@ export function AwakeDashboard({ staffName, staffRole, initials, onSleep }: Prop
         open={howToOpen}
         onClose={() => setHowToOpen(false)}
         title={howToTitle}
+      />
+
+      <QuadView
+        open={quadOpen}
+        focused={quadFocused}
+        onFocus={setQuadFocused}
+        onClose={closeQuadView}
+        timeOutChecked={timeOutChecked}
+        toggleTimeOutItem={toggleTimeOutItem}
+        counts={counts}
+        adjustInstrumentCount={adjustInstrumentCount}
+        dismissedAlerts={dismissedAlerts}
+        dismissAlert={dismissAlert}
       />
     </div>
   );
