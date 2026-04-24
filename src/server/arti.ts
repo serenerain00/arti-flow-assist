@@ -27,6 +27,34 @@ const TOOLS: Anthropic.Tool[] = [
     input_schema: { type: "object" as const, properties: {}, required: [] },
   },
   {
+    name: "navigate_schedule",
+    description:
+      "Open the Schedule screen (month-view OR calendar). Use for: 'show me the schedule', 'open the calendar', 'show me the schedule screen', 'what's on the schedule this month'.",
+    input_schema: { type: "object" as const, properties: {}, required: [] },
+  },
+  {
+    name: "show_schedule_day",
+    description:
+      "Open a specific day's detail on the Schedule. Use whenever the user mentions a date — e.g. 'show me May 20th', 'what's on April 27', 'pull up next Tuesday'. Convert the spoken date to ISO format YYYY-MM-DD using 'Today is …' from context as the reference year; pick the closest future or past occurrence if ambiguous.",
+    input_schema: {
+      type: "object" as const,
+      properties: {
+        date: {
+          type: "string",
+          description:
+            "Target date in ISO format YYYY-MM-DD (e.g., '2026-05-20' for 'May 20th').",
+        },
+      },
+      required: ["date"],
+    },
+  },
+  {
+    name: "close_schedule_day",
+    description:
+      "Close the currently open day-detail drawer on the Schedule screen while keeping the user on the Schedule (calendar) view. Use when the user says 'close', 'close that', 'close the day', 'close the details', 'dismiss', or 'go back' while a schedule day drawer is open. Do NOT use navigate_home, navigate_cases, or any other navigation tool for these phrases — the user wants to stay on the calendar.",
+    input_schema: { type: "object" as const, properties: {}, required: [] },
+  },
+  {
     name: "open_case",
     description: "Open a specific case by patient name, procedure keyword, or 'next'.",
     input_schema: {
@@ -245,7 +273,10 @@ export const processVoiceCommand = createServerFn({ method: "POST" })
 
     const first = await client.messages.create({
       model: "claude-haiku-4-5-20251001",
-      max_tokens: 400,
+      // Responses are capped at ≤1–2 sentences by the system prompt. 120
+      // tokens is enough headroom for a greeting + tool call; lower cap =
+      // faster time-to-last-token for every voice turn.
+      max_tokens: 120,
       temperature: 0,
       system,
       messages,
@@ -260,9 +291,43 @@ export const processVoiceCommand = createServerFn({ method: "POST" })
       input: b.input as Record<string, string | number | boolean | null>,
     }));
 
-    // Only truly mechanical actions that need no verbal acknowledgement are silent.
-    const SILENT_TOOLS = new Set(["sleep", "scroll", "stop_scroll"]);
-    const isSilent = toolCalls.length > 0 && toolCalls.every(tc => SILENT_TOOLS.has(tc.name));
+    // Silent tools: the screen change itself is the confirmation, so skip TTS
+    // entirely. This is the biggest single latency win for voice commands —
+    // ElevenLabs generation + audio playback together add ~1.5 s per response,
+    // and none of it is needed when the user can see the result.
+    //
+    // Keep verbal for: wake (greeting), open_case (announces which case),
+    // role / count / time-out / alert tools (sterile-field hands-off workflow),
+    // and anything that answers a question without changing the screen.
+    const SILENT_TOOLS = new Set([
+      "sleep",
+      "scroll",
+      "stop_scroll",
+      // Navigation
+      "navigate_home",
+      "navigate_cases",
+      "navigate_schedule",
+      "show_schedule_day",
+      "close_schedule_day",
+      // Modals & overlays
+      "open_patient_details",
+      "close_patient_details",
+      "open_quad_view",
+      "focus_quad_panel",
+      "close_quad_view",
+      // Lightbox / images
+      "lightbox_next",
+      "lightbox_prev",
+      "close_lightbox",
+      "show_preference_card",
+      "show_preference_card_layout_images",
+      "open_table_layout_images",
+      // Media
+      "open_how_to_video",
+      // Role view switch — the panel visibly changes, audio is redundant.
+      "switch_role",
+    ]);
+    const isSilent = toolCalls.length > 0 && toolCalls.every((tc) => SILENT_TOOLS.has(tc.name));
 
     // Use whatever text Claude returned in the first turn (greetings, answers, etc.).
     let response = isSilent ? "" : first.content

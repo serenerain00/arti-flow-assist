@@ -1,6 +1,6 @@
 // Shared mock case data for the day. Used by CaseList and PreOp.
 
-export type CaseStatus = "in-progress" | "next" | "scheduled" | "completed" | "delayed";
+export type CaseStatus = "in-progress" | "next" | "scheduled" | "completed" | "delayed" | "cancelled";
 
 export interface CaseItem {
   id: string;
@@ -307,5 +307,10 @@ export const STATUS_META: Record<CaseStatus, { label: string; tone: string; dot:
     label: "Delayed",
     tone: "text-warning border-warning/40 bg-warning/10",
     dot: "bg-warning",
+  },
+  cancelled: {
+    label: "Cancelled",
+    tone: "text-destructive border-destructive/40 bg-destructive/10",
+    dot: "bg-destructive",
   },
 };

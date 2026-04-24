@@ -5,7 +5,15 @@ import { SleepScreen } from "@/components/arti/SleepScreen";
 import { HomeDashboard } from "@/components/arti/HomeDashboard";
 import { CaseListScreen } from "@/components/arti/CaseListScreen";
 import { AwakeDashboard } from "@/components/arti/AwakeDashboard";
+import { ScheduleScreen } from "@/components/arti/ScheduleScreen";
 import { TODAY_CASES, type CaseItem } from "@/components/arti/cases";
+import {
+  getCasesForDate,
+  formatLongDate,
+  toDateKey,
+  summarizeDay,
+  SCHEDULE_CASES,
+} from "@/components/arti/schedule";
 import { ArtiVoiceProvider, useArtiVoiceContext } from "@/hooks/ArtiVoiceContext";
 import type {
   ActiveRole,
@@ -69,13 +77,26 @@ export type DashboardActionsRef = React.MutableRefObject<DashboardActions | null
  */
 function ArtiWallRoot() {
   const navCallbacksRef = useRef<
-    Pick<ArtiVoiceCallbacks, "onWake" | "onGoHome" | "onShowCases" | "onOpenCase" | "onSleep">
+    Pick<
+      ArtiVoiceCallbacks,
+      | "onWake"
+      | "onGoHome"
+      | "onShowCases"
+      | "onOpenCase"
+      | "onSleep"
+      | "onShowSchedule"
+      | "onShowScheduleDay"
+      | "onCloseScheduleDay"
+    >
   >({
     onWake: () => {},
     onGoHome: () => {},
     onShowCases: () => {},
     onOpenCase: () => {},
     onSleep: () => {},
+    onShowSchedule: () => {},
+    onShowScheduleDay: () => {},
+    onCloseScheduleDay: () => {},
   });
 
   // Dashboard-only tool bridge. `null` when no dashboard is mounted.
@@ -114,6 +135,9 @@ function ArtiWallRoot() {
       onShowCases: () => navCallbacksRef.current.onShowCases(),
       onOpenCase: (q) => navCallbacksRef.current.onOpenCase(q),
       onSleep: () => navCallbacksRef.current.onSleep(),
+      onShowSchedule: () => navCallbacksRef.current.onShowSchedule?.(),
+      onShowScheduleDay: (date) => navCallbacksRef.current.onShowScheduleDay?.(date),
+      onCloseScheduleDay: () => navCallbacksRef.current.onCloseScheduleDay?.(),
 
       onToggleTimeOutItem: (id) =>
         dashboardActionsRef.current?.toggleTimeOutItem(id) ?? notAvailable(),
@@ -132,8 +156,7 @@ function ArtiWallRoot() {
         dashboardActionsRef.current?.showPreferenceCard() ?? notAvailable(),
       onShowPreferenceCardLayoutImages: () =>
         dashboardActionsRef.current?.showPreferenceCardLayoutImages() ?? notAvailable(),
-      onSwitchRole: (role) =>
-        dashboardActionsRef.current?.switchRole(role) ?? notAvailable(),
+      onSwitchRole: (role) => dashboardActionsRef.current?.switchRole(role) ?? notAvailable(),
       onOpenPatientDetails: () =>
         dashboardActionsRef.current?.openPatientDetails() ?? notAvailable(),
       onClosePatientDetails: () =>
@@ -142,12 +165,9 @@ function ArtiWallRoot() {
         dashboardActionsRef.current?.toggleOpeningChecklistItem(index) ?? notAvailable(),
       onOpenTableLayoutImages: () =>
         dashboardActionsRef.current?.openTableLayoutImages() ?? notAvailable(),
-      onLightboxNext: () =>
-        dashboardActionsRef.current?.lightboxNext() ?? notAvailable(),
-      onLightboxPrev: () =>
-        dashboardActionsRef.current?.lightboxPrev() ?? notAvailable(),
-      onCloseLightbox: () =>
-        dashboardActionsRef.current?.closeLightbox() ?? notAvailable(),
+      onLightboxNext: () => dashboardActionsRef.current?.lightboxNext() ?? notAvailable(),
+      onLightboxPrev: () => dashboardActionsRef.current?.lightboxPrev() ?? notAvailable(),
+      onCloseLightbox: () => dashboardActionsRef.current?.closeLightbox() ?? notAvailable(),
       onScroll: (direction, speed, continuous) =>
         scrollActionsRef.current.onScroll(direction, speed, continuous),
       onStopScroll: () => scrollActionsRef.current.onStopScroll(),
@@ -189,11 +209,21 @@ const notAvailable = (): ArtiToolResult => ({ ok: false, reason: "dashboard not 
  * (see ./components/arti/intent.ts). The sleep tap also wakes Arti so a
  * silent gesture works.
  */
-type ArtiPhase = "sleep" | "waking" | "greeting" | "home" | "cases" | "preop";
+type ArtiPhase = "sleep" | "waking" | "greeting" | "home" | "cases" | "preop" | "schedule";
 
 interface ArtiWallProps {
   navCallbacksRef: React.MutableRefObject<
-    Pick<ArtiVoiceCallbacks, "onWake" | "onGoHome" | "onShowCases" | "onOpenCase" | "onSleep">
+    Pick<
+      ArtiVoiceCallbacks,
+      | "onWake"
+      | "onGoHome"
+      | "onShowCases"
+      | "onOpenCase"
+      | "onSleep"
+      | "onShowSchedule"
+      | "onShowScheduleDay"
+      | "onCloseScheduleDay"
+    >
   >;
   dashboardActionsRef: DashboardActionsRef;
   dashboardContextRef: React.MutableRefObject<() => string>;
@@ -227,7 +257,16 @@ function getScrollTarget(): HTMLElement {
     : document.documentElement;
 }
 
-function ArtiWall({ navCallbacksRef, dashboardActionsRef, dashboardContextRef, contextRef, scrollActionsRef, idleResetRef, artiNapSetterRef, artiNapping }: ArtiWallProps) {
+function ArtiWall({
+  navCallbacksRef,
+  dashboardActionsRef,
+  dashboardContextRef,
+  contextRef,
+  scrollActionsRef,
+  idleResetRef,
+  artiNapSetterRef,
+  artiNapping,
+}: ArtiWallProps) {
   const scrollIntervalRef = useRef<ReturnType<typeof setInterval> | null>(null);
 
   // Keep scroll handlers current on every render — stableCallbacks delegates through the ref.
@@ -238,12 +277,20 @@ function ArtiWall({ navCallbacksRef, dashboardActionsRef, dashboardContextRef, c
         scrollIntervalRef.current = null;
       }
       const el = getScrollTarget();
-      if (direction === "top") { el.scrollTo({ top: 0, behavior: "smooth" }); return { ok: true }; }
-      if (direction === "bottom") { el.scrollTo({ top: el.scrollHeight, behavior: "smooth" }); return { ok: true }; }
+      if (direction === "top") {
+        el.scrollTo({ top: 0, behavior: "smooth" });
+        return { ok: true };
+      }
+      if (direction === "bottom") {
+        el.scrollTo({ top: el.scrollHeight, behavior: "smooth" });
+        return { ok: true };
+      }
       const pxPerFrame = SCROLL_SPEED_PX[speed] ?? SCROLL_SPEED_PX.normal;
       const sign = direction === "down" ? 1 : -1;
       if (continuous) {
-        scrollIntervalRef.current = setInterval(() => { el.scrollBy(0, sign * pxPerFrame); }, 16);
+        scrollIntervalRef.current = setInterval(() => {
+          el.scrollBy(0, sign * pxPerFrame);
+        }, 16);
       } else {
         // Scroll ~40% of the element's visible height so the jump feels meaningful
         // regardless of screen size.
@@ -263,6 +310,8 @@ function ArtiWall({ navCallbacksRef, dashboardActionsRef, dashboardContextRef, c
   const [activeCase, setActiveCase] = useState<CaseItem>(
     () => TODAY_CASES.find((c) => c.status === "next") ?? TODAY_CASES[0],
   );
+  // Which day's detail drawer is open on the Schedule screen. Null = closed.
+  const [selectedScheduleDate, setSelectedScheduleDate] = useState<string | null>(null);
 
   const staff = { name: "Melissa Quinn", role: "Circulating Nurse", initials: "MQ" };
 
@@ -286,11 +335,16 @@ function ArtiWall({ navCallbacksRef, dashboardActionsRef, dashboardContextRef, c
   // Arm the timer whenever Arti is awake and not napping; clear it otherwise.
   useEffect(() => {
     if (phase === "sleep" || artiNapping) {
-      if (idleTimerRef.current) { clearTimeout(idleTimerRef.current); idleTimerRef.current = null; }
+      if (idleTimerRef.current) {
+        clearTimeout(idleTimerRef.current);
+        idleTimerRef.current = null;
+      }
       return;
     }
     armIdleTimer();
-    return () => { if (idleTimerRef.current) clearTimeout(idleTimerRef.current); };
+    return () => {
+      if (idleTimerRef.current) clearTimeout(idleTimerRef.current);
+    };
   }, [phase, artiNapping, armIdleTimer]);
 
   const vForSleepRef = useRef(v);
@@ -321,27 +375,71 @@ function ArtiWall({ navCallbacksRef, dashboardActionsRef, dashboardContextRef, c
     home: "home dashboard",
     cases: "case list",
     preop: "pre-op / surgical dashboard",
+    schedule: "schedule / calendar",
   };
 
   // Keep contextRef current so Claude always gets a fresh state snapshot.
   contextRef.current = () => {
     const board = TODAY_CASES.map(
-      (c) => `  - ${c.patientName} · ${c.procedure} (${c.procedureShort}) · ${c.status}${c.side ? ` · ${c.side} side` : ""} · ${c.surgeon} · ${c.time}`,
+      (c) =>
+        `  - ${c.patientName} · ${c.procedure} (${c.procedureShort}) · ${c.status}${c.side ? ` · ${c.side} side` : ""} · ${c.surgeon} · ${c.time}`,
     ).join("\n");
 
     const now = new Date();
     const h = now.getHours();
-    const timeGreeting = h < 5 ? "Good evening" : h < 12 ? "Good morning" : h < 17 ? "Good afternoon" : "Good evening";
+    const timeGreeting =
+      h < 5 ? "Good evening" : h < 12 ? "Good morning" : h < 17 ? "Good afternoon" : "Good evening";
     const timeStr = now.toLocaleTimeString([], { hour: "numeric", minute: "2-digit" });
+
+    // Full schedule overview — always included so Arti can answer "when is
+    // Marcus Chen's surgery?" or "what days is Dr. Patel operating?" from
+    // any screen. One line per case keeps the footprint small (~45 lines).
+    const scheduleOverview = SCHEDULE_CASES.map(
+      (c) =>
+        `  - ${c.date} ${c.time} ${c.room} · ${c.patientName} (${c.patientAgeSex}) · ${c.procedureShort}${c.side ? ` ${c.side}` : ""} · ${c.surgeon} · Anes ${c.anesthesiologist} · Scrub ${c.scrubTech} · ${c.status}`,
+    ).join("\n");
+
+    // Look up the team for the active case from the schedule (same id). If
+    // it isn't on the schedule, fall back to the room+today assignment so the
+    // preop view still has a team Arti can reference.
+    const activeScheduleEntry = SCHEDULE_CASES.find((c) => c.id === activeCase.id);
 
     const lines = [
       `Staff: ${staff.name}, ${staff.role}`,
       `Current time: ${timeStr} — use "${timeGreeting}" for any greeting`,
+      `Today is ${formatLongDate(toDateKey(now))} (${toDateKey(now)})`,
       `Current screen: ${PHASE_LABEL[phase]}`,
-      `Active case: ${activeCase.patientName} · ${activeCase.procedure}${activeCase.side ? ` · ${activeCase.side} side` : ""} · ${activeCase.patientMrn} · ${activeCase.surgeon} · OR ${activeCase.room}`,
+      `Active case: ${activeCase.patientName} · ${activeCase.procedure}${activeCase.side ? ` · ${activeCase.side} side` : ""} · ${activeCase.patientMrn} · Scheduled ${activeCase.time} · OR ${activeCase.room}`,
+      activeScheduleEntry
+        ? `Active case team — Surgeon: ${activeScheduleEntry.surgeon} · Anesthesiologist: ${activeScheduleEntry.anesthesiologist} · Scrub Tech: ${activeScheduleEntry.scrubTech} · Circulator: ${activeScheduleEntry.circulator} · Anesthesia type: ${activeScheduleEntry.anesthesiaType} · ASA ${activeScheduleEntry.asaClass}`
+        : `Active case team — Surgeon: ${activeCase.surgeon} (team not on schedule)`,
       `Today's board:\n${board}`,
-      `Navigation available: home dashboard, case list, pre-op dashboard, sleep`,
+      `Full OR schedule (use this to answer patient/surgeon/date questions):\n${scheduleOverview}`,
+      `Navigation available: home dashboard, case list, schedule/calendar, pre-op dashboard, sleep`,
     ];
+
+    // Schedule-specific context (only relevant when on the schedule screen).
+    if (phase === "schedule") {
+      if (selectedScheduleDate) {
+        const dayCases = getCasesForDate(selectedScheduleDate);
+        const sum = summarizeDay(selectedScheduleDate);
+        lines.push(
+          `Schedule day detail open: ${formatLongDate(selectedScheduleDate)} (${selectedScheduleDate}) — ${sum.total} cases`,
+          dayCases.length
+            ? `Cases on ${selectedScheduleDate} (with full team):\n${dayCases
+                .map(
+                  (c) =>
+                    `  - ${c.time} ${c.room} · ${c.patientName} (${c.patientAgeSex}) · ${c.procedureShort}${c.side ? ` ${c.side}` : ""} · Surgeon: ${c.surgeon} · Anesthesiologist: ${c.anesthesiologist} · Scrub Tech: ${c.scrubTech} · Circulator: ${c.circulator} · ${c.anesthesiaType} · ASA ${c.asaClass} · ${c.status}`,
+                )
+                .join("\n")}`
+            : "No cases scheduled.",
+        );
+      } else {
+        lines.push(
+          "Schedule screen open. No day selected. Say 'show me [date]' to open a day detail.",
+        );
+      }
+    }
 
     // Add live dashboard state when on the surgical screen.
     const dashCtx = dashboardContextRef.current();
@@ -392,13 +490,62 @@ function ArtiWall({ navCallbacksRef, dashboardActionsRef, dashboardContextRef, c
     setPhase("preop");
   }, []);
 
+  // Shared sidebar click handler — used by every screen that renders <Sidebar>.
+  const handleSidebarNavigate = useCallback(
+    (key: "home" | "case" | "schedule" | "patient" | "library" | "preferences") => {
+      armIdleTimer();
+      switch (key) {
+        case "home":
+          setPhase("home");
+          break;
+        case "case":
+          setPhase("cases");
+          break;
+        case "schedule":
+          setSelectedScheduleDate(null);
+          setPhase("schedule");
+          break;
+        case "patient":
+          setPhase("preop");
+          break;
+        case "library":
+        case "preferences":
+          // not yet implemented — ignore
+          break;
+      }
+    },
+    [armIdleTimer],
+  );
+
+  const handleOpenCaseFromSchedule = useCallback(
+    (caseId: string, query: string) => {
+      // Prefer a direct ID match against TODAY_CASES; fall back to fuzzy match
+      // (same logic as the voice onOpenCase callback) so Schedule cases from
+      // other days still route sensibly through the case-list screen.
+      const byId = TODAY_CASES.find((c) => c.id === caseId);
+      if (byId) {
+        setActiveCase(byId);
+        setPhase("preop");
+        return;
+      }
+      const match = findCase(query);
+      if (match) {
+        setActiveCase(match);
+        setPhase("preop");
+      } else {
+        setPhase("cases");
+      }
+    },
+    [findCase],
+  );
+
   /**
    * Voice nav callbacks. Dashboard-only tools are registered in the bridge
    * by AwakeDashboard itself — those don't need to live here.
    */
   navCallbacksRef.current = {
     onWake: () => {
-      setPhase((p) => p === "sleep" ? "waking" : p);
+      setPhase((p) => (p === "sleep" ? "waking" : p));
     },
     onGoHome: () => setPhase("home"),
     onShowCases: () => setPhase("cases"),
@@ -411,7 +558,23 @@ function ArtiWall({ navCallbacksRef, dashboardActionsRef, dashboardContextRef, c
         setPhase("cases");
       }
     },
-    onSleep: () => { artiNapSetterRef.current(true); vForSleepRef.current?.stopListening(); },
+    onSleep: () => {
+      artiNapSetterRef.current(true);
+      vForSleepRef.current?.stopListening();
+    },
+    onShowSchedule: () => {
+      setSelectedScheduleDate(null);
+      setPhase("schedule");
+    },
+    onShowScheduleDay: (date: string) => {
+      if (!date) return;
+      setSelectedScheduleDate(date);
+      setPhase("schedule");
+    },
+    onCloseScheduleDay: () => {
+      // Only close the drawer — don't change the phase.
+      setSelectedScheduleDate(null);
+    },
   };
 
   /**
@@ -444,6 +607,7 @@ function ArtiWall({ navCallbacksRef, dashboardActionsRef, dashboardContextRef, c
         onPrompt={handlePrompt}
         actionsRef={dashboardActionsRef}
         dashboardContextRef={dashboardContextRef}
+        onSidebarNavigate={handleSidebarNavigate}
       />
     );
   } else if (phase === "cases") {
@@ -456,6 +620,22 @@ function ArtiWall({ navCallbacksRef, dashboardActionsRef, dashboardContextRef, c
         onBackHome={() => setPhase("home")}
         onSelectCase={handleSelectCase}
         onPrompt={handlePrompt}
+        onSidebarNavigate={handleSidebarNavigate}
+      />
+    );
+  } else if (phase === "schedule") {
+    screen = (
+      <ScheduleScreen
+        staffName={staff.name}
+        staffRole={staff.role}
+        initials={staff.initials}
+        onSleep={handleSleep}
+        onBackHome={() => setPhase("home")}
+        onPrompt={handlePrompt}
+        selectedDate={selectedScheduleDate}
+        onSelectDate={setSelectedScheduleDate}
+        onOpenCase={handleOpenCaseFromSchedule}
+        onSidebarNavigate={handleSidebarNavigate}
       />
     );
   } else if (phase === "home") {
@@ -466,6 +646,7 @@ function ArtiWall({ navCallbacksRef, dashboardActionsRef, dashboardContextRef, c
         initials={staff.initials}
         onSleep={handleSleep}
         onPrompt={handlePrompt}
+        onSidebarNavigate={handleSidebarNavigate}
       />
     );
   } else {

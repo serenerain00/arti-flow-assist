@@ -1,5 +1,5 @@
 import { ArrowLeft, Clock, MapPin, User } from "lucide-react";
-import { Sidebar } from "./Sidebar";
+import { Sidebar, type SidebarKey } from "./Sidebar";
 import { TopBar } from "./TopBar";
 import { ArtiInvoker } from "./ArtiInvoker";
 
@@ -14,6 +14,7 @@ interface Props {
   onBackHome: () => void;
   onSelectCase: (c: CaseItem) => void;
   onPrompt: (text: string) => void;
+  onSidebarNavigate?: (key: SidebarKey) => void;
 }
 
 /**
@@ -29,6 +30,7 @@ export function CaseListScreen({
   onBackHome,
   onSelectCase,
   onPrompt,
+  onSidebarNavigate,
 }: Props) {
   const today = new Date().toLocaleDateString(undefined, {
     weekday: "long",
@@ -38,7 +40,7 @@ export function CaseListScreen({
 
   return (
     <div className="flex h-screen w-full overflow-hidden bg-background">
-      <Sidebar onSleep={onSleep} />
+      <Sidebar onSleep={onSleep} activeKey="case" onNavigate={onSidebarNavigate} />
 
       <div className="flex min-w-0 flex-1 flex-col overflow-hidden">
         <TopBar

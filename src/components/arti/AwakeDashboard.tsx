@@ -1,5 +1,5 @@
 import { useCallback, useEffect, useMemo, useRef, useState } from "react";
-import { Sidebar } from "./Sidebar";
+import { Sidebar, type SidebarKey } from "./Sidebar";
 import { TopBar } from "./TopBar";
 import { CaseHeader } from "./CaseHeader";
 import { TimeOutPanel } from "./TimeOutPanel";
@@ -33,6 +33,7 @@ interface Props {
   actionsRef?: DashboardActionsRef;
   /** Written to by AwakeDashboard so the route's context builder can read live state. */
   dashboardContextRef?: React.MutableRefObject<() => string>;
+  onSidebarNavigate?: (key: SidebarKey) => void;
 }
 
 export type TimeOutId = "patient" | "site" | "procedure" | "allergies";
@@ -68,6 +69,7 @@ export function AwakeDashboard({
   onPrompt,
   actionsRef,
   dashboardContextRef,
+  onSidebarNavigate,
 }: Props) {
   const [cockpit, setCockpit] = useState(false);
   const [howToOpen, setHowToOpen] = useState(false);
@@ -325,7 +327,7 @@ export function AwakeDashboard({
 
   return (
     <div className="flex h-screen w-full overflow-hidden bg-background">
-      <Sidebar onSleep={onSleep} />
+      <Sidebar onSleep={onSleep} activeKey="patient" onNavigate={onSidebarNavigate} />
 
       <div className="flex min-w-0 flex-1 flex-col overflow-hidden">
         <TopBar

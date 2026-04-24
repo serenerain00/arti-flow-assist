@@ -17,6 +17,12 @@ export interface ArtiVoiceCallbacks {
   onShowCases: () => void;
   onOpenCase: (query: string) => void;
   onSleep: () => void;
+  /** Navigate to the Schedule (calendar) screen. */
+  onShowSchedule?: () => void;
+  /** Open the day detail on the Schedule. `date` is an ISO key YYYY-MM-DD. */
+  onShowScheduleDay?: (date: string) => void;
+  /** Close the Schedule day-detail drawer without leaving the Schedule screen. */
+  onCloseScheduleDay?: () => void;
   onToggleTimeOutItem?: (id: TimeOutId) => ArtiToolResult;
   onAdjustInstrumentCount?: (item: InstrumentId, delta: number) => ArtiToolResult;
   onToggleSterileCockpit?: (enabled?: boolean) => ArtiToolResult;
@@ -74,6 +80,9 @@ function executeToolCall(call: ArtiToolCall, cb: ArtiVoiceCallbacks): void {
     case "navigate_cases":             cb.onShowCases(); break;
     case "open_case":                  cb.onOpenCase(String(inp.query ?? "")); break;
     case "sleep":                      cb.onSleep(); break;
+    case "navigate_schedule":          cb.onShowSchedule?.(); break;
+    case "show_schedule_day":          cb.onShowScheduleDay?.(String(inp.date ?? "")); break;
+    case "close_schedule_day":         cb.onCloseScheduleDay?.(); break;
     case "toggle_timeout_item":        cb.onToggleTimeOutItem?.(inp.id as TimeOutId); break;
     case "adjust_instrument_count":    cb.onAdjustInstrumentCount?.(inp.item as InstrumentId, Number(inp.delta)); break;
     case "toggle_sterile_cockpit":     cb.onToggleSterileCockpit?.(inp.enabled == null ? undefined : Boolean(inp.enabled)); break;

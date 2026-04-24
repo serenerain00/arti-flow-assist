@@ -1,20 +1,26 @@
 import { Home, LayoutDashboard, Calendar, User, BookOpen, Settings, Power } from "lucide-react";
 import { cn } from "@/lib/utils";
 
-const ITEMS = [
-  { icon: Home, label: "Home", active: true },
-  { icon: LayoutDashboard, label: "Case" },
-  { icon: Calendar, label: "Schedule" },
-  { icon: User, label: "Patient" },
-  { icon: BookOpen, label: "Library" },
-  { icon: Settings, label: "Preferences" },
-];
+export type SidebarKey = "home" | "case" | "schedule" | "patient" | "library" | "preferences";
 
 interface Props {
   onSleep: () => void;
+  /** Current active sidebar section — highlights the matching item. */
+  activeKey?: SidebarKey;
+  /** Click handlers per section. If omitted, the item renders as a dead button (pre-existing behavior). */
+  onNavigate?: (key: SidebarKey) => void;
 }
 
-export function Sidebar({ onSleep }: Props) {
+const ITEMS: Array<{ key: SidebarKey; icon: typeof Home; label: string }> = [
+  { key: "home", icon: Home, label: "Home" },
+  { key: "case", icon: LayoutDashboard, label: "Case" },
+  { key: "schedule", icon: Calendar, label: "Schedule" },
+  { key: "patient", icon: User, label: "Patient" },
+  { key: "library", icon: BookOpen, label: "Library" },
+  { key: "preferences", icon: Settings, label: "Preferences" },
+];
+
+export function Sidebar({ onSleep, activeKey, onNavigate }: Props) {
   return (
     <aside className="flex w-24 shrink-0 flex-col items-center justify-between border-r border-border bg-surface/40 py-6">
       <div className="flex flex-col items-center gap-1">
@@ -24,18 +30,24 @@ export function Sidebar({ onSleep }: Props) {
           </div>
         </div>
 
-        {ITEMS.map((it) => (
-          <button
-            key={it.label}
-            className={cn(
-              "group flex w-full flex-col items-center gap-1.5 px-2 py-3 transition-colors",
-              it.active ? "text-primary" : "text-muted-foreground/70 hover:text-foreground",
-            )}
-          >
-            <it.icon className="h-5 w-5" strokeWidth={1.5} />
-            <span className="text-[10px] font-light tracking-wide">{it.label}</span>
-          </button>
-        ))}
+        {ITEMS.map((it) => {
+          const active = activeKey === it.key;
+          return (
+            <button
+              key={it.key}
+              type="button"
+              onClick={onNavigate ? () => onNavigate(it.key) : undefined}
+              className={cn(
+                "group flex w-full flex-col items-center gap-1.5 px-2 py-3 transition-colors",
+                active ? "text-primary" : "text-muted-foreground/70 hover:text-foreground",
+                !onNavigate && "cursor-default",
+              )}
+            >
+              <it.icon className="h-5 w-5" strokeWidth={1.5} />
+              <span className="text-[10px] font-light tracking-wide">{it.label}</span>
+            </button>
+          );
+        })}
       </div>
 
       <button
