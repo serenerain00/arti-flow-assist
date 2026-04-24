@@ -19,6 +19,10 @@ export interface ArtiVoiceCallbacks {
   onSleep: () => void;
   /** Navigate to the Schedule (calendar) screen. */
   onShowSchedule?: () => void;
+  /** Navigate to the Surgeons directory screen. */
+  onShowSurgeons?: () => void;
+  /** Navigate to today's Patients screen. */
+  onShowPatients?: () => void;
   /** Open the day detail on the Schedule. `date` is an ISO key YYYY-MM-DD. */
   onShowScheduleDay?: (date: string) => void;
   /** Close the Schedule day-detail drawer without leaving the Schedule screen. */
@@ -27,12 +31,20 @@ export interface ArtiVoiceCallbacks {
   onSetReminder?: (text: string, minutes: number) => void;
   /** Cancel all pending reminders. */
   onCancelReminders?: () => void;
+  /** Dismiss the currently visible reminder toast(s). */
+  onDismissReminderAlert?: () => void;
   /** Set visible service lines on Schedule. Pass full desired list. */
   onScheduleSetServiceLines?: (lines: string[]) => void;
   /** Filter Schedule by surgeon. Empty string = clear surgeon filter. */
   onScheduleSetSurgeon?: (surgeon: string) => void;
   /** Reset all Schedule filters to defaults. */
   onScheduleClearFilters?: () => void;
+  /** Open the Person Schedule modal for a specific person. */
+  onShowPersonSchedule?: (name: string, role: string) => void;
+  /** Change the Person Schedule modal's time scope. */
+  onSetPersonScheduleView?: (view: string) => void;
+  /** Close the Person Schedule modal. */
+  onClosePersonSchedule?: () => void;
   onToggleTimeOutItem?: (id: TimeOutId) => ArtiToolResult;
   onAdjustInstrumentCount?: (item: InstrumentId, delta: number) => ArtiToolResult;
   onToggleSterileCockpit?: (enabled?: boolean) => ArtiToolResult;
@@ -93,13 +105,19 @@ function executeToolCall(call: ArtiToolCall, cb: ArtiVoiceCallbacks): void {
     case "open_case":                  cb.onOpenCase(String(inp.query ?? "")); break;
     case "sleep":                      cb.onSleep(); break;
     case "navigate_schedule":          cb.onShowSchedule?.(); break;
+    case "navigate_surgeons":          cb.onShowSurgeons?.(); break;
+    case "navigate_patients":          cb.onShowPatients?.(); break;
     case "show_schedule_day":          cb.onShowScheduleDay?.(String(inp.date ?? "")); break;
     case "close_schedule_day":         cb.onCloseScheduleDay?.(); break;
     case "set_reminder":               cb.onSetReminder?.(String(inp.text ?? ""), Number(inp.minutes ?? 0)); break;
     case "cancel_reminders":           cb.onCancelReminders?.(); break;
+    case "dismiss_reminder_alert":     cb.onDismissReminderAlert?.(); break;
     case "schedule_set_service_lines": cb.onScheduleSetServiceLines?.(Array.isArray(inp.lines) ? inp.lines.map(String) : []); break;
     case "schedule_set_surgeon":       cb.onScheduleSetSurgeon?.(String(inp.surgeon ?? "")); break;
     case "schedule_clear_filters":     cb.onScheduleClearFilters?.(); break;
+    case "show_person_schedule":       cb.onShowPersonSchedule?.(String(inp.name ?? ""), String(inp.role ?? "")); break;
+    case "set_person_schedule_view":   cb.onSetPersonScheduleView?.(String(inp.view ?? "day")); break;
+    case "close_person_schedule":      cb.onClosePersonSchedule?.(); break;
     case "toggle_timeout_item":        cb.onToggleTimeOutItem?.(inp.id as TimeOutId); break;
     case "adjust_instrument_count":    cb.onAdjustInstrumentCount?.(inp.item as InstrumentId, Number(inp.delta)); break;
     case "toggle_sterile_cockpit":     cb.onToggleSterileCockpit?.(inp.enabled == null ? undefined : Boolean(inp.enabled)); break;

@@ -64,7 +64,7 @@ export function PatientDetailsModal({ open, onClose, activeCase }: Props) {
           </DialogDescription>
         </DialogHeader>
 
-        <div className="min-h-0 flex-1 overflow-y-auto py-6">
+        <div data-scroll-modal className="min-h-0 flex-1 overflow-y-auto py-6">
           <div className="grid gap-8 md:grid-cols-3">
             {/* ── Column 1: Demographics + Blood + NPO ── */}
             <div className="space-y-8">

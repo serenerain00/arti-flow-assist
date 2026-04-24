@@ -79,7 +79,7 @@ export const TODAY_CASES: CaseItem[] = [
     time: "16:00",
     durationMin: 105,
     room: "OR 326",
-    patientName: "Linnea Park",
+    patientName: "Linnea Sundberg",
     patientMrn: "MRN 845‑553",
     patientAgeSex: "51F",
     procedure: "Subacromial Decompression",

@@ -374,7 +374,7 @@ export function AwakeDashboard({
 
   return (
     <div className="flex h-screen w-full overflow-hidden bg-background">
-      <Sidebar onSleep={onSleep} activeKey="patient" onNavigate={onSidebarNavigate} />
+      <Sidebar onSleep={onSleep} activeKey="patients" onNavigate={onSidebarNavigate} />
 
       <div className="flex min-w-0 flex-1 flex-col overflow-hidden">
         <TopBar

@@ -1,7 +1,23 @@
-import { Home, LayoutDashboard, Calendar, User, BookOpen, Settings, Power } from "lucide-react";
+import {
+  BookOpen,
+  Calendar,
+  Home,
+  LayoutDashboard,
+  Power,
+  Settings,
+  Stethoscope,
+  Users,
+} from "lucide-react";
 import { cn } from "@/lib/utils";
 
-export type SidebarKey = "home" | "case" | "schedule" | "patient" | "library" | "preferences";
+export type SidebarKey =
+  | "home"
+  | "case"
+  | "schedule"
+  | "surgeons"
+  | "patients"
+  | "library"
+  | "preferences";
 
 interface Props {
   onSleep: () => void;
@@ -15,7 +31,8 @@ const ITEMS: Array<{ key: SidebarKey; icon: typeof Home; label: string }> = [
   { key: "home", icon: Home, label: "Home" },
   { key: "case", icon: LayoutDashboard, label: "Case" },
   { key: "schedule", icon: Calendar, label: "Schedule" },
-  { key: "patient", icon: User, label: "Patient" },
+  { key: "surgeons", icon: Stethoscope, label: "Surgeons" },
+  { key: "patients", icon: Users, label: "Patients" },
   { key: "library", icon: BookOpen, label: "Library" },
   { key: "preferences", icon: Settings, label: "Preferences" },
 ];

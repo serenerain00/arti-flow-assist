@@ -593,7 +593,7 @@ function DayDetailContent({
         )}
       </header>
 
-      <div className="min-h-0 flex-1 overflow-y-auto">
+      <div data-scroll-modal className="min-h-0 flex-1 overflow-y-auto">
         {cases.length === 0 ? (
           <div className="flex h-full flex-col items-center justify-center px-6 py-12 text-center">
             <CalendarIcon className="h-10 w-10 text-muted-foreground/40" strokeWidth={1.3} />

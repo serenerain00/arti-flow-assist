@@ -19,48 +19,16 @@ export interface Surgeon {
 }
 
 export const SURGEONS: Surgeon[] = [
-  {
-    name: "Dr. Anika Patel",
-    specialty: "Orthopedics",
-    homeRoom: "OR 326",
-    initials: "AP",
-    color: "var(--primary)",
-  },
-  {
-    name: "Dr. Jamal Foster",
-    specialty: "Orthopedics",
-    homeRoom: "OR 327",
-    initials: "JF",
-    color: "var(--accent)",
-  },
-  {
-    name: "Dr. Sarah Kim",
-    specialty: "Orthopedics",
-    homeRoom: "OR 327",
-    initials: "SK",
-    color: "#d97706",
-  },
-  {
-    name: "Dr. Ethan Reyes",
-    specialty: "Cardiothoracic",
-    homeRoom: "OR 411",
-    initials: "ER",
-    color: "#dc2626",
-  },
-  {
-    name: "Dr. Raul Okafor",
-    specialty: "General",
-    homeRoom: "OR 205",
-    initials: "RO",
-    color: "#2563eb",
-  },
-  {
-    name: "Dr. Elena Vasquez",
-    specialty: "Spine",
-    homeRoom: "OR 308",
-    initials: "EV",
-    color: "#7c3aed",
-  },
+  { name: "Dr. Anika Patel",     specialty: "Orthopedics",    homeRoom: "OR 326", initials: "AP", color: "var(--primary)" },
+  { name: "Dr. Jamal Foster",    specialty: "Orthopedics",    homeRoom: "OR 327", initials: "JF", color: "var(--accent)" },
+  { name: "Dr. Sarah Kim",       specialty: "Orthopedics",    homeRoom: "OR 327", initials: "SK", color: "#d97706" },
+  { name: "Dr. Ethan Reyes",     specialty: "Cardiothoracic", homeRoom: "OR 411", initials: "ER", color: "#dc2626" },
+  { name: "Dr. Raul Okafor",     specialty: "General",        homeRoom: "OR 205", initials: "RO", color: "#2563eb" },
+  { name: "Dr. Elena Vasquez",   specialty: "Spine",          homeRoom: "OR 308", initials: "EV", color: "#7c3aed" },
+  { name: "Dr. Liam O'Connell",  specialty: "General",        homeRoom: "OR 205", initials: "LO", color: "#0891b2" },
+  { name: "Dr. Aisha Bhatt",     specialty: "Cardiothoracic", homeRoom: "OR 411", initials: "AB", color: "#be185d" },
+  { name: "Dr. Mateus Silva",    specialty: "Spine",          homeRoom: "OR 308", initials: "MS", color: "#9333ea" },
+  { name: "Dr. Hannah Park",     specialty: "ENT",            homeRoom: "OR 327", initials: "HP", color: "#0d9488" },
 ];
 
 export const ROOMS = ["OR 326", "OR 327", "OR 411", "OR 205", "OR 308"] as const;
@@ -316,7 +284,7 @@ const RAW_SCHEDULE_CASES: Array<
     time: "07:30",
     durationMin: 105,
     room: "OR 327",
-    patientName: "Yasmin Patel",
+    patientName: "Yasmin Aldridge",
     patientAgeSex: "34F",
     patientMrn: "MRN 912-776",
     procedure: "Carpal Tunnel Release (open)",
@@ -810,7 +778,7 @@ const RAW_SCHEDULE_CASES: Array<
     time: "16:00",
     durationMin: 105,
     room: "OR 326",
-    patientName: "Linnea Park",
+    patientName: "Linnea Sundberg",
     patientAgeSex: "51F",
     patientMrn: "MRN 845-553",
     procedure: "Subacromial Decompression",
@@ -1009,7 +977,7 @@ const RAW_SCHEDULE_CASES: Array<
     time: "07:30",
     durationMin: 60,
     room: "OR 205",
-    patientName: "Eugenie Okafor",
+    patientName: "Eugenie Bellweather",
     patientAgeSex: "34F",
     patientMrn: "MRN 890-204",
     procedure: "Laparoscopic Cholecystectomy",
@@ -1483,6 +1451,29 @@ const RAW_SCHEDULE_CASES: Array<
   { id: "s-0605-01", date: "2026-06-05", time: "07:30", durationMin: 120, room: "OR 326", patientName: "Horatio Zappacosta",  patientAgeSex: "66M", patientMrn: "MRN 858-004", procedure: "Reverse Total Shoulder Arthroplasty", procedureShort: "RSA",     side: "Right",     surgeon: "Dr. Anika Patel",   serviceLine: "Orthopedics",    anesthesiaType: "General + Block", asaClass: "III", status: "scheduled", firstCase: true, implantsRequired: true },
   { id: "s-0605-02", date: "2026-06-05", time: "08:00", durationMin: 75,  room: "OR 327", patientName: "Ingrid Kallinen",     patientAgeSex: "28F", patientMrn: "MRN 929-220", procedure: "Trigger Finger Release (D2)",          procedureShort: "TFR",     side: "Right",     surgeon: "Dr. Sarah Kim",     serviceLine: "Orthopedics",    anesthesiaType: "MAC",             asaClass: "I",   status: "scheduled" },
   { id: "s-0605-03", date: "2026-06-05", time: "07:30", durationMin: 210, room: "OR 308", patientName: "Xavier Bellmonte",    patientAgeSex: "54M", patientMrn: "MRN 826-118", procedure: "Anterior Cervical Discectomy & Fusion C5–C6", procedureShort: "ACDF", surgeon: "Dr. Elena Vasquez", serviceLine: "Spine",          anesthesiaType: "General",         asaClass: "II",  status: "scheduled", firstCase: true, implantsRequired: true, specialNeeds: ["Neuromonitoring"] },
+
+  // ─── Cases for the four newer surgeons (sprinkled across the demo range) ─
+  // Dr. Liam O'Connell — General
+  { id: "s-oc-0427", date: "2026-04-27", time: "11:30", durationMin: 90,  room: "OR 205", patientName: "Tobias Marlowe",      patientAgeSex: "52M", patientMrn: "MRN 822-114", procedure: "Laparoscopic Inguinal Hernia Repair",  procedureShort: "Hernia",  side: "Left",  surgeon: "Dr. Liam O'Connell", serviceLine: "General",        anesthesiaType: "General",         asaClass: "II",  status: "scheduled" },
+  { id: "s-oc-0430", date: "2026-04-30", time: "07:30", durationMin: 75,  room: "OR 205", patientName: "Vesper Calloway",     patientAgeSex: "39F", patientMrn: "MRN 887-302", procedure: "Laparoscopic Cholecystectomy",         procedureShort: "Lap Chole", surgeon: "Dr. Liam O'Connell", serviceLine: "General",        anesthesiaType: "General",         asaClass: "I",   status: "scheduled", firstCase: true },
+  { id: "s-oc-0512", date: "2026-05-12", time: "10:00", durationMin: 180, room: "OR 205", patientName: "Augusto Velázquez",   patientAgeSex: "61M", patientMrn: "MRN 845-220", procedure: "Open Sigmoid Colectomy",                procedureShort: "Colectomy", surgeon: "Dr. Liam O'Connell", serviceLine: "General",        anesthesiaType: "General",         asaClass: "III", status: "scheduled", specialNeeds: ["ERAS protocol"] },
+  { id: "s-oc-0526", date: "2026-05-26", time: "11:30", durationMin: 60,  room: "OR 205", patientName: "Esme Lockhart",       patientAgeSex: "28F", patientMrn: "MRN 916-007", procedure: "Laparoscopic Appendectomy",            procedureShort: "Appy",    surgeon: "Dr. Liam O'Connell", serviceLine: "General",        anesthesiaType: "General",         asaClass: "I",   status: "scheduled", addOn: true, notes: "Add-on — urgent from ED" },
+
+  // Dr. Aisha Bhatt — Cardiothoracic
+  { id: "s-ab-0429", date: "2026-04-29", time: "07:30", durationMin: 270, room: "OR 411", patientName: "Eleanor Kazimirov",   patientAgeSex: "70F", patientMrn: "MRN 718-552", procedure: "Mitral Valve Replacement",             procedureShort: "MVR",     surgeon: "Dr. Aisha Bhatt",   serviceLine: "Cardiothoracic", anesthesiaType: "General",         asaClass: "IV",  status: "scheduled", firstCase: true, implantsRequired: true, specialNeeds: ["TEE in room", "ICU bed booked"] },
+  { id: "s-ab-0506", date: "2026-05-06", time: "07:30", durationMin: 240, room: "OR 411", patientName: "Reginald Voss",       patientAgeSex: "65M", patientMrn: "MRN 729-118", procedure: "CABG × 3",                              procedureShort: "CABG",    surgeon: "Dr. Aisha Bhatt",   serviceLine: "Cardiothoracic", anesthesiaType: "General",         asaClass: "IV",  status: "scheduled", firstCase: true, implantsRequired: true },
+  { id: "s-ab-0520", date: "2026-05-20", time: "07:30", durationMin: 300, room: "OR 411", patientName: "Yelena Antonescu",    patientAgeSex: "73F", patientMrn: "MRN 715-003", procedure: "Aortic Valve Replacement (TAVR)",     procedureShort: "TAVR",    surgeon: "Dr. Aisha Bhatt",   serviceLine: "Cardiothoracic", anesthesiaType: "General",         asaClass: "IV",  status: "scheduled", firstCase: true, implantsRequired: true },
+
+  // Dr. Mateus Silva — Spine
+  { id: "s-ms-0428", date: "2026-04-28", time: "07:30", durationMin: 210, room: "OR 308", patientName: "Calvin Mariotti",     patientAgeSex: "48M", patientMrn: "MRN 850-447", procedure: "Anterior Cervical Discectomy & Fusion C6–C7", procedureShort: "ACDF", surgeon: "Dr. Mateus Silva",  serviceLine: "Spine",          anesthesiaType: "General",         asaClass: "II",  status: "scheduled", firstCase: true, implantsRequired: true, specialNeeds: ["Neuromonitoring"] },
+  { id: "s-ms-0511", date: "2026-05-11", time: "07:30", durationMin: 240, room: "OR 308", patientName: "Astrid Kjellberg",    patientAgeSex: "55F", patientMrn: "MRN 818-220", procedure: "Posterior Spinal Fusion L2–L4",        procedureShort: "PSF",     surgeon: "Dr. Mateus Silva",  serviceLine: "Spine",          anesthesiaType: "General",         asaClass: "III", status: "scheduled", firstCase: true, implantsRequired: true, specialNeeds: ["Neuromonitoring", "Cell saver"] },
+  { id: "s-ms-0528", date: "2026-05-28", time: "07:30", durationMin: 180, room: "OR 308", patientName: "Ravi Mahapatra",      patientAgeSex: "41M", patientMrn: "MRN 901-330", procedure: "Lumbar Microdiscectomy L4–L5",         procedureShort: "Microdisc", surgeon: "Dr. Mateus Silva",  serviceLine: "Spine",          anesthesiaType: "General",         asaClass: "II",  status: "scheduled", firstCase: true },
+
+  // Dr. Hannah Park — ENT
+  { id: "s-hp-0427", date: "2026-04-27", time: "07:30", durationMin: 90,  room: "OR 327", patientName: "Mira Jankowski",      patientAgeSex: "8F",  patientMrn: "MRN 944-001", procedure: "Tonsillectomy & Adenoidectomy",        procedureShort: "T&A",     surgeon: "Dr. Hannah Park",   serviceLine: "ENT",            anesthesiaType: "General",         asaClass: "I",   status: "scheduled", firstCase: true, specialNeeds: ["Pediatric airway cart"] },
+  { id: "s-hp-0504", date: "2026-05-04", time: "13:00", durationMin: 120, room: "OR 327", patientName: "Daniel Rosenthal",    patientAgeSex: "44M", patientMrn: "MRN 858-220", procedure: "Septoplasty + Bilateral Turbinate Reduction", procedureShort: "Septo", surgeon: "Dr. Hannah Park",   serviceLine: "ENT",            anesthesiaType: "General",         asaClass: "II",  status: "scheduled" },
+  { id: "s-hp-0518", date: "2026-05-18", time: "13:00", durationMin: 150, room: "OR 327", patientName: "Lila Whitford",       patientAgeSex: "12F", patientMrn: "MRN 942-117", procedure: "Bilateral Tympanostomy + Adenoidectomy", procedureShort: "BMT+A", surgeon: "Dr. Hannah Park",   serviceLine: "ENT",            anesthesiaType: "General",         asaClass: "I",   status: "scheduled", specialNeeds: ["Pediatric airway cart"] },
+  { id: "s-hp-0602", date: "2026-06-02", time: "10:00", durationMin: 180, room: "OR 327", patientName: "Beatrix Halloran",    patientAgeSex: "56F", patientMrn: "MRN 869-440", procedure: "Total Thyroidectomy",                  procedureShort: "Thyroid", surgeon: "Dr. Hannah Park",   serviceLine: "ENT",            anesthesiaType: "General",         asaClass: "II",  status: "scheduled", implantsRequired: false, specialNeeds: ["Recurrent laryngeal nerve monitoring"] },
 ];
 
 export const SCHEDULE_CASES: ScheduleCase[] = RAW_SCHEDULE_CASES.map((c) => ({
@@ -1570,4 +1561,177 @@ export function parseSpokenDate(text: string, referenceYear?: number): string | 
   const yr = referenceYear ?? new Date().getFullYear();
   const d = new Date(yr, monthIdx, day);
   return toDateKey(d);
+}
+
+// ─────────────────────────────────────────────────────────────────────────
+// Person-centric helpers (for the PersonScheduleModal)
+// ─────────────────────────────────────────────────────────────────────────
+
+export type PersonRole = "Surgeon" | "Anesthesiologist" | "Scrub Tech" | "Circulator";
+export type PersonScheduleView = "day" | "week" | "month";
+
+export interface ResolvedPerson {
+  /** Canonical full name (with credential suffix if applicable). */
+  name: string;
+  role: PersonRole;
+  /** Specialty for surgeons; undefined for others. */
+  specialty?: ServiceLine;
+  /** Two-letter initials for an avatar. */
+  initials: string;
+}
+
+function initialsFor(name: string): string {
+  // Strip credential suffixes (", CST", ", RN", etc.) and Dr. prefix.
+  const clean = name.replace(/,.*$/, "").replace(/^Dr\.\s+/i, "");
+  const parts = clean.split(/\s+/).filter(Boolean);
+  return ((parts[0]?.[0] ?? "") + (parts[parts.length - 1]?.[0] ?? "")).toUpperCase();
+}
+
+/**
+ * Fuzzy-resolve a spoken person reference ("Patel", "Marcus", "Dr. Foster")
+ * to a canonical name + role. Searches surgeons, anesthesiologists, scrub
+ * techs, and circulators. If `roleHint` is provided, that pool is searched
+ * first.
+ */
+export function resolvePerson(
+  query: string,
+  roleHint?: PersonRole,
+): ResolvedPerson | null {
+  const q = query.trim().toLowerCase();
+  if (!q) return null;
+
+  const surgeons: ResolvedPerson[] = SURGEONS.map((s) => ({
+    name: s.name,
+    role: "Surgeon" as const,
+    specialty: s.specialty,
+    initials: s.initials,
+  }));
+  const anes: ResolvedPerson[] = ANESTHESIOLOGISTS.map((n) => ({
+    name: n,
+    role: "Anesthesiologist" as const,
+    initials: initialsFor(n),
+  }));
+  const techs: ResolvedPerson[] = SCRUB_TECHS.map((n) => ({
+    name: n,
+    role: "Scrub Tech" as const,
+    initials: initialsFor(n),
+  }));
+  const circ: ResolvedPerson[] = CIRCULATORS.map((n) => ({
+    name: n,
+    role: "Circulator" as const,
+    initials: initialsFor(n),
+  }));
+
+  const POOLS: Record<PersonRole, ResolvedPerson[]> = {
+    Surgeon: surgeons,
+    Anesthesiologist: anes,
+    "Scrub Tech": techs,
+    Circulator: circ,
+  };
+
+  const order: PersonRole[] = roleHint
+    ? [roleHint, ...(["Surgeon", "Anesthesiologist", "Scrub Tech", "Circulator"] as PersonRole[]).filter((r) => r !== roleHint)]
+    : ["Surgeon", "Anesthesiologist", "Scrub Tech", "Circulator"];
+
+  for (const role of order) {
+    const pool = POOLS[role];
+    // Exact match (case-insensitive)
+    const exact = pool.find((p) => p.name.toLowerCase() === q);
+    if (exact) return exact;
+    // Last-name match: "patel" matches "Dr. Anika Patel"
+    const lastMatch = pool.find((p) => {
+      const cleaned = p.name.replace(/,.*$/, "").replace(/^Dr\.\s+/i, "");
+      const last = cleaned.split(/\s+/).pop()?.toLowerCase();
+      return last === q;
+    });
+    if (lastMatch) return lastMatch;
+    // Substring match (handles "marcus webb" vs "Marcus Webb, CST")
+    const sub = pool.find((p) => p.name.toLowerCase().includes(q));
+    if (sub) return sub;
+  }
+  return null;
+}
+
+/** Beginning-of-week (Mon) for a given date, returned as YYYY-MM-DD. */
+export function weekStart(date: Date): string {
+  const d = new Date(date);
+  const day = d.getDay(); // 0 = Sun, 1 = Mon, …
+  const diff = day === 0 ? -6 : 1 - day; // shift to Monday
+  d.setDate(d.getDate() + diff);
+  return toDateKey(d);
+}
+
+export function weekEnd(date: Date): string {
+  const start = parseDateKey(weekStart(date));
+  start.setDate(start.getDate() + 6);
+  return toDateKey(start);
+}
+
+export function monthStart(date: Date): string {
+  return toDateKey(new Date(date.getFullYear(), date.getMonth(), 1));
+}
+
+export function monthEnd(date: Date): string {
+  return toDateKey(new Date(date.getFullYear(), date.getMonth() + 1, 0));
+}
+
+/**
+ * Return cases for a person in the given range, sorted by date+time
+ * (earliest first). Searches every role field on each case so a
+ * Scrub Tech who happens to share a name with a Surgeon won't collide.
+ */
+export function getCasesForPerson(
+  person: ResolvedPerson,
+  startKey: string,
+  endKey: string,
+): ScheduleCase[] {
+  const matches = SCHEDULE_CASES.filter((c) => {
+    if (c.date < startKey || c.date > endKey) return false;
+    switch (person.role) {
+      case "Surgeon":
+        return c.surgeon === person.name;
+      case "Anesthesiologist":
+        return c.anesthesiologist === person.name;
+      case "Scrub Tech":
+        return c.scrubTech === person.name;
+      case "Circulator":
+        return c.circulator === person.name;
+    }
+  });
+  return matches.sort((a, b) => {
+    if (a.date !== b.date) return a.date.localeCompare(b.date);
+    return a.time.localeCompare(b.time);
+  });
+}
+
+/** Compute (start, end) keys for "day" / "week" / "month" relative to today. */
+export function rangeForView(view: PersonScheduleView, today: Date = new Date()): {
+  start: string;
+  end: string;
+  label: string;
+} {
+  switch (view) {
+    case "day": {
+      const k = toDateKey(today);
+      return { start: k, end: k, label: formatLongDate(k) };
+    }
+    case "week": {
+      const s = weekStart(today);
+      const e = weekEnd(today);
+      return {
+        start: s,
+        end: e,
+        label: `${formatShortDate(s)} – ${formatShortDate(e)}`,
+      };
+    }
+    case "month": {
+      const s = monthStart(today);
+      const e = monthEnd(today);
+      return {
+        start: s,
+        end: e,
+        label: today.toLocaleDateString(undefined, { month: "long", year: "numeric" }),
+      };
+    }
+  }
 }

@@ -6,7 +6,11 @@ import { HomeDashboard } from "@/components/arti/HomeDashboard";
 import { CaseListScreen } from "@/components/arti/CaseListScreen";
 import { AwakeDashboard } from "@/components/arti/AwakeDashboard";
 import { ScheduleScreen } from "@/components/arti/ScheduleScreen";
+import { SurgeonsScreen } from "@/components/arti/SurgeonsScreen";
+import { PatientsScreen } from "@/components/arti/PatientsScreen";
 import { ReminderToast, type FiredReminder } from "@/components/arti/ReminderToast";
+import { PersonScheduleModal } from "@/components/arti/PersonScheduleModal";
+import type { PersonRole, PersonScheduleView } from "@/components/arti/schedule";
 import { TODAY_CASES, PATIENT_CLINICAL, type CaseItem } from "@/components/arti/cases";
 import {
   getCasesForDate,
@@ -89,13 +93,19 @@ function ArtiWallRoot() {
       | "onOpenCase"
       | "onSleep"
       | "onShowSchedule"
+      | "onShowSurgeons"
+      | "onShowPatients"
       | "onShowScheduleDay"
       | "onCloseScheduleDay"
       | "onSetReminder"
       | "onCancelReminders"
+      | "onDismissReminderAlert"
       | "onScheduleSetServiceLines"
       | "onScheduleSetSurgeon"
       | "onScheduleClearFilters"
+      | "onShowPersonSchedule"
+      | "onSetPersonScheduleView"
+      | "onClosePersonSchedule"
     >
   >({
     onWake: () => {},
@@ -104,13 +114,19 @@ function ArtiWallRoot() {
     onOpenCase: () => {},
     onSleep: () => {},
     onShowSchedule: () => {},
+    onShowSurgeons: () => {},
+    onShowPatients: () => {},
     onShowScheduleDay: () => {},
     onCloseScheduleDay: () => {},
     onSetReminder: () => {},
     onCancelReminders: () => {},
+    onDismissReminderAlert: () => {},
     onScheduleSetServiceLines: () => {},
     onScheduleSetSurgeon: () => {},
     onScheduleClearFilters: () => {},
+    onShowPersonSchedule: () => {},
+    onSetPersonScheduleView: () => {},
+    onClosePersonSchedule: () => {},
   });
 
   // Dashboard-only tool bridge. `null` when no dashboard is mounted.
@@ -150,14 +166,20 @@ function ArtiWallRoot() {
       onOpenCase: (q) => navCallbacksRef.current.onOpenCase(q),
       onSleep: () => navCallbacksRef.current.onSleep(),
       onShowSchedule: () => navCallbacksRef.current.onShowSchedule?.(),
+      onShowSurgeons: () => navCallbacksRef.current.onShowSurgeons?.(),
+      onShowPatients: () => navCallbacksRef.current.onShowPatients?.(),
       onShowScheduleDay: (date) => navCallbacksRef.current.onShowScheduleDay?.(date),
       onCloseScheduleDay: () => navCallbacksRef.current.onCloseScheduleDay?.(),
       onSetReminder: (text, minutes) => navCallbacksRef.current.onSetReminder?.(text, minutes),
       onCancelReminders: () => navCallbacksRef.current.onCancelReminders?.(),
+      onDismissReminderAlert: () => navCallbacksRef.current.onDismissReminderAlert?.(),
       onScheduleSetServiceLines: (lines) =>
         navCallbacksRef.current.onScheduleSetServiceLines?.(lines),
       onScheduleSetSurgeon: (s) => navCallbacksRef.current.onScheduleSetSurgeon?.(s),
       onScheduleClearFilters: () => navCallbacksRef.current.onScheduleClearFilters?.(),
+      onShowPersonSchedule: (n, r) => navCallbacksRef.current.onShowPersonSchedule?.(n, r),
+      onSetPersonScheduleView: (v) => navCallbacksRef.current.onSetPersonScheduleView?.(v),
+      onClosePersonSchedule: () => navCallbacksRef.current.onClosePersonSchedule?.(),
 
       onToggleTimeOutItem: (id) =>
         dashboardActionsRef.current?.toggleTimeOutItem(id) ?? notAvailable(),
@@ -231,7 +253,16 @@ const notAvailable = (): ArtiToolResult => ({ ok: false, reason: "dashboard not 
  * (see ./components/arti/intent.ts). The sleep tap also wakes Arti so a
  * silent gesture works.
  */
-type ArtiPhase = "sleep" | "waking" | "greeting" | "home" | "cases" | "preop" | "schedule";
+type ArtiPhase =
+  | "sleep"
+  | "waking"
+  | "greeting"
+  | "home"
+  | "cases"
+  | "preop"
+  | "schedule"
+  | "surgeons"
+  | "patients";
 
 interface ArtiWallProps {
   navCallbacksRef: React.MutableRefObject<
@@ -243,13 +274,19 @@ interface ArtiWallProps {
       | "onOpenCase"
       | "onSleep"
       | "onShowSchedule"
+      | "onShowSurgeons"
+      | "onShowPatients"
       | "onShowScheduleDay"
       | "onCloseScheduleDay"
       | "onSetReminder"
       | "onCancelReminders"
+      | "onDismissReminderAlert"
       | "onScheduleSetServiceLines"
       | "onScheduleSetSurgeon"
       | "onScheduleClearFilters"
+      | "onShowPersonSchedule"
+      | "onSetPersonScheduleView"
+      | "onClosePersonSchedule"
     >
   >;
   dashboardActionsRef: DashboardActionsRef;
@@ -278,6 +315,15 @@ const ALL_SERVICE_LINES: ServiceLine[] = [
 ];
 
 function getScrollTarget(): HTMLElement {
+  // Modal scroll containers take precedence — when an overlay is mounted,
+  // "scroll down" should target the modal contents, not the body behind it.
+  // We pick the LAST modal container in DOM order (latest-opened wins) since
+  // multiple modals can be in the tree at once.
+  const modals = document.querySelectorAll<HTMLElement>("[data-scroll-modal]");
+  for (let i = modals.length - 1; i >= 0; i--) {
+    const el = modals[i];
+    if (el.scrollHeight > el.clientHeight) return el;
+  }
   // Prefer the explicitly marked container if it actually has overflow.
   const marked = document.querySelector<HTMLElement>("[data-scroll]");
   if (marked && marked.scrollHeight > marked.clientHeight) return marked;
@@ -356,6 +402,20 @@ function ArtiWall({
     () => new Set(ALL_SERVICE_LINES),
   );
   const [scheduleSurgeonFilter, setScheduleSurgeonFilter] = useState<string | "all">("all");
+
+  // Person Schedule modal — overlay that shows one person's cases.
+  interface PersonScheduleState {
+    open: boolean;
+    name: string | null;
+    role: PersonRole | null;
+    view: PersonScheduleView;
+  }
+  const [personSchedule, setPersonSchedule] = useState<PersonScheduleState>({
+    open: false,
+    name: null,
+    role: null,
+    view: "day",
+  });
 
   // ── Reminders ────────────────────────────────────────────────────────────
   // Pending reminders are scheduled one-shot via setTimeout. When a reminder
@@ -447,6 +507,8 @@ function ArtiWall({
     cases: "case list",
     preop: "pre-op / surgical dashboard",
     schedule: "schedule / calendar",
+    surgeons: "surgeons directory",
+    patients: "patients today",
   };
 
   // Keep contextRef current so Claude always gets a fresh state snapshot.
@@ -503,6 +565,14 @@ function ArtiWall({
             })
             .join("\n")}`
         : `Pending reminders: none`,
+      firedReminders.length
+        ? `Reminder alert showing (${firedReminders.length}): ${firedReminders
+            .map((r) => `"${r.text}"`)
+            .join(", ")} — "close alert" / "dismiss" / "got it" → dismiss_reminder_alert (highest close precedence)`
+        : `Reminder alerts: none visible`,
+      personSchedule.open
+        ? `Person schedule modal: OPEN — viewing ${personSchedule.role} ${personSchedule.name} (${personSchedule.view} view). "switch to [name]" → show_person_schedule. "show me her week/month/today" → set_person_schedule_view. "close" → close_person_schedule.`
+        : `Person schedule modal: closed`,
     ];
 
     // Schedule filter state — always included so Arti knows the current
@@ -589,7 +659,16 @@ function ArtiWall({
 
   // Shared sidebar click handler — used by every screen that renders <Sidebar>.
   const handleSidebarNavigate = useCallback(
-    (key: "home" | "case" | "schedule" | "patient" | "library" | "preferences") => {
+    (
+      key:
+        | "home"
+        | "case"
+        | "schedule"
+        | "surgeons"
+        | "patients"
+        | "library"
+        | "preferences",
+    ) => {
       armIdleTimer();
       switch (key) {
         case "home":
@@ -602,8 +681,11 @@ function ArtiWall({
           setSelectedScheduleDate(null);
           setPhase("schedule");
           break;
-        case "patient":
-          setPhase("preop");
+        case "surgeons":
+          setPhase("surgeons");
+          break;
+        case "patients":
+          setPhase("patients");
           break;
         case "library":
         case "preferences":
@@ -638,6 +720,10 @@ function ArtiWall({
     setFiredReminders((prev) => prev.filter((r) => r.id !== id));
   }, []);
 
+  const handleDismissAllFiredReminders = useCallback(() => {
+    setFiredReminders([]);
+  }, []);
+
   const handleScheduleSetServiceLines = useCallback((lines: string[]) => {
     const valid = lines.filter((l): l is ServiceLine =>
       (ALL_SERVICE_LINES as string[]).includes(l),
@@ -654,6 +740,40 @@ function ArtiWall({
     setActiveScheduleLines(new Set(ALL_SERVICE_LINES));
     setScheduleSurgeonFilter("all");
   }, []);
+
+  const isPersonRole = (s: string): s is PersonRole =>
+    s === "Surgeon" || s === "Anesthesiologist" || s === "Scrub Tech" || s === "Circulator";
+  const isPersonView = (s: string): s is PersonScheduleView =>
+    s === "day" || s === "week" || s === "month";
+
+  const handleShowPersonSchedule = useCallback((name: string, role: string) => {
+    if (!name || !isPersonRole(role)) return;
+    setPersonSchedule((prev) => ({
+      open: true,
+      name,
+      role,
+      // Preserve current view if a modal is already open (the user is just
+      // switching person); reset to "day" when opening fresh.
+      view: prev.open ? prev.view : "day",
+    }));
+  }, []);
+
+  const handleSetPersonScheduleView = useCallback((view: string) => {
+    if (!isPersonView(view)) return;
+    setPersonSchedule((prev) => (prev.open ? { ...prev, view } : prev));
+  }, []);
+
+  const handleClosePersonSchedule = useCallback(() => {
+    setPersonSchedule((prev) => ({ ...prev, open: false }));
+  }, []);
+
+  // Click a surgeon card → open the PersonScheduleModal pre-filtered to them.
+  const handleOpenSurgeonSchedule = useCallback(
+    (name: string) => {
+      handleShowPersonSchedule(name, "Surgeon");
+    },
+    [handleShowPersonSchedule],
+  );
 
   // Clean up any pending timers on unmount.
   useEffect(() => {
@@ -713,6 +833,8 @@ function ArtiWall({
       setSelectedScheduleDate(null);
       setPhase("schedule");
     },
+    onShowSurgeons: () => setPhase("surgeons"),
+    onShowPatients: () => setPhase("patients"),
     onShowScheduleDay: (date: string) => {
       if (!date) return;
       setSelectedScheduleDate(date);
@@ -724,9 +846,13 @@ function ArtiWall({
     },
     onSetReminder: handleSetReminder,
     onCancelReminders: handleCancelReminders,
+    onDismissReminderAlert: handleDismissAllFiredReminders,
     onScheduleSetServiceLines: handleScheduleSetServiceLines,
     onScheduleSetSurgeon: handleScheduleSetSurgeon,
     onScheduleClearFilters: handleScheduleClearFilters,
+    onShowPersonSchedule: handleShowPersonSchedule,
+    onSetPersonScheduleView: handleSetPersonScheduleView,
+    onClosePersonSchedule: handleClosePersonSchedule,
   };
 
   /**
@@ -773,6 +899,29 @@ function ArtiWall({
         onSelectCase={handleSelectCase}
         onPrompt={handlePrompt}
         onSidebarNavigate={handleSidebarNavigate}
+      />
+    );
+  } else if (phase === "patients") {
+    screen = (
+      <PatientsScreen
+        staffName={staff.name}
+        staffRole={staff.role}
+        initials={staff.initials}
+        onSleep={handleSleep}
+        onPrompt={handlePrompt}
+        onSidebarNavigate={handleSidebarNavigate}
+      />
+    );
+  } else if (phase === "surgeons") {
+    screen = (
+      <SurgeonsScreen
+        staffName={staff.name}
+        staffRole={staff.role}
+        initials={staff.initials}
+        onSleep={handleSleep}
+        onPrompt={handlePrompt}
+        onSidebarNavigate={handleSidebarNavigate}
+        onOpenSurgeonSchedule={handleOpenSurgeonSchedule}
       />
     );
   } else if (phase === "schedule") {
@@ -838,6 +987,15 @@ function ArtiWall({
         </motion.div>
       </AnimatePresence>
       <ReminderToast reminders={firedReminders} onDismiss={handleDismissFiredReminder} />
+      <PersonScheduleModal
+        open={personSchedule.open}
+        personName={personSchedule.name}
+        personRole={personSchedule.role}
+        view={personSchedule.view}
+        onClose={handleClosePersonSchedule}
+        onChangeView={handleSetPersonScheduleView}
+        onOpenCase={handleOpenCaseFromSchedule}
+      />
     </div>
   );
 }

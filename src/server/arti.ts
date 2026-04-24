@@ -2,7 +2,13 @@ import { createServerFn } from "@tanstack/react-start";
 import Anthropic from "@anthropic-ai/sdk";
 import { readFileSync } from "fs";
 import { resolve } from "path";
-import { SCHEDULE_CASES } from "../components/arti/schedule";
+import {
+  ANESTHESIOLOGISTS,
+  CIRCULATORS,
+  SCHEDULE_CASES,
+  SCRUB_TECHS,
+  SURGEONS,
+} from "../components/arti/schedule";
 
 const client = new Anthropic({ apiKey: process.env.ANTHROPIC_API_KEY });
 
@@ -20,7 +26,21 @@ const STATIC_SCHEDULE_OVERVIEW = SCHEDULE_CASES.map(
     `  - ${c.date} ${c.time} ${c.room} · ${c.patientName} (${c.patientAgeSex}) · ${c.procedureShort}${c.side ? ` ${c.side}` : ""} · ${c.surgeon} · Anes ${c.anesthesiologist} · Scrub ${c.scrubTech} · ${c.status}`,
 ).join("\n");
 
-const CACHED_SYSTEM = `${SYSTEM_PROMPT}\n\n---\nFull OR schedule (stable reference — use this to answer patient / surgeon / date / count questions):\n${STATIC_SCHEDULE_OVERVIEW}`;
+const TEAM_ROSTER = [
+  `Surgeons:`,
+  ...SURGEONS.map((s) => `  - ${s.name} (${s.specialty})`),
+  ``,
+  `Anesthesiologists:`,
+  ...ANESTHESIOLOGISTS.map((n) => `  - ${n}`),
+  ``,
+  `Scrub Techs:`,
+  ...SCRUB_TECHS.map((n) => `  - ${n}`),
+  ``,
+  `Circulating Nurses:`,
+  ...CIRCULATORS.map((n) => `  - ${n}`),
+].join("\n");
+
+const CACHED_SYSTEM = `${SYSTEM_PROMPT}\n\n---\nFull OR schedule (stable reference — use this to answer patient / surgeon / date / count questions):\n${STATIC_SCHEDULE_OVERVIEW}\n\n---\nTeam roster (use these canonical names for show_person_schedule and team-lookup queries):\n${TEAM_ROSTER}`;
 
 const TOOLS: Anthropic.Tool[] = [
   {
@@ -42,6 +62,18 @@ const TOOLS: Anthropic.Tool[] = [
     name: "navigate_schedule",
     description:
       "Open the Schedule screen (month-view OR calendar). Use for: 'show me the schedule', 'open the calendar', 'show me the schedule screen', 'what's on the schedule this month'.",
+    input_schema: { type: "object" as const, properties: {}, required: [] },
+  },
+  {
+    name: "navigate_surgeons",
+    description:
+      "Open the Surgeons directory screen (vertical card list of all surgeons sorted by their soonest upcoming case, with name/specialty/procedure search). Use for: 'show me the surgeons', 'open the surgeons list', 'show me all surgeons', 'pull up the surgeons directory', 'who are my surgeons', 'show me the surgeon list'. Use this only for the directory; for ONE specific surgeon's day-by-day schedule, use show_person_schedule instead.",
+    input_schema: { type: "object" as const, properties: {}, required: [] },
+  },
+  {
+    name: "navigate_patients",
+    description:
+      "Open the Patients screen — vertical card list of every patient scheduled for surgery TODAY in OR 326, with name/MRN/procedure search and risk flags (severe allergies, difficult airway, flagged labs). Use for: 'show me today's patients', 'show me the patients', 'pull up the patient list', 'who are today's patients', 'open patients'. Tapping a card opens that patient's full chart modal — for opening one specific patient by name from voice, prefer this nav and let the user click, or use open_patient_details if a case is already active in preop.",
     input_schema: { type: "object" as const, properties: {}, required: [] },
   },
   {
@@ -94,6 +126,12 @@ const TOOLS: Anthropic.Tool[] = [
     input_schema: { type: "object" as const, properties: {}, required: [] },
   },
   {
+    name: "dismiss_reminder_alert",
+    description:
+      "Dismiss the currently visible reminder toast/alert(s). Only use when context says 'Reminder alert showing'. Trigger phrases: 'close alert', 'close the alert', 'close reminder', 'close the reminder', 'close reminder alert', 'dismiss', 'dismiss alert', 'dismiss that', 'got it', 'thanks', 'thank you', 'okay', 'acknowledged', 'noted', 'close that'. Do NOT use close_patient_details, close_lightbox, close_quad_view, or close_schedule_day for these phrases while a reminder alert is visible — the reminder alert has highest close precedence. If no reminder alert is showing, use the normal close-disambiguation rules.",
+    input_schema: { type: "object" as const, properties: {}, required: [] },
+  },
+  {
     name: "schedule_set_service_lines",
     description:
       "Set which service lines are visible on the Schedule screen. Pass the FINAL desired list, not a delta — if the user says 'also show cardiothoracic', read the current 'Schedule filters' line in live context, then pass current-plus-Cardiothoracic. Examples: 'show only orthopedics' → ['Orthopedics']. 'show orthopedics and spine' → ['Orthopedics','Spine']. 'hide general' → (current without General). 'show all service lines' → all five. Use only when the user wants to filter by service line, not by surgeon.",
@@ -132,6 +170,49 @@ const TOOLS: Anthropic.Tool[] = [
     name: "schedule_clear_filters",
     description:
       "Reset all Schedule filters — show every service line and every surgeon. Use for 'clear the filters', 'clear all filters', 'show everything', 'reset the filters', 'show all cases', 'remove the filter'.",
+    input_schema: { type: "object" as const, properties: {}, required: [] },
+  },
+  {
+    name: "show_person_schedule",
+    description:
+      "Open a focused modal showing one person's case schedule (vertical card list, soonest-first). Use for: 'show me Dr. Patel's schedule', 'what's Marcus Webb's day look like', 'pull up Dr. Shah's week', 'show me the anesthesiologist's schedule', 'now show me Dr. Foster' (when modal already open — switches person). Resolve the spoken reference to a CANONICAL name from the Team roster in the cached system prompt — pass the full string as it appears (e.g. 'Dr. Anika Patel', 'Marcus Webb, CST', 'Dr. Priya Shah', 'Melissa Quinn, RN'). Always include `role` so the modal knows which schedule field to filter on.",
+    input_schema: {
+      type: "object" as const,
+      properties: {
+        name: {
+          type: "string",
+          description:
+            "Canonical full name from the Team roster. Include credential suffixes for techs (', CST') and circulators (', RN').",
+        },
+        role: {
+          type: "string",
+          enum: ["Surgeon", "Anesthesiologist", "Scrub Tech", "Circulator"],
+          description: "Which role this person serves on the schedule.",
+        },
+      },
+      required: ["name", "role"],
+    },
+  },
+  {
+    name: "set_person_schedule_view",
+    description:
+      "Change the time scope of the open Person Schedule modal. 'show me her week' / 'this week' → 'week'. 'today only' / 'just today' → 'day'. 'this month' / 'show me the whole month' → 'month'.",
+    input_schema: {
+      type: "object" as const,
+      properties: {
+        view: {
+          type: "string",
+          enum: ["day", "week", "month"],
+          description: "Time scope to display.",
+        },
+      },
+      required: ["view"],
+    },
+  },
+  {
+    name: "close_person_schedule",
+    description:
+      "Close the Person Schedule modal. Use only when the modal is open AND the user wants to close JUST that modal (not navigate away). Phrases: 'close', 'close that', 'close the modal', 'close the schedule', 'dismiss', 'go back'.",
     input_schema: { type: "object" as const, properties: {}, required: [] },
   },
   {
@@ -414,6 +495,8 @@ export const processVoiceCommand = createServerFn({ method: "POST" })
       "navigate_home",
       "navigate_cases",
       "navigate_schedule",
+      "navigate_surgeons",
+      "navigate_patients",
       "show_schedule_day",
       "close_schedule_day",
       // Modals & overlays
@@ -439,6 +522,12 @@ export const processVoiceCommand = createServerFn({ method: "POST" })
       "schedule_set_service_lines",
       "schedule_set_surgeon",
       "schedule_clear_filters",
+      // Reminder alert dismissal — the toast visibly disappears.
+      "dismiss_reminder_alert",
+      // Person schedule modal — visible card list / view toggle / close.
+      "show_person_schedule",
+      "set_person_schedule_view",
+      "close_person_schedule",
     ]);
     const isSilent = toolCalls.length > 0 && toolCalls.every((tc) => SILENT_TOOLS.has(tc.name));
 
