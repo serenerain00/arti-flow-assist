@@ -2,6 +2,7 @@ import { createServerFn } from "@tanstack/react-start";
 import Anthropic from "@anthropic-ai/sdk";
 import { readFileSync } from "fs";
 import { resolve } from "path";
+import { SCHEDULE_CASES } from "../components/arti/schedule";
 
 const client = new Anthropic({ apiKey: process.env.ANTHROPIC_API_KEY });
 
@@ -9,6 +10,17 @@ const SYSTEM_PROMPT = readFileSync(
   resolve(process.cwd(), "skills/personality.md"),
   "utf-8",
 );
+
+// Static schedule reference — built once at module load, never changes per
+// request. Combined with the system prompt into a single cached block so
+// Haiku only processes this once per 5-minute window per process, not every
+// turn. This is the single biggest latency win for repeat voice commands.
+const STATIC_SCHEDULE_OVERVIEW = SCHEDULE_CASES.map(
+  (c) =>
+    `  - ${c.date} ${c.time} ${c.room} · ${c.patientName} (${c.patientAgeSex}) · ${c.procedureShort}${c.side ? ` ${c.side}` : ""} · ${c.surgeon} · Anes ${c.anesthesiologist} · Scrub ${c.scrubTech} · ${c.status}`,
+).join("\n");
+
+const CACHED_SYSTEM = `${SYSTEM_PROMPT}\n\n---\nFull OR schedule (stable reference — use this to answer patient / surgeon / date / count questions):\n${STATIC_SCHEDULE_OVERVIEW}`;
 
 const TOOLS: Anthropic.Tool[] = [
   {
@@ -217,6 +229,18 @@ const TOOLS: Anthropic.Tool[] = [
     input_schema: { type: "object" as const, properties: {}, required: [] },
   },
   {
+    name: "lightbox_zoom_in",
+    description:
+      "Zoom INTO the currently displayed image in the lightbox (table layout or preference card photos). Use for: 'zoom in', 'zoom in on that', 'get closer', 'enlarge', 'make it bigger', 'zoom into the image'.",
+    input_schema: { type: "object" as const, properties: {}, required: [] },
+  },
+  {
+    name: "lightbox_zoom_out",
+    description:
+      "Zoom OUT on the currently displayed image in the lightbox back to normal size. Use for: 'zoom out', 'zoom back out', 'back out', 'smaller', 'fit the image', 'zoom out of that'.",
+    input_schema: { type: "object" as const, properties: {}, required: [] },
+  },
+  {
     name: "close_lightbox",
     description: "Close the currently open image lightbox/viewer.",
     input_schema: { type: "object" as const, properties: {}, required: [] },
@@ -264,24 +288,39 @@ export const processVoiceCommand = createServerFn({ method: "POST" })
     history: Array<{ role: "user" | "assistant"; content: string }>;
   })
   .handler(async ({ data }) => {
-    const system = `${SYSTEM_PROMPT}\n\n---\nLive context:\n${data.context}`;
-
     const messages: Anthropic.MessageParam[] = [
-      ...data.history.map(h => ({ role: h.role, content: h.content })),
+      ...data.history.map((h) => ({ role: h.role, content: h.content })),
       { role: "user", content: data.transcript },
     ];
 
-    const first = await client.messages.create({
-      model: "claude-haiku-4-5-20251001",
-      // Responses are capped at ≤1–2 sentences by the system prompt. 120
-      // tokens is enough headroom for a greeting + tool call; lower cap =
-      // faster time-to-last-token for every voice turn.
-      max_tokens: 120,
-      temperature: 0,
-      system,
-      messages,
-      tools: TOOLS,
-    });
+    const first = await client.messages.create(
+      {
+        model: "claude-haiku-4-5-20251001",
+        // Responses are capped at ≤1–2 sentences by the system prompt. 120
+        // tokens is enough headroom for a greeting + tool call; lower cap =
+        // faster time-to-last-token for every voice turn.
+        max_tokens: 120,
+        temperature: 0,
+        // Split into a cached block (system prompt + full schedule) and a live
+        // block (current screen, active case, dashboard state, time). Haiku
+        // reads the cached block from Anthropic's prompt cache on repeat
+        // calls within 5 minutes, cutting input processing by ~90%.
+        system: [
+          {
+            type: "text",
+            text: CACHED_SYSTEM,
+            cache_control: { type: "ephemeral" },
+          },
+          {
+            type: "text",
+            text: `---\nLive context:\n${data.context}`,
+          },
+        ],
+        messages,
+        tools: TOOLS,
+      },
+      { timeout: 15_000 },
+    );
 
     const toolUseBlocks = first.content.filter(
       (b): b is Anthropic.ToolUseBlock => b.type === "tool_use",
@@ -318,6 +357,8 @@ export const processVoiceCommand = createServerFn({ method: "POST" })
       // Lightbox / images
       "lightbox_next",
       "lightbox_prev",
+      "lightbox_zoom_in",
+      "lightbox_zoom_out",
       "close_lightbox",
       "show_preference_card",
       "show_preference_card_layout_images",
@@ -345,17 +386,32 @@ export const processVoiceCommand = createServerFn({ method: "POST" })
         content: JSON.stringify({ ok: true }),
       }));
 
-      const second = await client.messages.create({
-        model: "claude-haiku-4-5-20251001",
-        max_tokens: 32,
-        temperature: 0,
-        system: `${system}\n\nSpeak ONE short sentence confirming what just happened. No patient names. No case details. No elaboration.\nGreeting/wake examples: "Good morning." "Hey, good to have you in." "Ready when you are."\nNavigation examples: "Home screen." "Here's the case list." "Opening next case." "Quad view open."\nAction examples: "Done." "Counts updated." "Sterile cockpit on." "Alert dismissed."`,
-        messages: [
-          { role: "user", content: data.transcript },
-          { role: "assistant", content: first.content },
-          { role: "user", content: toolResults },
-        ],
-      });
+      const second = await client.messages.create(
+        {
+          model: "claude-haiku-4-5-20251001",
+          max_tokens: 32,
+          temperature: 0,
+          // Reuse the same cache breakpoint so the second turn also reads
+          // from the cached system prompt.
+          system: [
+            {
+              type: "text",
+              text: CACHED_SYSTEM,
+              cache_control: { type: "ephemeral" },
+            },
+            {
+              type: "text",
+              text: `---\nLive context:\n${data.context}\n\nSpeak ONE short sentence confirming what just happened. No patient names. No case details. No elaboration.\nGreeting/wake examples: "Good morning." "Hey, good to have you in." "Ready when you are."\nNavigation examples: "Home screen." "Here's the case list." "Opening next case." "Quad view open."\nAction examples: "Done." "Counts updated." "Sterile cockpit on." "Alert dismissed."`,
+            },
+          ],
+          messages: [
+            { role: "user", content: data.transcript },
+            { role: "assistant", content: first.content },
+            { role: "user", content: toolResults },
+          ],
+        },
+        { timeout: 10_000 },
+      );
 
       response = second.content
         .filter((b): b is Anthropic.TextBlock => b.type === "text")

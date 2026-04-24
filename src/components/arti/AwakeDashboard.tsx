@@ -118,7 +118,8 @@ export function AwakeDashboard({
       .map((id) => TO_LABELS[id]);
 
     const clinical = activeCase ? PATIENT_CLINICAL[activeCase.id] : undefined;
-    const flaggedLabs = clinical?.labs.filter(l => l.flag).map(l => `${l.label} ${l.value}`) ?? [];
+    const flaggedLabs = clinical?.labs.filter((l) => l.flag).map((l) => `${l.label} ${l.value}`) ?? [];
+    const allLabs = clinical?.labs.map((l) => `${l.label} ${l.value}${l.flag ? " ⚠" : ""}`) ?? [];
     dashboardContextRef.current = () => [
       `Active dashboard view: ${ROLE_LABEL[activeRole]}`,
       `Available role views: Circulating Nurse, Scrub Tech, Surgeon, Anesthesiologist`,
@@ -136,19 +137,49 @@ export function AwakeDashboard({
       lightboxOpen
         ? `Image lightbox: OPEN (${lightboxIndex + 1} of ${lightboxImages.length}) — "next image"/"previous image"/"close" are valid commands`
         : `Image lightbox: closed`,
-      clinical ? [
-        `Surgeon notes: ${clinical.notes.join(" | ")}`,
-        `Allergies: ${clinical.allergies.map(a => `${a.agent} (${a.reaction}, ${a.severity})`).join(", ")}`,
-        `Conditions: ${clinical.conditions.join(", ")}`,
-        `Anesthesia plan: ${clinical.anesthesiaPlan}`,
-        `Airway: Mallampati ${clinical.airway.mallampati}${clinical.airway.difficult ? " — DIFFICULT AIRWAY" : ""}`,
-        flaggedLabs.length ? `Flagged labs: ${flaggedLabs.join(", ")}` : "Labs: all within range",
-        `Procedure steps: ${clinical.procedureSteps.map(s => `${s.step}. ${s.title}`).join(" → ")}`,
-        `Implants: ${clinical.implantPlan.map(i => `${i.component} ${i.spec}${i.confirmed ? "" : " [UNCONFIRMED]"}`).join(", ")}`,
-      ].join("\n") : "",
+      patientDetailsOpen
+        ? `Patient details modal: OPEN — "close" / "close modal" / "close patient info" → close_patient_details`
+        : `Patient details modal: closed`,
+      quadOpen
+        ? `Quad view: OPEN${quadFocused ? ` (focused on ${quadFocused})` : ""} — "close" / "close quad view" → close_quad_view`
+        : `Quad view: closed`,
+      clinical
+        ? [
+            `── Active-case patient chart ──`,
+            `DOB: ${clinical.dob} · Sex: ${clinical.sex} · Height: ${clinical.height} · Weight: ${clinical.weight} · BMI: ${clinical.bmi}`,
+            `Blood type: ${clinical.bloodType}`,
+            `NPO: ${clinical.npo}`,
+            `Allergies: ${clinical.allergies.length ? clinical.allergies.map((a) => `${a.agent} (${a.reaction}, ${a.severity})`).join(", ") : "NKDA — no known drug allergies"}`,
+            `Medications: ${clinical.medications.length ? clinical.medications.join("; ") : "None on file"}`,
+            `Conditions: ${clinical.conditions.join(", ")}`,
+            `Labs (all): ${allLabs.join(", ")}`,
+            flaggedLabs.length ? `  ⚠ Flagged: ${flaggedLabs.join(", ")}` : "  All labs within range",
+            `Consents: ${clinical.consents.join("; ")}`,
+            `Airway: Mallampati ${clinical.airway.mallampati}${clinical.airway.difficult ? " — DIFFICULT AIRWAY" : ""}`,
+            `Anesthesia plan: ${clinical.anesthesiaPlan}`,
+            `Surgeon notes: ${clinical.notes.join(" | ")}`,
+            `Procedure steps: ${clinical.procedureSteps.map((s) => `${s.step}. ${s.title}`).join(" → ")}`,
+            `Implants: ${clinical.implantPlan.map((i) => `${i.component} ${i.spec}${i.confirmed ? "" : " [UNCONFIRMED]"}`).join(", ")}`,
+          ].join("\n")
+        : "",
       `Actions available from this screen: toggle time-out items, adjust instrument counts, sterile cockpit, dismiss advisory alerts, open quad view, show preference card, show table layout images, open scrub tech table layout images, toggle opening checklist items, switch role view, open patient details, open how-to video`,
     ].join("\n");
-  }, [activeRole, cockpit, timeOutChecked, counts, dismissedAlerts, openingChecklist, lightboxOpen, lightboxIndex, lightboxImages.length, dashboardContextRef]);
+  }, [
+    activeRole,
+    cockpit,
+    timeOutChecked,
+    counts,
+    dismissedAlerts,
+    openingChecklist,
+    lightboxOpen,
+    lightboxIndex,
+    lightboxImages.length,
+    patientDetailsOpen,
+    quadOpen,
+    quadFocused,
+    activeCase,
+    dashboardContextRef,
+  ]);
 
   const toggleTimeOutItem = useCallback((id: TimeOutId): ArtiToolResult => {
     setTimeOutChecked((prev) => {
@@ -267,6 +298,18 @@ export function AwakeDashboard({
     return { ok: true };
   }, [lightboxOpen]);
 
+  const lightboxZoomIn = useCallback((): ArtiToolResult => {
+    if (!lightboxOpen) return { ok: false, reason: "no lightbox open" };
+    lightboxRef.current?.zoomIn();
+    return { ok: true };
+  }, [lightboxOpen]);
+
+  const lightboxZoomOut = useCallback((): ArtiToolResult => {
+    if (!lightboxOpen) return { ok: false, reason: "no lightbox open" };
+    lightboxRef.current?.zoomOut();
+    return { ok: true };
+  }, [lightboxOpen]);
+
   const closeLightbox = useCallback((): ArtiToolResult => {
     setLightboxOpen(false);
     return { ok: true };
@@ -292,6 +335,8 @@ export function AwakeDashboard({
       openTableLayoutImages,
       lightboxNext,
       lightboxPrev,
+      lightboxZoomIn,
+      lightboxZoomOut,
       closeLightbox,
     }),
     [
@@ -312,6 +357,8 @@ export function AwakeDashboard({
       openTableLayoutImages,
       lightboxNext,
       lightboxPrev,
+      lightboxZoomIn,
+      lightboxZoomOut,
       closeLightbox,
     ],
   );

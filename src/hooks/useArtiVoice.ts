@@ -40,6 +40,8 @@ export interface ArtiVoiceCallbacks {
   onOpenTableLayoutImages?: () => ArtiToolResult;
   onLightboxNext?: () => ArtiToolResult;
   onLightboxPrev?: () => ArtiToolResult;
+  onLightboxZoomIn?: () => ArtiToolResult;
+  onLightboxZoomOut?: () => ArtiToolResult;
   onCloseLightbox?: () => ArtiToolResult;
   onScroll?: (direction: string, speed: string, continuous: boolean) => ArtiToolResult;
   onStopScroll?: () => ArtiToolResult;
@@ -100,6 +102,8 @@ function executeToolCall(call: ArtiToolCall, cb: ArtiVoiceCallbacks): void {
     case "open_table_layout_images":   cb.onOpenTableLayoutImages?.(); break;
     case "lightbox_next":              cb.onLightboxNext?.(); break;
     case "lightbox_prev":              cb.onLightboxPrev?.(); break;
+    case "lightbox_zoom_in":           cb.onLightboxZoomIn?.(); break;
+    case "lightbox_zoom_out":          cb.onLightboxZoomOut?.(); break;
     case "close_lightbox":             cb.onCloseLightbox?.(); break;
     case "scroll":                     cb.onScroll?.(String(inp.direction ?? "down"), String(inp.speed ?? "normal"), Boolean(inp.continuous ?? false)); break;
     case "stop_scroll":                cb.onStopScroll?.(); break;

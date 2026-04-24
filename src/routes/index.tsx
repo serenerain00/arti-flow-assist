@@ -6,7 +6,7 @@ import { HomeDashboard } from "@/components/arti/HomeDashboard";
 import { CaseListScreen } from "@/components/arti/CaseListScreen";
 import { AwakeDashboard } from "@/components/arti/AwakeDashboard";
 import { ScheduleScreen } from "@/components/arti/ScheduleScreen";
-import { TODAY_CASES, type CaseItem } from "@/components/arti/cases";
+import { TODAY_CASES, PATIENT_CLINICAL, type CaseItem } from "@/components/arti/cases";
 import {
   getCasesForDate,
   formatLongDate,
@@ -63,6 +63,8 @@ export interface DashboardActions {
   openTableLayoutImages: () => ArtiToolResult;
   lightboxNext: () => ArtiToolResult;
   lightboxPrev: () => ArtiToolResult;
+  lightboxZoomIn: () => ArtiToolResult;
+  lightboxZoomOut: () => ArtiToolResult;
   closeLightbox: () => ArtiToolResult;
 }
 
@@ -167,6 +169,8 @@ function ArtiWallRoot() {
         dashboardActionsRef.current?.openTableLayoutImages() ?? notAvailable(),
       onLightboxNext: () => dashboardActionsRef.current?.lightboxNext() ?? notAvailable(),
       onLightboxPrev: () => dashboardActionsRef.current?.lightboxPrev() ?? notAvailable(),
+      onLightboxZoomIn: () => dashboardActionsRef.current?.lightboxZoomIn() ?? notAvailable(),
+      onLightboxZoomOut: () => dashboardActionsRef.current?.lightboxZoomOut() ?? notAvailable(),
       onCloseLightbox: () => dashboardActionsRef.current?.closeLightbox() ?? notAvailable(),
       onScroll: (direction, speed, continuous) =>
         scrollActionsRef.current.onScroll(direction, speed, continuous),
@@ -391,18 +395,24 @@ function ArtiWall({
       h < 5 ? "Good evening" : h < 12 ? "Good morning" : h < 17 ? "Good afternoon" : "Good evening";
     const timeStr = now.toLocaleTimeString([], { hour: "numeric", minute: "2-digit" });
 
-    // Full schedule overview — always included so Arti can answer "when is
-    // Marcus Chen's surgery?" or "what days is Dr. Patel operating?" from
-    // any screen. One line per case keeps the footprint small (~45 lines).
-    const scheduleOverview = SCHEDULE_CASES.map(
-      (c) =>
-        `  - ${c.date} ${c.time} ${c.room} · ${c.patientName} (${c.patientAgeSex}) · ${c.procedureShort}${c.side ? ` ${c.side}` : ""} · ${c.surgeon} · Anes ${c.anesthesiologist} · Scrub ${c.scrubTech} · ${c.status}`,
-    ).join("\n");
-
     // Look up the team for the active case from the schedule (same id). If
-    // it isn't on the schedule, fall back to the room+today assignment so the
-    // preop view still has a team Arti can reference.
+    // it isn't on the schedule, fall back so the preop view still has a
+    // team Arti can reference. The full schedule itself lives in the server's
+    // cached system prompt — we don't resend it per turn.
     const activeScheduleEntry = SCHEDULE_CASES.find((c) => c.id === activeCase.id);
+
+    // Patient basics — always available regardless of which screen is open,
+    // so "what's her blood type?" works from home / cases / schedule, not
+    // just preop. The full chart (meds, labs, consents, airway, steps) is
+    // still added by the dashboard context when on preop.
+    const activeClinical = PATIENT_CLINICAL[activeCase.id];
+    const activeAllergiesLine = activeClinical
+      ? activeClinical.allergies.length
+        ? activeClinical.allergies
+            .map((a) => `${a.agent} (${a.severity})`)
+            .join(", ")
+        : "NKDA"
+      : "unknown";
 
     const lines = [
       `Staff: ${staff.name}, ${staff.role}`,
@@ -413,8 +423,10 @@ function ArtiWall({
       activeScheduleEntry
         ? `Active case team — Surgeon: ${activeScheduleEntry.surgeon} · Anesthesiologist: ${activeScheduleEntry.anesthesiologist} · Scrub Tech: ${activeScheduleEntry.scrubTech} · Circulator: ${activeScheduleEntry.circulator} · Anesthesia type: ${activeScheduleEntry.anesthesiaType} · ASA ${activeScheduleEntry.asaClass}`
         : `Active case team — Surgeon: ${activeCase.surgeon} (team not on schedule)`,
+      activeClinical
+        ? `Active case patient basics — Blood type: ${activeClinical.bloodType} · DOB: ${activeClinical.dob} · Sex: ${activeClinical.sex} · Height: ${activeClinical.height} · Weight: ${activeClinical.weight} · BMI: ${activeClinical.bmi} · NPO: ${activeClinical.npo} · Allergies: ${activeAllergiesLine}`
+        : `Active case patient basics — chart not available`,
       `Today's board:\n${board}`,
-      `Full OR schedule (use this to answer patient/surgeon/date questions):\n${scheduleOverview}`,
       `Navigation available: home dashboard, case list, schedule/calendar, pre-op dashboard, sleep`,
     ];
 

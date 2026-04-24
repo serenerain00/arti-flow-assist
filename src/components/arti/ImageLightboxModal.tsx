@@ -13,6 +13,10 @@ export interface LightboxImage {
 export interface LightboxHandle {
   scrollNext: () => void;
   scrollPrev: () => void;
+  zoomIn: () => void;
+  zoomOut: () => void;
+  toggleZoom: () => void;
+  isZoomed: () => boolean;
 }
 
 interface Props {
@@ -61,10 +65,18 @@ export const ImageLightboxModal = forwardRef<LightboxHandle, Props>(function Ima
     return () => window.removeEventListener("keydown", onKey);
   }, [open, onClose, emblaApi]);
 
-  useImperativeHandle(ref, () => ({
-    scrollNext: () => emblaApi?.scrollNext(),
-    scrollPrev: () => emblaApi?.scrollPrev(),
-  }), [emblaApi]);
+  useImperativeHandle(
+    ref,
+    () => ({
+      scrollNext: () => emblaApi?.scrollNext(),
+      scrollPrev: () => emblaApi?.scrollPrev(),
+      zoomIn: () => setZoomed(true),
+      zoomOut: () => setZoomed(false),
+      toggleZoom: () => setZoomed((z) => !z),
+      isZoomed: () => zoomed,
+    }),
+    [emblaApi, zoomed],
+  );
 
   if (!open) return null;
 
