@@ -1,4 +1,4 @@
-import { useCallback, useEffect, useMemo, useState } from "react";
+import { useCallback, useEffect, useMemo, useRef, useState } from "react";
 import { Sidebar } from "./Sidebar";
 import { TopBar } from "./TopBar";
 import { CaseHeader } from "./CaseHeader";
@@ -8,11 +8,17 @@ import { TeamRoster } from "./TeamRoster";
 import { AlertStack, ALERTS as ALERT_DEFS } from "./AlertStack";
 import { HowToVideoModal } from "./HowToVideoModal";
 import { QuadView, type QuadPanelId } from "./QuadView";
-import { PreferenceCard } from "./PreferenceCard";
+import { PreferenceCard, PREF_CARD_IMAGES } from "./PreferenceCard";
 import { PatientDetailsModal } from "./PatientDetailsModal";
 import { ArtiInvoker } from "./ArtiInvoker";
+import { ImageLightboxModal, type LightboxHandle, type LightboxImage } from "./ImageLightboxModal";
+import { RoleSwitcherBar, type ActiveRole } from "./RoleSwitcherBar";
+import { AnesthesiaPanel } from "./AnesthesiaPanel";
+import { ScrubTechPanel, SCRUB_LIGHTBOX_IMAGES, OPENING_CHECKLIST_ITEMS, OPENING_CHECKLIST_INITIAL_DONE } from "./ScrubTechPanel";
+import { SurgeonPanel } from "./SurgeonPanel";
 import { ArrowLeft, LayoutGrid } from "lucide-react";
 import type { CaseItem } from "./cases";
+import { PATIENT_CLINICAL } from "./cases";
 import type { DashboardActions, DashboardActionsRef } from "@/routes/index";
 import type { ArtiToolResult } from "@/hooks/useArtiVoice";
 
@@ -21,17 +27,12 @@ interface Props {
   staffRole: string;
   initials: string;
   onSleep: () => void;
-  /** Optional case to display — when provided, drives the case header. */
   activeCase?: CaseItem;
-  /** When provided, shows a "back to cases" affordance. */
   onBackToCases?: () => void;
-  /** Free-text prompt handler (drives navigation + voice). */
   onPrompt: (text: string) => void;
-  /**
-   * Bridge so the voice agent (hosted at the route level) can drive
-   * dashboard state. Populated on mount, cleared on unmount.
-   */
   actionsRef?: DashboardActionsRef;
+  /** Written to by AwakeDashboard so the route's context builder can read live state. */
+  dashboardContextRef?: React.MutableRefObject<() => string>;
 }
 
 export type TimeOutId = "patient" | "site" | "procedure" | "allergies";
@@ -62,9 +63,11 @@ export function AwakeDashboard({
   staffRole,
   initials,
   onSleep,
+  activeCase,
   onBackToCases,
   onPrompt,
   actionsRef,
+  dashboardContextRef,
 }: Props) {
   const [cockpit, setCockpit] = useState(false);
   const [howToOpen, setHowToOpen] = useState(false);
@@ -81,6 +84,69 @@ export function AwakeDashboard({
   const [quadOpen, setQuadOpen] = useState(false);
   const [quadFocused, setQuadFocused] = useState<QuadPanelId | null>(null);
   const [patientDetailsOpen, setPatientDetailsOpen] = useState(false);
+  const [activeRole, setActiveRole] = useState<ActiveRole>("nurse");
+  const [lightboxOpen, setLightboxOpen] = useState(false);
+  const [lightboxImages, setLightboxImages] = useState<LightboxImage[]>([]);
+  const [lightboxIndex, setLightboxIndex] = useState(0);
+  const lightboxRef = useRef<LightboxHandle>(null);
+  const [openingChecklist, setOpeningChecklist] = useState<Set<number>>(() => new Set(OPENING_CHECKLIST_INITIAL_DONE));
+
+  const openLightbox = useCallback((images: LightboxImage[], index = 0) => {
+    setLightboxImages(images);
+    setLightboxIndex(index);
+    setLightboxOpen(true);
+  }, []);
+
+  // Keep the route-level context builder updated with live dashboard state.
+  useEffect(() => {
+    if (!dashboardContextRef) return;
+    const ROLE_LABEL: Record<ActiveRole, string> = {
+      nurse: "Circulating Nurse",
+      scrub: "Scrub Tech",
+      surgeon: "Surgeon",
+      anesthesia: "Anesthesiologist",
+    };
+    const TO_LABELS: Record<string, string> = {
+      patient: "Patient identity", site: "Surgical site marked",
+      procedure: "Procedure agreed", allergies: "Allergies/antibiotics",
+    };
+    const checkedItems = [...timeOutChecked].map((id) => TO_LABELS[id] ?? id);
+    const pendingItems = (["patient", "site", "procedure", "allergies"] as const)
+      .filter((id) => !timeOutChecked.has(id))
+      .map((id) => TO_LABELS[id]);
+
+    const clinical = activeCase ? PATIENT_CLINICAL[activeCase.id] : undefined;
+    const flaggedLabs = clinical?.labs.filter(l => l.flag).map(l => `${l.label} ${l.value}`) ?? [];
+    dashboardContextRef.current = () => [
+      `Active dashboard view: ${ROLE_LABEL[activeRole]}`,
+      `Available role views: Circulating Nurse, Scrub Tech, Surgeon, Anesthesiologist`,
+      `Sterile cockpit: ${cockpit ? "ON (suppress suggestions, direct commands only)" : "OFF"}`,
+      `Time-out checklist: ${timeOutChecked.size}/4 confirmed`,
+      checkedItems.length ? `  Confirmed: ${checkedItems.join(", ")}` : "  None confirmed yet",
+      pendingItems.length ? `  Pending: ${pendingItems.join(", ")}` : "  All items confirmed",
+      `Instrument counts (current / opening):`,
+      `  Raytec ${counts.raytec}/20 · Lap ${counts.lap}/9 · Needle ${counts.needle}/14 · Blade ${counts.blade}/3 · Clamps ${counts.clamps}/12`,
+      counts.raytec !== 20 || counts.lap !== 9 || counts.needle !== 14 || counts.blade !== 3 || counts.clamps !== 12
+        ? "  ⚠ COUNT DISCREPANCY — investigate before closure"
+        : "  All counts nominal",
+      `Dismissed alerts: ${dismissedAlerts.size}`,
+      `Opening checklist: ${openingChecklist.size}/${OPENING_CHECKLIST_ITEMS.length} done`,
+      lightboxOpen
+        ? `Image lightbox: OPEN (${lightboxIndex + 1} of ${lightboxImages.length}) — "next image"/"previous image"/"close" are valid commands`
+        : `Image lightbox: closed`,
+      clinical ? [
+        `Surgeon notes: ${clinical.notes.join(" | ")}`,
+        `Allergies: ${clinical.allergies.map(a => `${a.agent} (${a.reaction}, ${a.severity})`).join(", ")}`,
+        `Conditions: ${clinical.conditions.join(", ")}`,
+        `Anesthesia plan: ${clinical.anesthesiaPlan}`,
+        `Airway: Mallampati ${clinical.airway.mallampati}${clinical.airway.difficult ? " — DIFFICULT AIRWAY" : ""}`,
+        flaggedLabs.length ? `Flagged labs: ${flaggedLabs.join(", ")}` : "Labs: all within range",
+        `Procedure steps: ${clinical.procedureSteps.map(s => `${s.step}. ${s.title}`).join(" → ")}`,
+        `Implants: ${clinical.implantPlan.map(i => `${i.component} ${i.spec}${i.confirmed ? "" : " [UNCONFIRMED]"}`).join(", ")}`,
+      ].join("\n") : "",
+      `Actions available from this screen: toggle time-out items, adjust instrument counts, sterile cockpit, dismiss advisory alerts, open quad view, show preference card, show table layout images, open scrub tech table layout images, toggle opening checklist items, switch role view, open patient details, open how-to video`,
+    ].join("\n");
+  }, [activeRole, cockpit, timeOutChecked, counts, dismissedAlerts, openingChecklist, lightboxOpen, lightboxIndex, lightboxImages.length, dashboardContextRef]);
 
   const toggleTimeOutItem = useCallback((id: TimeOutId): ArtiToolResult => {
     setTimeOutChecked((prev) => {
@@ -150,10 +216,57 @@ export function AwakeDashboard({
   }, []);
 
   const showPreferenceCardLayoutImages = useCallback((): ArtiToolResult => {
-    if (typeof document === "undefined") return { ok: false, reason: "no dom" };
-    const el = document.getElementById("preference-card-layout-images");
-    if (!el) return { ok: false, reason: "layout images not mounted" };
-    el.scrollIntoView({ behavior: "smooth", block: "center" });
+    openLightbox(PREF_CARD_IMAGES, 0);
+    return { ok: true };
+  }, [openLightbox]);
+
+  const switchRole = useCallback((role: ActiveRole): ArtiToolResult => {
+    setActiveRole(role);
+    return { ok: true };
+  }, []);
+
+  const openPatientDetails = useCallback((): ArtiToolResult => {
+    setPatientDetailsOpen(true);
+    return { ok: true };
+  }, []);
+
+  const closePatientDetails = useCallback((): ArtiToolResult => {
+    setPatientDetailsOpen(false);
+    return { ok: true };
+  }, []);
+
+  const toggleOpeningChecklistItem = useCallback((index: number): ArtiToolResult => {
+    if (index < 0 || index >= OPENING_CHECKLIST_ITEMS.length) {
+      return { ok: false, reason: "invalid checklist index" };
+    }
+    setOpeningChecklist((prev) => {
+      const next = new Set(prev);
+      if (next.has(index)) next.delete(index);
+      else next.add(index);
+      return next;
+    });
+    return { ok: true };
+  }, []);
+
+  const openTableLayoutImages = useCallback((): ArtiToolResult => {
+    openLightbox(SCRUB_LIGHTBOX_IMAGES, 0);
+    return { ok: true };
+  }, [openLightbox]);
+
+  const lightboxNext = useCallback((): ArtiToolResult => {
+    if (!lightboxOpen) return { ok: false, reason: "no lightbox open" };
+    lightboxRef.current?.scrollNext();
+    return { ok: true };
+  }, [lightboxOpen]);
+
+  const lightboxPrev = useCallback((): ArtiToolResult => {
+    if (!lightboxOpen) return { ok: false, reason: "no lightbox open" };
+    lightboxRef.current?.scrollPrev();
+    return { ok: true };
+  }, [lightboxOpen]);
+
+  const closeLightbox = useCallback((): ArtiToolResult => {
+    setLightboxOpen(false);
     return { ok: true };
   }, []);
 
@@ -170,6 +283,14 @@ export function AwakeDashboard({
       openHowToVideo,
       showPreferenceCard,
       showPreferenceCardLayoutImages,
+      switchRole,
+      openPatientDetails,
+      closePatientDetails,
+      toggleOpeningChecklistItem,
+      openTableLayoutImages,
+      lightboxNext,
+      lightboxPrev,
+      closeLightbox,
     }),
     [
       toggleTimeOutItem,
@@ -182,6 +303,14 @@ export function AwakeDashboard({
       openHowToVideo,
       showPreferenceCard,
       showPreferenceCardLayoutImages,
+      switchRole,
+      openPatientDetails,
+      closePatientDetails,
+      toggleOpeningChecklistItem,
+      openTableLayoutImages,
+      lightboxNext,
+      lightboxPrev,
+      closeLightbox,
     ],
   );
 
@@ -198,7 +327,7 @@ export function AwakeDashboard({
     <div className="flex h-screen w-full overflow-hidden bg-background">
       <Sidebar onSleep={onSleep} />
 
-      <div className="flex min-w-0 flex-1 flex-col">
+      <div className="flex min-w-0 flex-1 flex-col overflow-hidden">
         <TopBar
           staffName={staffName}
           staffRole={staffRole}
@@ -207,56 +336,95 @@ export function AwakeDashboard({
           onToggleCockpit={() => setCockpit((c) => !c)}
         />
 
-        <main className="flex min-h-0 flex-1 flex-col gap-5 overflow-y-auto px-8 py-6 animate-fade-in">
-          {onBackToCases && (
-            <button
-              onClick={onBackToCases}
-              className="-mb-2 inline-flex w-fit items-center gap-1.5 font-mono text-[10px] uppercase tracking-[0.3em] text-muted-foreground transition-colors hover:text-foreground"
-            >
-              <ArrowLeft className="h-3 w-3" /> Today's cases
-            </button>
-          )}
+        <RoleSwitcherBar activeRole={activeRole} onRoleChange={setActiveRole} />
 
-          <CaseHeader
-            cockpitMode={cockpit}
-            onOpenPatientDetails={() => setPatientDetailsOpen(true)}
-          />
+        <main data-scroll className="min-h-0 flex-1 overflow-y-auto px-8 py-6 animate-fade-in">
+          <div className="flex flex-col gap-5">
+            {onBackToCases && (
+              <button
+                onClick={onBackToCases}
+                className="-mb-2 inline-flex w-fit items-center gap-1.5 font-mono text-[10px] uppercase tracking-[0.3em] text-muted-foreground transition-colors hover:text-foreground"
+              >
+                <ArrowLeft className="h-3 w-3" /> Today's cases
+              </button>
+            )}
 
-          <div className="grid grid-cols-1 gap-5 xl:grid-cols-3">
-            <div className="space-y-5 xl:col-span-2">
-              <TimeOutPanel
-                checked={timeOutChecked as Set<string>}
-                onToggle={(id) => toggleTimeOutItem(id as TimeOutId)}
-              />
-              <InstrumentCount
+            <CaseHeader
+              activeCase={activeCase}
+              cockpitMode={cockpit}
+              onOpenPatientDetails={() => setPatientDetailsOpen(true)}
+            />
+
+            {/* ── Nurse view (default) ── */}
+            {activeRole === "nurse" && (
+              <>
+                <div className="grid grid-cols-1 gap-5 xl:grid-cols-3">
+                  <div className="space-y-5 xl:col-span-2">
+                    <TimeOutPanel
+                      checked={timeOutChecked as Set<string>}
+                      onToggle={(id) => toggleTimeOutItem(id as TimeOutId)}
+                    />
+                    <InstrumentCount
+                      counts={counts}
+                      onAdjust={(id, delta) => adjustInstrumentCount(id as InstrumentId, delta)}
+                    />
+                  </div>
+                  <div className="space-y-5">
+                    <AlertStack dismissed={dismissedAlerts} onDismiss={dismissAlert} />
+                    <TeamRoster />
+                  </div>
+                </div>
+                <PreferenceCard onOpenLightbox={openLightbox} />
+              </>
+            )}
+
+            {/* ── Scrub Tech view ── */}
+            {activeRole === "scrub" && (
+              <ScrubTechPanel
+                activeCase={activeCase}
                 counts={counts}
                 onAdjust={(id, delta) => adjustInstrumentCount(id as InstrumentId, delta)}
+                onOpenLightbox={openLightbox}
+                openingChecklist={openingChecklist}
+                onToggleChecklistItem={toggleOpeningChecklistItem}
               />
-            </div>
-            <div className="space-y-5">
-              <AlertStack dismissed={dismissedAlerts} onDismiss={dismissAlert} />
-              <TeamRoster />
-            </div>
+            )}
+
+            {/* ── Surgeon view ── */}
+            {activeRole === "surgeon" && (
+              <SurgeonPanel activeCase={activeCase} onOpenLightbox={openLightbox} />
+            )}
+
+            {/* ── Anesthesia view ── */}
+            {activeRole === "anesthesia" && <AnesthesiaPanel activeCase={activeCase} />}
+
+            <div className="h-24" />
           </div>
-
-          <PreferenceCard />
-
-          <div className="h-24" />
         </main>
 
-        <button
-          onClick={openQuadView}
-          className="absolute right-8 top-24 z-30 flex h-11 w-11 items-center justify-center rounded-full bg-surface-2 text-muted-foreground border border-border hover:text-foreground hover:border-primary/40 transition-colors"
-          aria-label="Open quad view"
-          title="Quad view"
-        >
-          <LayoutGrid className="h-5 w-5" />
-        </button>
+        {activeRole === "nurse" && (
+          <button
+            onClick={openQuadView}
+            className="absolute right-8 top-36 z-30 flex h-11 w-11 items-center justify-center rounded-full border border-border bg-surface-2 text-muted-foreground transition-colors hover:border-primary/40 hover:text-foreground"
+            aria-label="Open quad view"
+            title="Quad view"
+          >
+            <LayoutGrid className="h-5 w-5" />
+          </button>
+        )}
       </div>
 
       <HowToVideoModal open={howToOpen} onClose={() => setHowToOpen(false)} title={howToTitle} />
+      <PatientDetailsModal open={patientDetailsOpen} onClose={() => setPatientDetailsOpen(false)} activeCase={activeCase} />
 
-      <PatientDetailsModal open={patientDetailsOpen} onClose={() => setPatientDetailsOpen(false)} />
+      <ImageLightboxModal
+        ref={lightboxRef}
+        open={lightboxOpen}
+        onClose={() => setLightboxOpen(false)}
+        images={lightboxImages}
+        initialIndex={lightboxIndex}
+        title="Surgical Setup"
+      />
 
       <QuadView
         open={quadOpen}
@@ -276,8 +444,6 @@ export function AwakeDashboard({
           cockpit ? "Sterile cockpit · direct commands only" : "Ask Arti about this case…"
         }
         onSubmit={onPrompt}
-        // Per Arti spec: sterile cockpit suppresses all suggestions. Default
-        // surface offers a few starter prompts otherwise.
         suggestions={cockpit ? [] : DEFAULT_SUGGESTIONS}
       />
     </div>

@@ -12,6 +12,22 @@ import {
 import { useState } from "react";
 import surgicalTableOverview from "@/assets/surgical-table-overview.jpg";
 import surgicalTableMayo from "@/assets/surgical-table-mayo.jpg";
+import type { LightboxImage } from "./ImageLightboxModal";
+
+export const PREF_CARD_IMAGES: LightboxImage[] = [
+  {
+    src: surgicalTableOverview,
+    alt: "Overhead view of sterile back table with orthopedic instruments arranged in rows",
+    label: "Back Table · Standard RSA Setup",
+    caption: "Full instrument layout for reverse shoulder arthroplasty",
+  },
+  {
+    src: surgicalTableMayo,
+    alt: "Mayo stand layout for shoulder arthroplasty showing reamers, trials, and impactors",
+    label: "Mayo Stand · Shoulder Arthroplasty",
+    caption: "Reamers, trials, and impactors arranged in sequence",
+  },
+];
 
 // Demo data — in production this comes from the surgeon's saved preference card
 const PREF_CARD = {
@@ -68,7 +84,11 @@ const Section = ({
   </div>
 );
 
-export function PreferenceCard() {
+interface Props {
+  onOpenLightbox?: (images: LightboxImage[], index?: number) => void;
+}
+
+export function PreferenceCard({ onOpenLightbox }: Props) {
   const [expanded, setExpanded] = useState(true);
 
   return (
@@ -99,32 +119,32 @@ export function PreferenceCard() {
           <div id="preference-card-layout-images" className="sm:col-span-2 scroll-mt-24">
             <Section icon={LayoutGrid} title="Surgical Table Layout">
               <div className="grid gap-3 sm:grid-cols-2">
-                <figure className="overflow-hidden rounded-xl border border-border/60 bg-surface-2">
-                  <img
-                    src={surgicalTableOverview}
-                    alt="Overhead view of sterile back table with orthopedic instruments arranged in rows"
-                    width={1024}
-                    height={640}
-                    loading="lazy"
-                    className="aspect-[16/10] w-full object-cover"
-                  />
-                  <figcaption className="px-3 py-2 font-mono text-[10px] uppercase tracking-wider text-muted-foreground">
-                    Back Table · Standard RSA Setup
-                  </figcaption>
-                </figure>
-                <figure className="overflow-hidden rounded-xl border border-border/60 bg-surface-2">
-                  <img
-                    src={surgicalTableMayo}
-                    alt="Mayo stand layout for shoulder arthroplasty showing reamers, trials, and impactors"
-                    width={1024}
-                    height={640}
-                    loading="lazy"
-                    className="aspect-[16/10] w-full object-cover"
-                  />
-                  <figcaption className="px-3 py-2 font-mono text-[10px] uppercase tracking-wider text-muted-foreground">
-                    Mayo Stand · Shoulder Arthroplasty
-                  </figcaption>
-                </figure>
+                {PREF_CARD_IMAGES.map((img, i) => (
+                  <button
+                    key={img.label}
+                    onClick={() => onOpenLightbox?.(PREF_CARD_IMAGES, i)}
+                    className="group relative overflow-hidden rounded-xl border border-border/60 bg-surface-2 text-left transition-all duration-300 hover:border-primary/40 hover:shadow-[0_0_28px_-8px_var(--primary)]"
+                  >
+                    <img
+                      src={img.src}
+                      alt={img.alt}
+                      width={1024}
+                      height={640}
+                      loading="lazy"
+                      className="aspect-[16/10] w-full object-cover transition-transform duration-500 group-hover:scale-105"
+                    />
+                    <div className="absolute inset-0 flex items-end bg-gradient-to-t from-black/60 via-transparent to-transparent p-3 opacity-80 group-hover:opacity-100 transition-opacity">
+                      <figcaption className="font-mono text-[10px] uppercase tracking-wider text-white/80">
+                        {img.label}
+                      </figcaption>
+                    </div>
+                    <div className="absolute inset-0 flex items-center justify-center opacity-0 transition-opacity duration-200 group-hover:opacity-100">
+                      <div className="rounded-full border border-white/20 bg-black/60 px-3 py-1.5 text-[10px] uppercase tracking-widest text-white/80 backdrop-blur-sm">
+                        Expand
+                      </div>
+                    </div>
+                  </button>
+                ))}
               </div>
             </Section>
           </div>

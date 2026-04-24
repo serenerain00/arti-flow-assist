@@ -59,15 +59,6 @@ export function SleepScreen({
       className="group fixed inset-0 z-50 block h-full w-full overflow-hidden bg-background text-left"
       aria-label={phase === "greeting" ? "Talk to Arti" : "Wake Arti"}
     >
-      {phase === "sleep" && (
-        <button
-          type="button"
-          onClick={onWakeRequested}
-          className="absolute inset-0 z-0 cursor-pointer"
-          aria-label="Wake Arti"
-        />
-      )}
-
       <div className="pointer-events-none absolute inset-0">
         <RippleCanvas intensity={phase === "sleep" ? 0.6 : 2.2} />
       </div>
@@ -102,7 +93,7 @@ export function SleepScreen({
                 </div>
                 <div className="text-7xl font-thin tabular-nums text-foreground/40">{timeStr}</div>
                 <div className="mt-12 font-mono text-[10px] uppercase tracking-[0.4em] text-muted-foreground/40 opacity-0 transition-opacity duration-500 group-hover:opacity-100">
-                  Tap anywhere · or say "Hi Arti"
+                  Tap the sparkle to begin speaking to Arti
                 </div>
               </>
             )}
@@ -112,17 +103,32 @@ export function SleepScreen({
             )}
 
             {phase === "greeting" && (
-              <div className="flex flex-col items-center gap-4 animate-fade-in">
-                <div className="font-mono text-[11px] uppercase tracking-[0.5em] text-primary">
+              <div className="flex flex-col items-center gap-4">
+                <div
+                  className="animate-greet font-mono text-[11px] uppercase tracking-[0.5em] text-primary"
+                  style={{ animationDelay: "0.05s" }}
+                >
                   Arti
                 </div>
-                <h1 className="text-5xl font-extralight tracking-tight text-foreground md:text-7xl">
+
+                <h1
+                  className="animate-greet text-5xl font-extralight tracking-tight text-foreground md:text-7xl"
+                  style={{ animationDelay: "0.2s" }}
+                >
                   {greeting},
                 </h1>
-                <h2 className="text-5xl font-light tracking-tight text-primary md:text-7xl">
+
+                <h2
+                  className="animate-greet text-5xl font-light tracking-tight text-primary md:text-7xl"
+                  style={{ animationDelay: "0.38s" }}
+                >
                   {staffName.split(" ")[0]}.
                 </h2>
-                <p className="mt-4 max-w-md text-balance text-sm font-light text-muted-foreground">
+
+                <p
+                  className="animate-greet mt-4 max-w-md text-balance text-sm font-light text-muted-foreground"
+                  style={{ animationDelay: "0.58s" }}
+                >
                   Today's first case begins in 32 minutes. What can I get you?
                 </p>
               </div>
@@ -131,14 +137,20 @@ export function SleepScreen({
         </div>
       </div>
 
-      {phase === "greeting" && (
+      {/* Orb is visible during sleep so the user can click it to arm the mic.
+          Once clicked, startListening fires with a real user gesture. */}
+      {phase === "sleep" ? (
+        <ArtiInvoker
+          onSubmit={onPrompt}
+        />
+      ) : phase === "greeting" ? (
         <ArtiInvoker
           placeholder="Ask Arti anything…"
           onSubmit={onPrompt}
           suggestions={["Show me the case list", "Open the next case", "What's my day look like?"]}
           className="bottom-12"
         />
-      )}
+      ) : null}
 
       <div className="pointer-events-none absolute bottom-4 left-8 font-mono text-[10px] uppercase tracking-[0.3em] text-muted-foreground/50">
         OR 326 · sterile field calibrated · 21.4°C

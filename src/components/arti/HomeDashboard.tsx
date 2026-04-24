@@ -72,7 +72,7 @@ export function HomeDashboard({ staffName, staffRole, initials, onSleep, onPromp
     <div className="flex h-screen w-full overflow-hidden bg-background">
       <Sidebar onSleep={onSleep} />
 
-      <div className="flex min-w-0 flex-1 flex-col">
+      <div className="flex min-w-0 flex-1 flex-col overflow-hidden">
         <TopBar
           staffName={staffName}
           staffRole={staffRole}
@@ -81,7 +81,8 @@ export function HomeDashboard({ staffName, staffRole, initials, onSleep, onPromp
           onToggleCockpit={() => {}}
         />
 
-        <main className="relative flex min-h-0 flex-1 flex-col gap-6 overflow-y-auto px-8 pt-10 pb-40 animate-fade-in">
+        <main data-scroll className="relative min-h-0 flex-1 overflow-y-auto px-8 pt-10 pb-40 animate-fade-in">
+          <div className="flex flex-col gap-6">
           {/* Hero */}
           <section className="relative overflow-hidden rounded-3xl border border-border bg-surface/50 p-8 md:p-10">
             <div
@@ -112,7 +113,11 @@ export function HomeDashboard({ staffName, staffRole, initials, onSleep, onPromp
           {/* Two-column: Up next + environment / quick-actions */}
           <section className="grid grid-cols-1 gap-5 xl:grid-cols-3">
             {/* Up next */}
-            <article className="xl:col-span-2 glass relative overflow-hidden rounded-2xl p-7">
+            <button
+              type="button"
+              onClick={() => onPrompt(`open ${upNext.patientName}'s case`)}
+              className="xl:col-span-2 glass group relative overflow-hidden rounded-2xl p-7 text-left transition-all hover:border-primary/40 hover:bg-surface/70"
+            >
               <div className="flex items-center justify-between">
                 <div className="font-mono text-[10px] uppercase tracking-[0.35em] text-primary">
                   Up Next
@@ -168,18 +173,19 @@ export function HomeDashboard({ staffName, staffRole, initials, onSleep, onPromp
                 </div>
               </div>
 
-              <button
-                onClick={() => onPrompt(`open ${upNext.patientName}'s case`)}
-                className="mt-7 inline-flex items-center gap-2 rounded-full bg-primary px-5 py-2.5 text-sm font-medium text-primary-foreground transition-opacity hover:opacity-90"
-              >
+              <div className="mt-7 inline-flex items-center gap-2 rounded-full bg-primary px-5 py-2.5 text-sm font-medium text-primary-foreground transition-opacity group-hover:opacity-90">
                 <Sparkles className="h-4 w-4" />
                 Open Pre-Op
-              </button>
-            </article>
+              </div>
+            </button>
 
             {/* Environment */}
             <aside className="space-y-5">
-              <div className="glass rounded-2xl p-6">
+              <button
+                type="button"
+                onClick={() => onPrompt(`open ${upNext.patientName}'s case`)}
+                className="glass w-full rounded-2xl p-6 text-left transition-all hover:border-primary/40 hover:bg-surface/70"
+              >
                 <div className="font-mono text-[10px] uppercase tracking-[0.35em] text-muted-foreground">
                   Room Vitals · OR 326
                 </div>
@@ -204,7 +210,7 @@ export function HomeDashboard({ staffName, staffRole, initials, onSleep, onPromp
                     sub="checked 06:42"
                   />
                 </div>
-              </div>
+              </button>
             </aside>
           </section>
 
@@ -215,11 +221,16 @@ export function HomeDashboard({ staffName, staffRole, initials, onSleep, onPromp
               eyebrow="Throughput · last 7 days"
               title="Cases per day"
               trailing={<TrendingPill value="+12%" />}
+              onClick={() => onPrompt("show me the case list")}
             >
               <CasesPerDayChart />
             </ChartCard>
 
-            <ChartCard eyebrow="Mix · today" title="Procedure mix">
+            <ChartCard
+              eyebrow="Mix · today"
+              title="Procedure mix"
+              onClick={() => onPrompt("show me the case list")}
+            >
               <ProcedureMixChart />
             </ChartCard>
           </section>
@@ -248,6 +259,7 @@ export function HomeDashboard({ staffName, staffRole, initials, onSleep, onPromp
               onClick={() => onPrompt("open marcus chen's case")}
             />
           </section>
+          </div>
         </main>
 
         <ArtiInvoker
@@ -389,15 +401,17 @@ function ChartCard({
   trailing,
   children,
   className,
+  onClick,
 }: {
   eyebrow: string;
   title: string;
   trailing?: React.ReactNode;
   children: React.ReactNode;
   className?: string;
+  onClick?: () => void;
 }) {
-  return (
-    <article className={cn("glass relative overflow-hidden rounded-2xl p-6", className)}>
+  const body = (
+    <>
       <header className="flex items-start justify-between gap-4">
         <div>
           <div className="font-mono text-[10px] uppercase tracking-[0.35em] text-primary">
@@ -408,6 +422,25 @@ function ChartCard({
         {trailing}
       </header>
       <div className="mt-5 h-[220px] w-full">{children}</div>
+    </>
+  );
+  if (onClick) {
+    return (
+      <button
+        type="button"
+        onClick={onClick}
+        className={cn(
+          "glass relative overflow-hidden rounded-2xl p-6 text-left transition-all hover:border-primary/40 hover:bg-surface/70",
+          className,
+        )}
+      >
+        {body}
+      </button>
+    );
+  }
+  return (
+    <article className={cn("glass relative overflow-hidden rounded-2xl p-6", className)}>
+      {body}
     </article>
   );
 }

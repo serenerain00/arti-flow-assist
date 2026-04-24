@@ -1,14 +1,14 @@
 import { createFileRoute } from "@tanstack/react-router";
-import { useCallback, useEffect, useMemo, useRef, useState } from "react";
+import { useCallback, useEffect, useMemo, useRef, useState, type MutableRefObject } from "react";
 import { AnimatePresence, motion } from "framer-motion";
 import { SleepScreen } from "@/components/arti/SleepScreen";
 import { HomeDashboard } from "@/components/arti/HomeDashboard";
 import { CaseListScreen } from "@/components/arti/CaseListScreen";
 import { AwakeDashboard } from "@/components/arti/AwakeDashboard";
-import { parseIntent } from "@/components/arti/intent";
 import { TODAY_CASES, type CaseItem } from "@/components/arti/cases";
 import { ArtiVoiceProvider, useArtiVoiceContext } from "@/hooks/ArtiVoiceContext";
 import type {
+  ActiveRole,
   ArtiToolResult,
   ArtiVoiceCallbacks,
   InstrumentId,
@@ -48,6 +48,14 @@ export interface DashboardActions {
   openHowToVideo: (title?: string) => ArtiToolResult;
   showPreferenceCard: () => ArtiToolResult;
   showPreferenceCardLayoutImages: () => ArtiToolResult;
+  switchRole: (role: ActiveRole) => ArtiToolResult;
+  openPatientDetails: () => ArtiToolResult;
+  closePatientDetails: () => ArtiToolResult;
+  toggleOpeningChecklistItem: (index: number) => ArtiToolResult;
+  openTableLayoutImages: () => ArtiToolResult;
+  lightboxNext: () => ArtiToolResult;
+  lightboxPrev: () => ArtiToolResult;
+  closeLightbox: () => ArtiToolResult;
 }
 
 export type DashboardActionsRef = React.MutableRefObject<DashboardActions | null>;
@@ -61,8 +69,9 @@ export type DashboardActionsRef = React.MutableRefObject<DashboardActions | null
  */
 function ArtiWallRoot() {
   const navCallbacksRef = useRef<
-    Pick<ArtiVoiceCallbacks, "onGoHome" | "onShowCases" | "onOpenCase" | "onSleep">
+    Pick<ArtiVoiceCallbacks, "onWake" | "onGoHome" | "onShowCases" | "onOpenCase" | "onSleep">
   >({
+    onWake: () => {},
     onGoHome: () => {},
     onShowCases: () => {},
     onOpenCase: () => {},
@@ -72,18 +81,40 @@ function ArtiWallRoot() {
   // Dashboard-only tool bridge. `null` when no dashboard is mounted.
   const dashboardActionsRef = useRef<DashboardActions | null>(null);
 
+  // Live context builder — always returns fresh state, referenced via ref
+  // so stableCallbacks never needs to change.
+  const contextRef = useRef<() => string>(() => "Phase: sleep");
+
+  // Dashboard contributes its own live state to the context snapshot.
+  const dashboardContextRef = useRef<() => string>(() => "");
+
+  // Scroll control — delegated from stableCallbacks to live ArtiWall closures.
+  const scrollActionsRef = useRef<{
+    onScroll: (direction: string, speed: string, continuous: boolean) => ArtiToolResult;
+    onStopScroll: () => ArtiToolResult;
+  }>({
+    onScroll: () => ({ ok: false, reason: "not ready" }),
+    onStopScroll: () => ({ ok: false, reason: "not ready" }),
+  });
+
+  // Idle-timer reset — called by stableCallbacks on any user activity or agent response.
+  const idleResetRef = useRef<() => void>(() => {});
+
+  // Arti napping state — true when Arti is in standby on the current screen
+  // (idle timeout or "sleep" voice command). Does NOT change the app phase/screen.
+  const [artiNapping, setArtiNapping] = useState(false);
+  // Ref so ArtiWall can set napping without a prop callback chain.
+  const artiNapSetterRef = useRef<(v: boolean) => void>(() => {});
+  artiNapSetterRef.current = setArtiNapping;
+
   const stableCallbacks = useMemo<ArtiVoiceCallbacks>(
     () => ({
-      // Nav — always available.
+      onWake: () => navCallbacksRef.current.onWake?.(),
       onGoHome: () => navCallbacksRef.current.onGoHome(),
       onShowCases: () => navCallbacksRef.current.onShowCases(),
       onOpenCase: (q) => navCallbacksRef.current.onOpenCase(q),
       onSleep: () => navCallbacksRef.current.onSleep(),
 
-      // Dashboard tools — gate on the dashboard being mounted. Returning
-      // `undefined` here causes the tool wrapper in useArtiVoice to return
-      // NOT_AVAILABLE, which the agent reads as "fall back to 'I don't
-      // have that.'"
       onToggleTimeOutItem: (id) =>
         dashboardActionsRef.current?.toggleTimeOutItem(id) ?? notAvailable(),
       onAdjustInstrumentCount: (item, delta) =>
@@ -101,13 +132,49 @@ function ArtiWallRoot() {
         dashboardActionsRef.current?.showPreferenceCard() ?? notAvailable(),
       onShowPreferenceCardLayoutImages: () =>
         dashboardActionsRef.current?.showPreferenceCardLayoutImages() ?? notAvailable(),
+      onSwitchRole: (role) =>
+        dashboardActionsRef.current?.switchRole(role) ?? notAvailable(),
+      onOpenPatientDetails: () =>
+        dashboardActionsRef.current?.openPatientDetails() ?? notAvailable(),
+      onClosePatientDetails: () =>
+        dashboardActionsRef.current?.closePatientDetails() ?? notAvailable(),
+      onToggleOpeningChecklistItem: (index) =>
+        dashboardActionsRef.current?.toggleOpeningChecklistItem(index) ?? notAvailable(),
+      onOpenTableLayoutImages: () =>
+        dashboardActionsRef.current?.openTableLayoutImages() ?? notAvailable(),
+      onLightboxNext: () =>
+        dashboardActionsRef.current?.lightboxNext() ?? notAvailable(),
+      onLightboxPrev: () =>
+        dashboardActionsRef.current?.lightboxPrev() ?? notAvailable(),
+      onCloseLightbox: () =>
+        dashboardActionsRef.current?.closeLightbox() ?? notAvailable(),
+      onScroll: (direction, speed, continuous) =>
+        scrollActionsRef.current.onScroll(direction, speed, continuous),
+      onStopScroll: () => scrollActionsRef.current.onStopScroll(),
+      onUserTranscript: () => idleResetRef.current(),
+      onAgentResponse: () => idleResetRef.current(),
+
+      getContext: () => contextRef.current(),
     }),
     [],
   );
 
   return (
-    <ArtiVoiceProvider callbacks={stableCallbacks}>
-      <ArtiWall navCallbacksRef={navCallbacksRef} dashboardActionsRef={dashboardActionsRef} />
+    <ArtiVoiceProvider
+      callbacks={stableCallbacks}
+      artiNapping={artiNapping}
+      wakeArti={() => setArtiNapping(false)}
+    >
+      <ArtiWall
+        navCallbacksRef={navCallbacksRef}
+        dashboardActionsRef={dashboardActionsRef}
+        dashboardContextRef={dashboardContextRef}
+        contextRef={contextRef}
+        scrollActionsRef={scrollActionsRef}
+        idleResetRef={idleResetRef}
+        artiNapSetterRef={artiNapSetterRef}
+        artiNapping={artiNapping}
+      />
     </ArtiVoiceProvider>
   );
 }
@@ -126,18 +193,162 @@ type ArtiPhase = "sleep" | "waking" | "greeting" | "home" | "cases" | "preop";
 
 interface ArtiWallProps {
   navCallbacksRef: React.MutableRefObject<
-    Pick<ArtiVoiceCallbacks, "onGoHome" | "onShowCases" | "onOpenCase" | "onSleep">
+    Pick<ArtiVoiceCallbacks, "onWake" | "onGoHome" | "onShowCases" | "onOpenCase" | "onSleep">
   >;
   dashboardActionsRef: DashboardActionsRef;
+  dashboardContextRef: React.MutableRefObject<() => string>;
+  contextRef: React.MutableRefObject<() => string>;
+  scrollActionsRef: React.MutableRefObject<{
+    onScroll: (direction: string, speed: string, continuous: boolean) => ArtiToolResult;
+    onStopScroll: () => ArtiToolResult;
+  }>;
+  idleResetRef: React.MutableRefObject<() => void>;
+  artiNapSetterRef: MutableRefObject<(v: boolean) => void>;
+  artiNapping: boolean;
 }
 
-function ArtiWall({ navCallbacksRef, dashboardActionsRef }: ArtiWallProps) {
+// px-per-frame for continuous scroll
+const SCROLL_SPEED_PX: Record<string, number> = { slow: 2, normal: 5, fast: 12 };
+
+function getScrollTarget(): HTMLElement {
+  // Prefer the explicitly marked container if it actually has overflow.
+  const marked = document.querySelector<HTMLElement>("[data-scroll]");
+  if (marked && marked.scrollHeight > marked.clientHeight) return marked;
+  // Fallback: first scrollable ancestor of the marked element, or body/documentElement.
+  if (marked) {
+    let el: HTMLElement | null = marked.parentElement;
+    while (el && el !== document.documentElement) {
+      if (el.scrollHeight > el.clientHeight) return el;
+      el = el.parentElement;
+    }
+  }
+  return document.body.scrollHeight > document.body.clientHeight
+    ? document.body
+    : document.documentElement;
+}
+
+function ArtiWall({ navCallbacksRef, dashboardActionsRef, dashboardContextRef, contextRef, scrollActionsRef, idleResetRef, artiNapSetterRef, artiNapping }: ArtiWallProps) {
+  const scrollIntervalRef = useRef<ReturnType<typeof setInterval> | null>(null);
+
+  // Keep scroll handlers current on every render — stableCallbacks delegates through the ref.
+  scrollActionsRef.current = {
+    onScroll: (direction, speed, continuous) => {
+      if (scrollIntervalRef.current) {
+        clearInterval(scrollIntervalRef.current);
+        scrollIntervalRef.current = null;
+      }
+      const el = getScrollTarget();
+      if (direction === "top") { el.scrollTo({ top: 0, behavior: "smooth" }); return { ok: true }; }
+      if (direction === "bottom") { el.scrollTo({ top: el.scrollHeight, behavior: "smooth" }); return { ok: true }; }
+      const pxPerFrame = SCROLL_SPEED_PX[speed] ?? SCROLL_SPEED_PX.normal;
+      const sign = direction === "down" ? 1 : -1;
+      if (continuous) {
+        scrollIntervalRef.current = setInterval(() => { el.scrollBy(0, sign * pxPerFrame); }, 16);
+      } else {
+        // Scroll ~40% of the element's visible height so the jump feels meaningful
+        // regardless of screen size.
+        el.scrollBy({ top: sign * Math.round(el.clientHeight * 0.4), behavior: "smooth" });
+      }
+      return { ok: true };
+    },
+    onStopScroll: () => {
+      if (scrollIntervalRef.current) {
+        clearInterval(scrollIntervalRef.current);
+        scrollIntervalRef.current = null;
+      }
+      return { ok: true };
+    },
+  };
   const [phase, setPhase] = useState<ArtiPhase>("sleep");
   const [activeCase, setActiveCase] = useState<CaseItem>(
     () => TODAY_CASES.find((c) => c.status === "next") ?? TODAY_CASES[0],
   );
 
   const staff = { name: "Melissa Quinn", role: "Circulating Nurse", initials: "MQ" };
+
+  // ── Idle-sleep timer ─────────────────────────────────────────────────────
+  const idleTimerRef = useRef<ReturnType<typeof setTimeout> | null>(null);
+  const v = useArtiVoiceContext();
+
+  const armIdleTimer = useCallback(() => {
+    if (idleTimerRef.current) clearTimeout(idleTimerRef.current);
+    idleTimerRef.current = setTimeout(async () => {
+      if (!v) return;
+      await v.speak("I haven't heard from you in almost a minute, I'm going to take a nap.");
+      artiNapSetterRef.current(true);
+      v.stopListening();
+    }, 60_000);
+  }, [v, artiNapSetterRef]);
+
+  // Expose armIdleTimer through the ref so stableCallbacks can reset on user activity.
+  idleResetRef.current = armIdleTimer;
+
+  // Arm the timer whenever Arti is awake and not napping; clear it otherwise.
+  useEffect(() => {
+    if (phase === "sleep" || artiNapping) {
+      if (idleTimerRef.current) { clearTimeout(idleTimerRef.current); idleTimerRef.current = null; }
+      return;
+    }
+    armIdleTimer();
+    return () => { if (idleTimerRef.current) clearTimeout(idleTimerRef.current); };
+  }, [phase, artiNapping, armIdleTimer]);
+
+  const vForSleepRef = useRef(v);
+  vForSleepRef.current = v;
+  // Stop mic on initial sleep phase (app startup).
+  useEffect(() => {
+    if (phase === "sleep") vForSleepRef.current?.stopListening();
+  }, [phase]);
+  // Auto-start mic and open session window whenever navigating to an active screen,
+  // AND recover if the mic dies mid-session (e.g. SpeechRecognition restart error).
+  // startListening() is idempotent — safe to call when already running.
+  const isListening = v?.listening ?? false;
+  useEffect(() => {
+    if (phase === "sleep" || phase === "waking" || artiNapping) return;
+    vForSleepRef.current?.startListening();
+    vForSleepRef.current?.activateSession();
+  }, [phase, artiNapping, isListening]);
+  // Stop mic when Arti naps mid-session (stays on current screen).
+  useEffect(() => {
+    if (artiNapping) vForSleepRef.current?.stopListening();
+  }, [artiNapping]);
+  // ─────────────────────────────────────────────────────────────────────────
+
+  const PHASE_LABEL: Record<ArtiPhase, string> = {
+    sleep: "sleep / standby",
+    waking: "waking up",
+    greeting: "greeting screen",
+    home: "home dashboard",
+    cases: "case list",
+    preop: "pre-op / surgical dashboard",
+  };
+
+  // Keep contextRef current so Claude always gets a fresh state snapshot.
+  contextRef.current = () => {
+    const board = TODAY_CASES.map(
+      (c) => `  - ${c.patientName} · ${c.procedure} (${c.procedureShort}) · ${c.status}${c.side ? ` · ${c.side} side` : ""} · ${c.surgeon} · ${c.time}`,
+    ).join("\n");
+
+    const now = new Date();
+    const h = now.getHours();
+    const timeGreeting = h < 5 ? "Good evening" : h < 12 ? "Good morning" : h < 17 ? "Good afternoon" : "Good evening";
+    const timeStr = now.toLocaleTimeString([], { hour: "numeric", minute: "2-digit" });
+
+    const lines = [
+      `Staff: ${staff.name}, ${staff.role}`,
+      `Current time: ${timeStr} — use "${timeGreeting}" for any greeting`,
+      `Current screen: ${PHASE_LABEL[phase]}`,
+      `Active case: ${activeCase.patientName} · ${activeCase.procedure}${activeCase.side ? ` · ${activeCase.side} side` : ""} · ${activeCase.patientMrn} · ${activeCase.surgeon} · OR ${activeCase.room}`,
+      `Today's board:\n${board}`,
+      `Navigation available: home dashboard, case list, pre-op dashboard, sleep`,
+    ];
+
+    // Add live dashboard state when on the surgical screen.
+    const dashCtx = dashboardContextRef.current();
+    if (dashCtx) lines.push(dashCtx);
+
+    return lines.join("\n");
+  };
 
   const handleWakeRequested = useCallback(() => {
     setPhase((p) => (p === "sleep" ? "waking" : p));
@@ -162,74 +373,18 @@ function ArtiWall({ navCallbacksRef, dashboardActionsRef }: ArtiWallProps) {
     );
   }, []);
 
-  /**
-   * Single entry point for free-form prompts from any screen. Routes intent
-   * to phase changes and, where possible, invokes the matching dashboard
-   * tool directly so typing "dismiss alert 2" works without voice.
-   */
+  /** Single entry point for free-form prompts from any screen — routed through Claude. */
   const handlePrompt = useCallback(
     (text: string) => {
-      const intent = parseIntent(text);
-
-      switch (intent.kind) {
-        case "wake":
-          setPhase((p) => (p === "sleep" ? "waking" : p === "waking" ? p : "greeting"));
-          return;
-        case "sleep":
-          setPhase("sleep");
-          return;
-        case "show-cases":
-          setPhase("cases");
-          return;
-        case "open-case": {
-          const match = findCase(intent.query);
-          if (match) {
-            setActiveCase(match);
-            setPhase("preop");
-          } else {
-            setPhase("cases");
-          }
-          return;
-        }
-        case "go-home":
-          setPhase("home");
-          return;
-        case "toggle-timeout":
-          dashboardActionsRef.current?.toggleTimeOutItem(intent.id);
-          return;
-        case "adjust-count":
-          dashboardActionsRef.current?.adjustInstrumentCount(intent.item, intent.delta);
-          return;
-        case "toggle-cockpit":
-          dashboardActionsRef.current?.toggleSterileCockpit(intent.enabled);
-          return;
-        case "open-quad":
-          dashboardActionsRef.current?.openQuadView();
-          return;
-        case "focus-quad":
-          dashboardActionsRef.current?.focusQuadPanel(intent.panel);
-          return;
-        case "close-quad":
-          dashboardActionsRef.current?.closeQuadView();
-          return;
-        case "show-pref-card":
-          dashboardActionsRef.current?.showPreferenceCard();
-          return;
-        case "show-pref-images":
-          dashboardActionsRef.current?.showPreferenceCardLayoutImages();
-          return;
-        case "unknown":
-        default:
-          // Sleep → unknown text still wakes him.
-          setPhase((p) => {
-            if (p === "sleep") return "waking";
-            if (p === "greeting") return "home";
-            return p;
-          });
-          return;
-      }
+      armIdleTimer();
+      setPhase((p) => {
+        if (p === "sleep") return "waking";
+        if (p === "greeting") return "home";
+        return p;
+      });
+      void v?.sendCommand(text);
     },
-    [findCase, dashboardActionsRef],
+    [v, armIdleTimer],
   );
 
   const handleSelectCase = useCallback((c: CaseItem) => {
@@ -242,6 +397,9 @@ function ArtiWall({ navCallbacksRef, dashboardActionsRef }: ArtiWallProps) {
    * by AwakeDashboard itself — those don't need to live here.
    */
   navCallbacksRef.current = {
+    onWake: () => {
+      setPhase((p) => p === "sleep" ? "waking" : p);
+    },
     onGoHome: () => setPhase("home"),
     onShowCases: () => setPhase("cases"),
     onOpenCase: (query: string) => {
@@ -253,34 +411,8 @@ function ArtiWall({ navCallbacksRef, dashboardActionsRef }: ArtiWallProps) {
         setPhase("cases");
       }
     },
-    onSleep: () => setPhase("sleep"),
+    onSleep: () => { artiNapSetterRef.current(true); vForSleepRef.current?.stopListening(); },
   };
-
-  /**
-   * Auto-greet: a single short utterance when Arti wakes. The Arti system
-   * prompt bans filler ("How can I help?") and caps responses at one
-   * sentence — we keep this first message to the same standard.
-   * Falls back silently if voice isn't available.
-   */
-  const v = useArtiVoiceContext();
-  const greetedRef = useRef<number>(0);
-  useEffect(() => {
-    if (phase !== "greeting" || !v) return;
-    const stamp = Date.now();
-    if (greetedRef.current && stamp - greetedRef.current < 30_000) return;
-    greetedRef.current = stamp;
-
-    const hour = new Date().getHours();
-    const tod = hour < 5 ? "Evening" : hour < 12 ? "Morning" : hour < 17 ? "Afternoon" : "Evening";
-    const nextCase = TODAY_CASES.find((c) => c.status === "next") ?? TODAY_CASES[0];
-    const firstName = staff.name.split(" ")[0];
-    const side = nextCase.side ? `${nextCase.side.toLowerCase()} ` : "";
-    const firstMessage = `${tod}, ${firstName}. ${nextCase.patientName} is up — ${side}${nextCase.procedureShort}.`;
-
-    void v.startSession({ firstMessage });
-    // We intentionally only run this when phase becomes 'greeting'.
-    // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [phase]);
 
   /**
    * Each phase mounts a different full-screen component. We wrap them in
@@ -311,6 +443,7 @@ function ArtiWall({ navCallbacksRef, dashboardActionsRef }: ArtiWallProps) {
         onBackToCases={() => setPhase("cases")}
         onPrompt={handlePrompt}
         actionsRef={dashboardActionsRef}
+        dashboardContextRef={dashboardContextRef}
       />
     );
   } else if (phase === "cases") {

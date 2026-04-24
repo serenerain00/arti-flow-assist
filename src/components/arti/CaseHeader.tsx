@@ -1,24 +1,51 @@
 import { Clock, MapPin, User } from "lucide-react";
 import { useEffect, useState } from "react";
+import type { CaseItem } from "./cases";
 
 interface Props {
+  activeCase?: CaseItem;
   cockpitMode: boolean;
   onOpenPatientDetails?: () => void;
 }
 
-/**
- * Above-the-fold case identity. Hick's law: the most-needed info is one glance away.
- * Countdown gives temporal anchoring; cockpit mode chip changes the whole frame's tone.
- */
-export function CaseHeader({ cockpitMode, onOpenPatientDetails }: Props) {
-  const [secs, setSecs] = useState(32 * 60 + 14);
+function secsFromScheduled(timeStr: string): number {
+  const [h, m] = timeStr.split(":").map(Number);
+  const now = new Date();
+  const target = new Date(now);
+  target.setHours(h, m, 0, 0);
+  // Positive = seconds until start (countdown). Negative = seconds since start (elapsed).
+  return Math.floor((target.getTime() - now.getTime()) / 1000);
+}
+
+function formatSecs(abs: number): string {
+  const hh = Math.floor(abs / 3600);
+  const mm = Math.floor((abs % 3600) / 60);
+  const ss = String(abs % 60).padStart(2, "0");
+  return hh > 0 ? `${hh}:${String(mm).padStart(2, "0")}:${ss}` : `${mm}:${ss}`;
+}
+
+export function CaseHeader({ activeCase, cockpitMode, onOpenPatientDetails }: Props) {
+  const [secs, setSecs] = useState(() => activeCase ? secsFromScheduled(activeCase.time) : 32 * 60 + 14);
+
+  // Reset whenever the active case changes.
   useEffect(() => {
-    const i = setInterval(() => setSecs((s) => Math.max(0, s - 1)), 1000);
+    setSecs(activeCase ? secsFromScheduled(activeCase.time) : 32 * 60 + 14);
+  }, [activeCase?.id]); // eslint-disable-line react-hooks/exhaustive-deps
+
+  useEffect(() => {
+    const i = setInterval(() => setSecs((s) => s - 1), 1000);
     return () => clearInterval(i);
   }, []);
 
-  const mm = Math.floor(secs / 60);
-  const ss = String(secs % 60).padStart(2, "0");
+  const countdown = secs > 0;   // true = before start, false = elapsed
+  const timeDisplay = formatSecs(Math.abs(secs));
+
+  const status = activeCase?.status;
+  const showCountdown = status === "next" || status === "scheduled";
+
+  const patientDisplay = activeCase
+    ? `${activeCase.patientName} · ${activeCase.patientAgeSex}${activeCase.side ? ` · ${activeCase.side} shoulder` : ""}`
+    : "Marcus Chen · 62M · Right shoulder";
 
   return (
     <div className="glass relative overflow-hidden rounded-2xl p-7">
@@ -30,7 +57,7 @@ export function CaseHeader({ cockpitMode, onOpenPatientDetails }: Props) {
         <div>
           <div className="flex items-center gap-3">
             <div className="font-mono text-[10px] uppercase tracking-[0.3em] text-primary">
-              Next Case · Pre-Op
+              {status === "in-progress" ? "In Progress · Pre-Op" : status === "completed" ? "Completed" : "Next Case · Pre-Op"}
             </div>
             <span className="rounded-full border border-border bg-surface-3/60 px-2 py-0.5 font-mono text-[9px] uppercase tracking-wider text-muted-foreground">
               Medtronix VIP plan
@@ -38,19 +65,19 @@ export function CaseHeader({ cockpitMode, onOpenPatientDetails }: Props) {
           </div>
 
           <h1 className="mt-2 text-4xl font-extralight tracking-tight">
-            Reverse Total Shoulder
-            <span className="text-muted-foreground/60"> · RSA</span>
+            {activeCase?.procedure ?? "Reverse Total Shoulder"}
+            <span className="text-muted-foreground/60"> · {activeCase?.procedureShort ?? "RSA"}</span>
           </h1>
 
           <div className="mt-3 flex flex-wrap items-center gap-x-6 gap-y-2 text-sm font-light text-muted-foreground">
             <span className="flex items-center gap-2">
               <span className="inline-block h-2 w-2 rounded-full bg-primary heartbeat" />
-              Marcus Chen · 62M · Right shoulder
+              {patientDisplay}
             </span>
             <span className="flex items-center gap-2">
-              <MapPin className="h-3.5 w-3.5" /> OR 326
+              <MapPin className="h-3.5 w-3.5" /> {activeCase?.room ?? "OR 326"}
             </span>
-            <span>Dr. Anika Patel · Lead surgeon</span>
+            <span>{activeCase?.surgeon ?? "Dr. Anika Patel"} · Lead surgeon</span>
           </div>
         </div>
 
@@ -64,17 +91,42 @@ export function CaseHeader({ cockpitMode, onOpenPatientDetails }: Props) {
               Patient Info
             </button>
           )}
-          <div className="text-right">
-            <div className="font-mono text-[10px] uppercase tracking-[0.3em] text-muted-foreground">
-              Incision in
+
+          {showCountdown && (
+            <div className="text-right">
+              <div className="font-mono text-[10px] uppercase tracking-[0.3em] text-muted-foreground">
+                {countdown ? "Incision in" : "Elapsed"}
+              </div>
+              <div className="mt-1 flex items-baseline gap-2">
+                <Clock className={`h-5 w-5 ${countdown ? "text-primary" : "text-warning"}`} />
+                <span className={`font-mono text-5xl font-thin tabular-nums tracking-tight ${countdown ? "" : "text-warning"}`}>
+                  {timeDisplay}
+                </span>
+              </div>
             </div>
-            <div className="mt-1 flex items-baseline gap-2">
-              <Clock className="h-5 w-5 text-primary" />
-              <span className="font-mono text-5xl font-thin tabular-nums tracking-tight">
-                {mm}:{ss}
-              </span>
+          )}
+
+          {status === "in-progress" && (
+            <div className="text-right">
+              <div className="font-mono text-[10px] uppercase tracking-[0.3em] text-primary">
+                In Progress
+              </div>
+              <div className="mt-1 font-mono text-3xl font-thin tabular-nums text-primary heartbeat">
+                {activeCase?.time}
+              </div>
             </div>
-          </div>
+          )}
+
+          {status === "delayed" && (
+            <div className="text-right">
+              <div className="font-mono text-[10px] uppercase tracking-[0.3em] text-warning">
+                Delayed
+              </div>
+              <div className="mt-1 font-mono text-3xl font-thin tabular-nums text-warning">
+                {activeCase?.time}
+              </div>
+            </div>
+          )}
         </div>
       </div>
     </div>

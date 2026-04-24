@@ -40,7 +40,7 @@ export function CaseListScreen({
     <div className="flex h-screen w-full overflow-hidden bg-background">
       <Sidebar onSleep={onSleep} />
 
-      <div className="flex min-w-0 flex-1 flex-col">
+      <div className="flex min-w-0 flex-1 flex-col overflow-hidden">
         <TopBar
           staffName={staffName}
           staffRole={staffRole}
@@ -49,7 +49,8 @@ export function CaseListScreen({
           onToggleCockpit={() => {}}
         />
 
-        <main className="flex min-h-0 flex-1 flex-col overflow-y-auto px-8 py-6 animate-fade-in">
+        <main data-scroll className="min-h-0 flex-1 overflow-y-auto px-8 py-6 animate-fade-in">
+          <div className="flex flex-col gap-5">
           {/* Header */}
           <div className="flex items-end justify-between gap-6">
             <div>
@@ -91,6 +92,7 @@ export function CaseListScreen({
           </div>
 
           <div className="h-32" />
+          </div>
         </main>
 
         <ArtiInvoker

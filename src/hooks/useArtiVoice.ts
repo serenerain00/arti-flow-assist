@@ -1,57 +1,25 @@
 import { useCallback, useEffect, useRef, useState } from "react";
-import { useConversation } from "@elevenlabs/react";
-import { getElevenLabsConversationToken } from "@/server/elevenlabs";
+import { processVoiceCommand, type ArtiToolCall } from "@/server/arti";
+import { speakText } from "@/server/elevenlabs";
 
-/**
- * Voice control for Arti.
- *
- * Two layers:
- *   1. A lightweight always-on Web Speech recognizer that ONLY listens for
- *      a wake phrase ("hey arti", "hi arti", "okay arti"). No audio leaves
- *      the device until the wake phrase fires. This keeps cost + latency
- *      low — full conversational agents are too expensive to leave
- *      streaming continuously.
- *   2. An ElevenLabs Conversational AI session (WebRTC) that opens after
- *      wake or when the user taps the mic. The agent can call client tools
- *      to drive the wall.
- *
- * The agent's API key never reaches the browser — we mint a short-lived
- * conversation token via a server function.
- *
- * Client tool names here MUST match the tool IDs configured on the
- * ElevenLabs agent. They follow the camelCase naming in the Arti system
- * prompt so the LLM's tool calls route 1:1.
- */
-
-/** Result shape every tool callback returns. */
 export type ArtiToolResult =
   | { ok: true; state?: Record<string, unknown> }
-  /**
-   * Action couldn't be performed — agent should fall back to
-   * "I don't have that." per the Arti system prompt. `reason` is advisory
-   * (e.g., "not on preop screen", "critical alert", "unknown panel").
-   */
   | { ok: false; reason: string };
 
 export type TimeOutId = "patient" | "site" | "procedure" | "allergies";
 export type InstrumentId = "raytec" | "lap" | "needle" | "blade" | "clamps";
 export type QuadPanelId = "timeout" | "instruments" | "alerts" | "team";
+export type ActiveRole = "nurse" | "scrub" | "surgeon" | "anesthesia";
 
 export interface ArtiVoiceCallbacks {
-  // ---- Navigation / phase ----
+  onWake?: () => void;
   onGoHome: () => void;
   onShowCases: () => void;
   onOpenCase: (query: string) => void;
   onSleep: () => void;
-
-  // ---- Dashboard tools (only valid while on the preop dashboard) ----
-  /** Toggle a time-out checklist item. */
   onToggleTimeOutItem?: (id: TimeOutId) => ArtiToolResult;
-  /** Adjust an instrument count by `delta` (positive = add). */
   onAdjustInstrumentCount?: (item: InstrumentId, delta: number) => ArtiToolResult;
-  /** Toggle sterile cockpit mode. `enabled` explicit override when given. */
   onToggleSterileCockpit?: (enabled?: boolean) => ArtiToolResult;
-  /** Dismiss a non-critical alert by index. Critical alerts are refused. */
   onDismissAlert?: (index: number) => ArtiToolResult;
   onOpenQuadView?: () => ArtiToolResult;
   onFocusQuadPanel?: (panel: QuadPanelId) => ArtiToolResult;
@@ -59,11 +27,23 @@ export interface ArtiVoiceCallbacks {
   onOpenHowToVideo?: (title?: string) => ArtiToolResult;
   onShowPreferenceCard?: () => ArtiToolResult;
   onShowPreferenceCardLayoutImages?: () => ArtiToolResult;
-
-  // ---- Observability (optional) ----
+  onSwitchRole?: (role: ActiveRole) => ArtiToolResult;
+  onOpenPatientDetails?: () => ArtiToolResult;
+  onClosePatientDetails?: () => ArtiToolResult;
+  onToggleOpeningChecklistItem?: (index: number) => ArtiToolResult;
+  onOpenTableLayoutImages?: () => ArtiToolResult;
+  onLightboxNext?: () => ArtiToolResult;
+  onLightboxPrev?: () => ArtiToolResult;
+  onCloseLightbox?: () => ArtiToolResult;
+  onScroll?: (direction: string, speed: string, continuous: boolean) => ArtiToolResult;
+  onStopScroll?: () => ArtiToolResult;
   onUserTranscript?: (text: string) => void;
   onAgentResponse?: (text: string) => void;
+  /** Returns a plain-text snapshot of live UI state for Claude's context window. */
+  getContext?: () => string;
 }
+
+type SpeechRecognitionResult = ArrayLike<{ transcript: string }> & { isFinal: boolean };
 
 type SpeechRecognitionLike = {
   continuous: boolean;
@@ -72,8 +52,8 @@ type SpeechRecognitionLike = {
   start: () => void;
   stop: () => void;
   abort: () => void;
-  onresult: ((ev: { results: ArrayLike<ArrayLike<{ transcript: string }>> }) => void) | null;
-  onerror: ((ev: { error?: string; message?: string }) => void) | null;
+  onresult: ((ev: { resultIndex: number; results: ArrayLike<SpeechRecognitionResult> }) => void) | null;
+  onerror: ((ev: { error?: string }) => void) | null;
   onend: (() => void) | null;
 };
 
@@ -86,304 +66,343 @@ function getSpeechRecognitionCtor(): (new () => SpeechRecognitionLike) | null {
   return w.SpeechRecognition ?? w.webkitSpeechRecognition ?? null;
 }
 
-const WAKE_PATTERN = /\b(hey|hi|hello|okay|ok)[\s,]+arti\b/i;
-
-/** Default failure when a dashboard tool is called while not on preop. */
-const NOT_AVAILABLE: ArtiToolResult = { ok: false, reason: "not available in current view" };
-
-/** Serialize a tool result for the ElevenLabs SDK (string-return contract). */
-function serialize(r: ArtiToolResult): string {
-  return JSON.stringify(r);
-}
-
-/**
- * Narrow unknown tool args into strings/numbers safely. ElevenLabs passes
- * args as loosely-typed objects; we defensively coerce rather than trust.
- */
-function asString(v: unknown): string | undefined {
-  return typeof v === "string" && v.trim() ? v.trim() : undefined;
-}
-function asNumber(v: unknown): number | undefined {
-  return typeof v === "number" && Number.isFinite(v) ? v : undefined;
-}
-function asBool(v: unknown): boolean | undefined {
-  return typeof v === "boolean" ? v : undefined;
+function executeToolCall(call: ArtiToolCall, cb: ArtiVoiceCallbacks): void {
+  const inp = call.input;
+  switch (call.name) {
+    case "wake":                       cb.onWake?.(); break;
+    case "navigate_home":              cb.onGoHome(); break;
+    case "navigate_cases":             cb.onShowCases(); break;
+    case "open_case":                  cb.onOpenCase(String(inp.query ?? "")); break;
+    case "sleep":                      cb.onSleep(); break;
+    case "toggle_timeout_item":        cb.onToggleTimeOutItem?.(inp.id as TimeOutId); break;
+    case "adjust_instrument_count":    cb.onAdjustInstrumentCount?.(inp.item as InstrumentId, Number(inp.delta)); break;
+    case "toggle_sterile_cockpit":     cb.onToggleSterileCockpit?.(inp.enabled == null ? undefined : Boolean(inp.enabled)); break;
+    case "dismiss_alert":              cb.onDismissAlert?.(Number(inp.index)); break;
+    case "open_quad_view":             cb.onOpenQuadView?.(); break;
+    case "focus_quad_panel":           cb.onFocusQuadPanel?.(inp.panel as QuadPanelId); break;
+    case "close_quad_view":            cb.onCloseQuadView?.(); break;
+    case "open_how_to_video":          cb.onOpenHowToVideo?.(inp.title != null ? String(inp.title) : undefined); break;
+    case "show_preference_card":       cb.onShowPreferenceCard?.(); break;
+    case "show_preference_card_layout_images": cb.onShowPreferenceCardLayoutImages?.(); break;
+    case "switch_role":                cb.onSwitchRole?.(inp.role as ActiveRole); break;
+    case "open_patient_details":       cb.onOpenPatientDetails?.(); break;
+    case "close_patient_details":      cb.onClosePatientDetails?.(); break;
+    case "toggle_opening_checklist_item": cb.onToggleOpeningChecklistItem?.(Number(inp.index)); break;
+    case "open_table_layout_images":   cb.onOpenTableLayoutImages?.(); break;
+    case "lightbox_next":              cb.onLightboxNext?.(); break;
+    case "lightbox_prev":              cb.onLightboxPrev?.(); break;
+    case "close_lightbox":             cb.onCloseLightbox?.(); break;
+    case "scroll":                     cb.onScroll?.(String(inp.direction ?? "down"), String(inp.speed ?? "normal"), Boolean(inp.continuous ?? false)); break;
+    case "stop_scroll":                cb.onStopScroll?.(); break;
+  }
 }
 
 export function useArtiVoice(callbacks: ArtiVoiceCallbacks) {
-  // Keep callbacks in a ref so the conversation tools always see the latest
-  // closures without forcing a session reconnect on every render.
   const cbRef = useRef(callbacks);
   useEffect(() => {
     cbRef.current = callbacks;
   }, [callbacks]);
 
-  const [sessionStatus, setSessionStatus] = useState<"idle" | "connecting" | "connected" | "error">(
-    "idle",
-  );
-  const [wakeListening, setWakeListening] = useState(false);
+  const [listening, setListening] = useState(false);
+  const [isSpeaking, setIsSpeaking] = useState(false);
   const [error, setError] = useState<string | null>(null);
+  const recognitionRef = useRef<SpeechRecognitionLike | null>(null);
+  const sessionActiveRef = useRef(false);
+  const sessionTimerRef = useRef<ReturnType<typeof setTimeout> | null>(null);
+  const processingRef = useRef(false);
+  const isSpeakingRef = useRef(false);
+  // Ref to the active Audio element so stopSpeaking() can cut TTS mid-sentence.
+  const activeAudioRef = useRef<HTMLAudioElement | null>(null);
+  // Stored resolve for the current speak() Promise — lets stopSpeaking() settle
+  // it immediately so processingRef is always released even on interrupt.
+  const speakResolveRef = useRef<(() => void) | null>(null);
+  // Rolling conversation history — last 8 messages (4 pairs) sent to Claude.
+  const historyRef = useRef<Array<{ role: "user" | "assistant"; content: string }>>([]);
+  // Blocks voice input briefly after TTS ends to prevent capturing reverb/echo.
+  const postSpeechCooldownRef = useRef(false);
 
-  const conversation = useConversation({
-    onConnect: () => setSessionStatus("connected"),
-    onDisconnect: () => setSessionStatus("idle"),
-    onError: (err: unknown) => {
-      console.error("[arti-voice] conversation error", err);
-      setError(err instanceof Error ? err.message : "Voice session error");
-      setSessionStatus("error");
-    },
-    onMessage: (msg: unknown) => {
-      const m = msg as {
-        type?: string;
-        message?: string;
-        source?: string;
-        user_transcription_event?: { user_transcript?: string };
-        agent_response_event?: { agent_response?: string };
-      };
-      if (m.type === "user_transcript" && m.user_transcription_event?.user_transcript) {
-        cbRef.current.onUserTranscript?.(m.user_transcription_event.user_transcript);
-      } else if (m.type === "agent_response" && m.agent_response_event?.agent_response) {
-        cbRef.current.onAgentResponse?.(m.agent_response_event.agent_response);
-      } else if (m.source === "user" && m.message) {
-        cbRef.current.onUserTranscript?.(m.message);
-      } else if (m.source === "ai" && m.message) {
-        cbRef.current.onAgentResponse?.(m.message);
+  // Safely restart recognition after TTS — clears dead ref instead of silent swallow.
+  const restartRecognition = useCallback(() => {
+    if (!recognitionRef.current) return;
+    try {
+      recognitionRef.current.start();
+    } catch {
+      // rec is unrecoverable — clear it so startListening creates a fresh instance.
+      recognitionRef.current = null;
+      setListening(false);
+    }
+  }, []);
+
+  const stopSpeaking = useCallback(() => {
+    if (activeAudioRef.current) {
+      activeAudioRef.current.pause();
+      activeAudioRef.current.src = "";
+      activeAudioRef.current = null;
+    }
+    isSpeakingRef.current = false;
+    setIsSpeaking(false);
+    postSpeechCooldownRef.current = false;
+    // Settle the pending speak() Promise so the finally{} in handleTranscript
+    // always runs and processingRef is released even when interrupted.
+    if (speakResolveRef.current) {
+      speakResolveRef.current();
+      speakResolveRef.current = null;
+    }
+    restartRecognition();
+  }, [restartRecognition]);
+
+  const speak = useCallback(async (text: string) => {
+    isSpeakingRef.current = true;
+    setIsSpeaking(true);
+    // Stop the recognizer before TTS so restartRecognition() after playback
+    // sees it in a known-stopped state. Without this, continuous recognition
+    // keeps running through TTS and rec.start() below throws "already started",
+    // which the catch used to treat as fatal — orphaning the live rec and
+    // leaving the mic unrecoverable after the first response.
+    try { recognitionRef.current?.abort(); } catch { /* ignore */ }
+    try {
+      const { audioBase64 } = await speakText({ data: { text } });
+      await new Promise<void>((resolve, reject) => {
+        speakResolveRef.current = resolve;
+        const audio = new Audio(`data:audio/mp3;base64,${audioBase64}`);
+        activeAudioRef.current = audio;
+        const cleanup = () => {
+          speakResolveRef.current = null;
+          if (activeAudioRef.current === audio) activeAudioRef.current = null;
+          isSpeakingRef.current = false;
+          setIsSpeaking(false);
+        };
+        audio.onended = () => {
+          cleanup();
+          postSpeechCooldownRef.current = true;
+          setTimeout(() => { postSpeechCooldownRef.current = false; }, 500);
+          restartRecognition();
+          resolve();
+        };
+        audio.onerror = () => {
+          cleanup();
+          restartRecognition();
+          reject(new Error("Audio playback failed"));
+        };
+        audio.play().catch(reject);
+      });
+    } catch (err) {
+      isSpeakingRef.current = false;
+      setIsSpeaking(false);
+      activeAudioRef.current = null;
+      speakResolveRef.current = null;
+      // We aborted the rec before TTS — if TTS fails, restart it so the
+      // mic doesn't stay dead on the next utterance.
+      restartRecognition();
+      console.error("[arti-voice] TTS error", err);
+    }
+  }, [restartRecognition]);
+
+  // voiceInput=true  → must contain wake word OR be within the 10s follow-up window.
+  // voiceInput=false → typed text; always processed (no wake word required).
+  const handleTranscript = useCallback(
+    async (transcript: string, voiceInput = false) => {
+      if (voiceInput) {
+        // Block while Arti's TTS is playing — mic picks up speaker output.
+        if (isSpeakingRef.current) {
+          console.log("[arti-voice] ignored (Arti speaking):", transcript);
+          return;
+        }
+        if (postSpeechCooldownRef.current) {
+          console.log("[arti-voice] ignored (post-speech cooldown):", transcript);
+          return;
+        }
+        const hasWakeWord = /\b(?:art|ard)(?:i[ey]?|y)\b/i.test(transcript);
+        if (!hasWakeWord && !sessionActiveRef.current) {
+          console.log("[arti-voice] ignored (no wake word):", transcript);
+          return;
+        }
       }
-    },
-    // Tool handlers are intentionally terse — the agent's system prompt
-    // caps responses at one short sentence, and verbose tool returns just
-    // bloat the LLM context. Returns are JSON-stringified ArtiToolResults
-    // (ok flag + optional reason) so the SDK's string-return contract is
-    // satisfied while the agent still gets structured context.
-    clientTools: {
-      // ---- Navigation ----
-      goHome: () => {
-        cbRef.current.onGoHome();
-        return serialize({ ok: true });
-      },
-      showCases: () => {
-        cbRef.current.onShowCases();
-        return serialize({ ok: true });
-      },
-      openCase: (params: Record<string, unknown>) => {
-        cbRef.current.onOpenCase(asString(params?.query) ?? "");
-        return serialize({ ok: true });
-      },
-      sleep: () => {
-        cbRef.current.onSleep();
-        return serialize({ ok: true });
-      },
+      if (processingRef.current) {
+        console.log("[arti-voice] ignored (busy):", transcript);
+        return;
+      }
+      processingRef.current = true;
 
-      // ---- Dashboard ----
-      toggleTimeOutItem: (params: Record<string, unknown>) => {
-        const id = asString(params?.id) as TimeOutId | undefined;
-        if (!id || !["patient", "site", "procedure", "allergies"].includes(id)) {
-          return serialize({ ok: false, reason: "unknown checklist item" });
-        }
-        return serialize(cbRef.current.onToggleTimeOutItem?.(id) ?? NOT_AVAILABLE);
-      },
-      adjustInstrumentCount: (params: Record<string, unknown>) => {
-        const item = asString(params?.item) as InstrumentId | undefined;
-        const delta = asNumber(params?.delta);
-        if (!item || !["raytec", "lap", "needle", "blade", "clamps"].includes(item)) {
-          return serialize({ ok: false, reason: "unknown instrument" });
-        }
-        if (delta === undefined || delta === 0) {
-          return serialize({ ok: false, reason: "delta required" });
-        }
-        return serialize(cbRef.current.onAdjustInstrumentCount?.(item, delta) ?? NOT_AVAILABLE);
-      },
-      toggleSterileCockpit: (params: Record<string, unknown>) => {
-        const enabled = asBool(params?.enabled);
-        return serialize(cbRef.current.onToggleSterileCockpit?.(enabled) ?? NOT_AVAILABLE);
-      },
-      dismissAlert: (params: Record<string, unknown>) => {
-        const index = asNumber(params?.index);
-        if (index === undefined || index < 0) {
-          return serialize({ ok: false, reason: "index required" });
-        }
-        return serialize(cbRef.current.onDismissAlert?.(index) ?? NOT_AVAILABLE);
-      },
-      openQuadView: () => {
-        return serialize(cbRef.current.onOpenQuadView?.() ?? NOT_AVAILABLE);
-      },
-      focusQuadPanel: (params: Record<string, unknown>) => {
-        const panel = asString(params?.panel) as QuadPanelId | undefined;
-        if (!panel || !["timeout", "instruments", "alerts", "team"].includes(panel)) {
-          return serialize({ ok: false, reason: "unknown panel" });
-        }
-        return serialize(cbRef.current.onFocusQuadPanel?.(panel) ?? NOT_AVAILABLE);
-      },
-      closeQuadView: () => {
-        return serialize(cbRef.current.onCloseQuadView?.() ?? NOT_AVAILABLE);
-      },
-      openHowToVideo: (params: Record<string, unknown>) => {
-        const title = asString(params?.title);
-        return serialize(cbRef.current.onOpenHowToVideo?.(title) ?? NOT_AVAILABLE);
-      },
-      showPreferenceCard: () => {
-        return serialize(cbRef.current.onShowPreferenceCard?.() ?? NOT_AVAILABLE);
-      },
-      showPreferenceCardLayoutImages: () => {
-        return serialize(cbRef.current.onShowPreferenceCardLayoutImages?.() ?? NOT_AVAILABLE);
-      },
-    },
-  });
-
-  /* ------------------------- conversation control ------------------------- */
-
-  const startSession = useCallback(
-    async (opts?: { firstMessage?: string; promptAddition?: string }) => {
-      if (sessionStatus === "connecting" || sessionStatus === "connected") return;
-      setError(null);
-      setSessionStatus("connecting");
       try {
-        await navigator.mediaDevices.getUserMedia({ audio: true });
-        const { token } = await getElevenLabsConversationToken();
-        // Overrides let us personalize Arti's greeting per session. The
-        // matching toggles ("First message" + "System prompt") MUST be
-        // enabled in the ElevenLabs agent's Security tab for these to
-        // take effect — otherwise the SDK silently ignores them.
-        const overrides =
-          opts?.firstMessage || opts?.promptAddition
-            ? {
-                agent: {
-                  ...(opts.firstMessage ? { firstMessage: opts.firstMessage } : {}),
-                  ...(opts.promptAddition ? { prompt: { prompt: opts.promptAddition } } : {}),
-                },
-              }
-            : undefined;
-        await conversation.startSession({
-          conversationToken: token,
-          connectionType: "webrtc",
-          ...(overrides ? { overrides } : {}),
-        });
-      } catch (err) {
-        console.error("[arti-voice] failed to start session", err);
-        setError(err instanceof Error ? err.message : "Could not start voice session");
-        setSessionStatus("error");
+        cbRef.current.onUserTranscript?.(transcript);
+
+        const context = cbRef.current.getContext?.() ?? "";
+        let response = "";
+        let toolCalls: ArtiToolCall[] = [];
+
+        try {
+          const result = await processVoiceCommand({
+            data: { transcript, context, history: historyRef.current },
+          });
+          response = result.response;
+          toolCalls = result.toolCalls;
+          console.log("[arti-voice] tools:", toolCalls.map(t => t.name), "response:", response);
+        } catch (err) {
+          console.error("[arti-voice] Claude error", err);
+          response = "I don't have that.";
+        }
+
+        for (const call of toolCalls) {
+          console.log("[arti-voice] executing tool:", call.name);
+          executeToolCall(call, cbRef.current);
+        }
+
+        if (response) {
+          cbRef.current.onAgentResponse?.(response);
+          historyRef.current = [
+            ...historyRef.current,
+            { role: "user" as const, content: transcript },
+            { role: "assistant" as const, content: response },
+          ].slice(-8);
+          await speak(response);
+        }
+
+        const isSleep = toolCalls.some(t => t.name === "sleep");
+        if (!isSleep && (response || toolCalls.length > 0)) {
+          sessionActiveRef.current = true;
+          if (sessionTimerRef.current) clearTimeout(sessionTimerRef.current);
+          sessionTimerRef.current = setTimeout(() => { sessionActiveRef.current = false; }, 30_000);
+        }
+
+        if (isSleep) {
+          recognitionRef.current?.abort();
+          recognitionRef.current = null;
+          setListening(false);
+          sessionActiveRef.current = false;
+          historyRef.current = [];
+          if (sessionTimerRef.current) clearTimeout(sessionTimerRef.current);
+        }
+      } finally {
+        // Always release the lock — prevents permanent "busy" state if a
+        // network hang or unhandled error stops execution before completion.
+        processingRef.current = false;
       }
     },
-    [conversation, sessionStatus],
+    [speak],
   );
 
-  const endSession = useCallback(async () => {
+  const startListening = useCallback(() => {
+    const Ctor = getSpeechRecognitionCtor();
+    if (!Ctor || recognitionRef.current) return;
+
+    const rec = new Ctor();
+    rec.continuous = true;
+    rec.interimResults = false;
+    rec.lang = "en-US";
+
+    // Chrome sometimes splits one phrase into multiple final segments
+    // (e.g. "Arti open" + "Marcus Chen's case"). Buffer them within a
+    // short window so Claude always receives the complete phrase.
+    let finalBuffer = "";
+    let flushTimer: ReturnType<typeof setTimeout> | null = null;
+
+    const flushBuffer = () => {
+      flushTimer = null;
+      const transcript = finalBuffer.trim();
+      finalBuffer = "";
+      if (transcript) {
+        console.log("[arti-voice] heard:", transcript);
+        void handleTranscript(transcript, true);
+      }
+    };
+
+    rec.onresult = (ev) => {
+      for (let i = ev.resultIndex; i < ev.results.length; i++) {
+        finalBuffer += " " + ev.results[i][0].transcript;
+      }
+      if (finalBuffer.trim()) {
+        if (flushTimer) clearTimeout(flushTimer);
+        flushTimer = setTimeout(flushBuffer, 250);
+      }
+    };
+
+    rec.onerror = (ev) => {
+      const code = ev?.error ?? "unknown";
+      if (code === "not-allowed" || code === "audio-capture") {
+        // Fatal — mic permission denied, stop entirely.
+        setError("Microphone access denied.");
+        recognitionRef.current = null;
+        setListening(false);
+        return;
+      }
+      // Transient errors (aborted, network, no-speech, etc.) — leave
+      // recognitionRef set so the onend handler restarts automatically.
+    };
+
+    rec.onend = () => {
+      if (!recognitionRef.current) {
+        setListening(false);
+        return;
+      }
+      // If TTS is playing, Chrome can't restart the mic yet.
+      // speak() will restart recognition once audio finishes.
+      if (isSpeakingRef.current) return;
+      try {
+        rec.start();
+      } catch {
+        // rec entered a broken/unrecoverable state — clear the dead reference
+        // so the next startListening() call creates a fresh instance instead
+        // of seeing a non-null ref and returning early.
+        recognitionRef.current = null;
+        setListening(false);
+      }
+    };
+
     try {
-      await conversation.endSession();
+      recognitionRef.current = rec;
+      rec.start();
+      setListening(true);
     } catch (err) {
-      console.error("[arti-voice] error ending session", err);
+      recognitionRef.current = null;
+      console.warn("[arti-voice] could not start recognizer", err);
     }
-    setSessionStatus("idle");
-  }, [conversation]);
+  }, [handleTranscript]);
 
-  /* ----------------------------- wake word -------------------------------- */
+  const startListeningWrapped = useCallback(() => {
+    // Belt-and-suspenders: if a prior Claude call hung and left processingRef
+    // locked, reset it when the user explicitly opens a new session.
+    processingRef.current = false;
+    // Only refresh the session window when one was already open — don't create
+    // a session from nothing. Cold orb taps still require the wake word so
+    // ambient speech on the sleep/greeting screen never fires unintended commands.
+    if (sessionActiveRef.current) {
+      if (sessionTimerRef.current) clearTimeout(sessionTimerRef.current);
+      sessionTimerRef.current = setTimeout(() => { sessionActiveRef.current = false; }, 30_000);
+    }
+    startListening();
+  }, [startListening]);
 
-  const recognitionRef = useRef<SpeechRecognitionLike | null>(null);
-  const wakeEnabledRef = useRef(false);
-
-  const stopWakeWord = useCallback(() => {
-    wakeEnabledRef.current = false;
-    setWakeListening(false);
+  const stopListening = useCallback(() => {
     try {
       recognitionRef.current?.abort();
     } catch {
       /* ignore */
     }
     recognitionRef.current = null;
+    setListening(false);
   }, []);
 
-  const startWakeWord = useCallback(() => {
-    const Ctor = getSpeechRecognitionCtor();
-    if (!Ctor) {
-      return;
-    }
-    if (recognitionRef.current) return;
-    wakeEnabledRef.current = true;
-
-    const rec = new Ctor();
-    rec.continuous = true;
-    rec.interimResults = true;
-    rec.lang = "en-US";
-
-    rec.onresult = (ev) => {
-      let heard = "";
-      for (let i = 0; i < ev.results.length; i++) {
-        const alt = ev.results[i][0];
-        if (alt?.transcript) heard += " " + alt.transcript;
-      }
-      if (WAKE_PATTERN.test(heard)) {
-        // Stop the local recognizer (it conflicts with the WebRTC mic
-        // capture used by ElevenLabs) and hand off to the agent.
-        stopWakeWord();
-        void startSession();
-      }
-    };
-    rec.onerror = (ev) => {
-      const code = ev?.error ?? "unknown";
-      // Fatal errors that mean we should stop trying — most importantly
-      // "not-allowed" (mic permission denied) and "service-not-allowed".
-      // Without this guard, onend kept restarting the recognizer in a
-      // tight loop and prevented the WebRTC session from ever grabbing
-      // the mic.
-      if (code === "not-allowed" || code === "service-not-allowed" || code === "audio-capture") {
-        console.warn("[arti-voice] wake recognizer disabled:", code);
-        wakeEnabledRef.current = false;
-        setWakeListening(false);
-        return;
-      }
-      if (code !== "no-speech" && code !== "aborted") {
-        console.warn("[arti-voice] wake recognizer error:", code);
-      }
-    };
-    rec.onend = () => {
-      if (wakeEnabledRef.current) {
-        try {
-          rec.start();
-        } catch {
-          /* already started — ignore */
-        }
-      } else {
-        setWakeListening(false);
-      }
-    };
-
-    try {
-      rec.start();
-      recognitionRef.current = rec;
-      setWakeListening(true);
-    } catch (err) {
-      console.warn("[arti-voice] could not start wake recognizer", err);
-    }
-  }, [startSession, stopWakeWord]);
-
-  useEffect(() => {
-    return () => {
-      stopWakeWord();
-      try {
-        const p = conversation.endSession() as unknown;
-        if (p && typeof (p as Promise<unknown>).then === "function") {
-          (p as Promise<unknown>).catch(() => {});
-        }
-      } catch {
-        /* ignore */
-      }
-    };
-    // eslint-disable-next-line react-hooks/exhaustive-deps
+  // Explicitly open a session window so the wake word isn't required for the
+  // next 30 s. Used when navigating to an active screen without a voice command.
+  const activateSession = useCallback(() => {
+    sessionActiveRef.current = true;
+    if (sessionTimerRef.current) clearTimeout(sessionTimerRef.current);
+    sessionTimerRef.current = setTimeout(() => { sessionActiveRef.current = false; }, 180_000);
   }, []);
 
-  const isAgentSpeaking = conversation.isSpeaking ?? false;
-  const isConnected = sessionStatus === "connected";
+  useEffect(() => () => stopListening(), [stopListening]);
 
   return {
-    sessionStatus,
-    isConnected,
-    isAgentSpeaking,
-    wakeListening,
+    listening,
+    isSpeaking,
     error,
-    startSession,
-    endSession,
-    startWakeWord,
-    stopWakeWord,
+    speak,
+    stopSpeaking,
+    sendCommand: handleTranscript,
+    startListening: startListeningWrapped,
+    stopListening,
+    activateSession,
     wakeWordSupported: typeof window !== "undefined" && getSpeechRecognitionCtor() !== null,
   };
 }
