@@ -263,15 +263,6 @@ const TOOLS: Anthropic.Tool[] = [
     },
   },
   {
-    name: "toggle_sterile_cockpit",
-    description: "Enable or disable sterile cockpit mode. Omit enabled to toggle.",
-    input_schema: {
-      type: "object" as const,
-      properties: { enabled: { type: "boolean" } },
-      required: [],
-    },
-  },
-  {
     name: "dismiss_alert",
     description: "Dismiss a non-critical alert by its zero-based index.",
     input_schema: {
@@ -350,13 +341,29 @@ const TOOLS: Anthropic.Tool[] = [
   },
   {
     name: "toggle_opening_checklist_item",
-    description: "Check or uncheck an opening checklist item on the scrub tech view by its zero-based index (0–6). Items: 0=Instrument trays, 1=Back table draped, 2=Mayo stand, 3=Implants logged, 4=Suture loaded, 5=Irrigation primed, 6=Drain ready.",
+    description:
+      "Check or uncheck an opening checklist item on the scrub tech view by its zero-based index (0–6). Items: 0=Instrument trays, 1=Back table draped, 2=Mayo stand, 3=Implants logged, 4=Suture loaded, 5=Irrigation primed, 6=Drain ready. The Opening checklist (scrub tech) section in live context shows current state. Phrase mapping: 'instrument trays' → 0; 'back table draped' / 'back table is draped' → 1; 'Mayo stand' → 2; 'implants logged' / 'implants are logged' → 3; 'suture loaded' / 'sutures loaded' → 4; 'irrigation primed' / 'irrigation is ready' → 5; 'drain ready' / 'drain is ready' / 'drain set' → 6. Always call this tool when the user mentions any of these items being done — never skip just because the phrase is short or terminal in the list.",
     input_schema: {
       type: "object" as const,
       properties: {
         index: {
           type: "number",
           description: "Zero-based index of the checklist item to toggle (0–6).",
+        },
+      },
+      required: ["index"],
+    },
+  },
+  {
+    name: "toggle_machine_check_item",
+    description:
+      "Check or uncheck an Anesthesia machine-check item by its zero-based index (0–6). Items: 0=O₂ flush valve, 1=Vaporizer filled (Sevo), 2=Circuit leak test passed, 3=Backup ventilation (Ambu), 4=Suction functional, 5=Emergency drugs drawn up, 6=Warming blanket active. Use when the user says 'check off [item]', 'mark [item] done', 'uncheck [item]', or describes completing a step ('emergency drugs are drawn up', 'warming blanket is on', 'leak test passed'). Use the live context (Machine check section in dashboard state) to map ambiguous phrasings to the right index. The user must be on the Anesthesia view; otherwise the action returns 'not available'.",
+    input_schema: {
+      type: "object" as const,
+      properties: {
+        index: {
+          type: "number",
+          description: "Zero-based index of the machine-check item to toggle (0–6).",
         },
       },
       required: ["index"],
@@ -562,7 +569,7 @@ export const processVoiceCommand = createServerFn({ method: "POST" })
             },
             {
               type: "text",
-              text: `---\nLive context:\n${data.context}\n\nSpeak ONE short sentence confirming what just happened. No patient names. No case details. No elaboration.\nGreeting/wake examples: "Good morning." "Hey, good to have you in." "Ready when you are."\nNavigation examples: "Home screen." "Here's the case list." "Opening next case." "Quad view open."\nAction examples: "Done." "Counts updated." "Sterile cockpit on." "Alert dismissed."`,
+              text: `---\nLive context:\n${data.context}\n\nSpeak ONE short sentence confirming what just happened. No patient names. No case details. No elaboration.\nGreeting/wake examples: "Good morning." "Hey, good to have you in." "Ready when you are."\nNavigation examples: "Home screen." "Here's the case list." "Opening next case." "Quad view open."\nAction examples: "Done." "Counts updated." "Alert dismissed."`,
             },
           ],
           messages: [

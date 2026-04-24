@@ -78,8 +78,6 @@ export function HomeDashboard({ staffName, staffRole, initials, onSleep, onPromp
           staffName={staffName}
           staffRole={staffRole}
           initials={initials}
-          cockpitMode={false}
-          onToggleCockpit={() => {}}
         />
 
         <main data-scroll className="relative min-h-0 flex-1 overflow-y-auto px-8 pt-10 pb-40 animate-fade-in">

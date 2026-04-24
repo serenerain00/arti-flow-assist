@@ -4,7 +4,6 @@ import type { CaseItem } from "./cases";
 
 interface Props {
   activeCase?: CaseItem;
-  cockpitMode: boolean;
   onOpenPatientDetails?: () => void;
 }
 
@@ -24,7 +23,7 @@ function formatSecs(abs: number): string {
   return hh > 0 ? `${hh}:${String(mm).padStart(2, "0")}:${ss}` : `${mm}:${ss}`;
 }
 
-export function CaseHeader({ activeCase, cockpitMode, onOpenPatientDetails }: Props) {
+export function CaseHeader({ activeCase, onOpenPatientDetails }: Props) {
   const [secs, setSecs] = useState(() => activeCase ? secsFromScheduled(activeCase.time) : 32 * 60 + 14);
 
   // Reset whenever the active case changes.
@@ -49,10 +48,6 @@ export function CaseHeader({ activeCase, cockpitMode, onOpenPatientDetails }: Pr
 
   return (
     <div className="glass relative overflow-hidden rounded-2xl p-7">
-      {cockpitMode && (
-        <div className="pointer-events-none absolute inset-0 bg-gradient-to-r from-primary/5 via-transparent to-transparent" />
-      )}
-
       <div className="relative flex flex-wrap items-end justify-between gap-6">
         <div>
           <div className="flex items-center gap-3">

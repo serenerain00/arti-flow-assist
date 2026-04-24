@@ -70,8 +70,6 @@ export function PatientsScreen({
           staffName={staffName}
           staffRole={staffRole}
           initials={initials}
-          cockpitMode={false}
-          onToggleCockpit={() => {}}
         />
 
         <main

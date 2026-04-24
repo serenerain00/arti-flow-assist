@@ -11,15 +11,20 @@ import { cn } from "@/lib/utils";
 import { PATIENT_CLINICAL } from "./cases";
 import type { CaseItem } from "./cases";
 
-const MACHINE_CHECK = [
-  { item: "O₂ flush valve", done: true },
-  { item: "Vaporizer filled (Sevo)", done: true },
-  { item: "Circuit leak test passed", done: true },
-  { item: "Backup ventilation (Ambu)", done: true },
-  { item: "Suction functional", done: true },
-  { item: "Emergency drugs drawn up", done: false },
-  { item: "Warming blanket active", done: false },
-];
+/** Canonical list of machine-check items. Indices are stable and used by
+ * the toggle_machine_check_item voice tool — DO NOT reorder. */
+export const MACHINE_CHECK_ITEMS = [
+  "O₂ flush valve",
+  "Vaporizer filled (Sevo)",
+  "Circuit leak test passed",
+  "Backup ventilation (Ambu)",
+  "Suction functional",
+  "Emergency drugs drawn up",
+  "Warming blanket active",
+] as const;
+
+/** Default checked state — first five items are done at start of day. */
+export const MACHINE_CHECK_INITIAL_DONE: number[] = [0, 1, 2, 3, 4];
 
 const ALLERGY_TIER: Record<string, string> = {
   severe: "border-destructive/50 bg-destructive/10 text-destructive",
@@ -54,14 +59,23 @@ function Panel({ children, className }: { children: React.ReactNode; className?:
 
 interface Props {
   activeCase?: CaseItem;
+  /** Indices of completed machine-check items. */
+  machineCheckDone?: Set<number>;
+  /** Toggle one item by index. If omitted, the rows render but aren't clickable. */
+  onToggleMachineCheck?: (index: number) => void;
 }
 
-export function AnesthesiaPanel({ activeCase }: Props) {
+export function AnesthesiaPanel({
+  activeCase,
+  machineCheckDone,
+  onToggleMachineCheck,
+}: Props) {
   const clinical = activeCase ? PATIENT_CLINICAL[activeCase.id] : PATIENT_CLINICAL["c-002"];
   const c = clinical ?? PATIENT_CLINICAL["c-002"];
 
-  const machineComplete = MACHINE_CHECK.filter((i) => i.done).length;
-  const machinePct = (machineComplete / MACHINE_CHECK.length) * 100;
+  const done = machineCheckDone ?? new Set(MACHINE_CHECK_INITIAL_DONE);
+  const machineComplete = done.size;
+  const machinePct = (machineComplete / MACHINE_CHECK_ITEMS.length) * 100;
 
   return (
     <div className="grid grid-cols-1 gap-5 xl:grid-cols-3 animate-fade-in">
@@ -199,30 +213,57 @@ export function AnesthesiaPanel({ activeCase }: Props) {
         {/* Machine Check */}
         <Panel>
           <PanelLabel icon={CheckCircle}>Machine Check</PanelLabel>
-          <div className="space-y-2">
-            {MACHINE_CHECK.map((item) => (
-              <div key={item.item} className="flex items-center gap-3 text-sm">
-                {item.done ? (
-                  <CheckCircle className="h-4 w-4 shrink-0 text-success" strokeWidth={1.8} />
-                ) : (
-                  <Circle className="h-4 w-4 shrink-0 text-muted-foreground/30" strokeWidth={1.8} />
-                )}
-                <span className={item.done ? "text-foreground/55 line-through" : "text-foreground/90"}>
-                  {item.item}
-                </span>
-              </div>
-            ))}
+          <div className="space-y-1">
+            {MACHINE_CHECK_ITEMS.map((label, i) => {
+              const isDone = done.has(i);
+              const interactive = !!onToggleMachineCheck;
+              return (
+                <button
+                  key={label}
+                  type="button"
+                  disabled={!interactive}
+                  onClick={() => onToggleMachineCheck?.(i)}
+                  className={cn(
+                    "flex w-full items-center gap-3 rounded-lg px-2 py-1.5 text-left text-sm transition-colors",
+                    interactive && "hover:bg-surface-2/50",
+                    !interactive && "cursor-default",
+                  )}
+                >
+                  {isDone ? (
+                    <CheckCircle
+                      className="h-4 w-4 shrink-0 text-success"
+                      strokeWidth={1.8}
+                    />
+                  ) : (
+                    <Circle
+                      className="h-4 w-4 shrink-0 text-muted-foreground/30"
+                      strokeWidth={1.8}
+                    />
+                  )}
+                  <span
+                    className={
+                      isDone ? "text-foreground/55 line-through" : "text-foreground/90"
+                    }
+                  >
+                    {label}
+                  </span>
+                </button>
+              );
+            })}
           </div>
           <div className="mt-4">
             <div className="mb-1.5 flex items-center justify-between text-xs text-muted-foreground">
               <span>Completed</span>
               <span className="font-mono">
-                {machineComplete}/{MACHINE_CHECK.length}
+                {machineComplete}/{MACHINE_CHECK_ITEMS.length}
               </span>
             </div>
             <div className="h-1 overflow-hidden rounded-full bg-surface-3/60">
               <div
-                className="h-full rounded-full bg-warning transition-all duration-700"
+                className={cn(
+                  "h-full rounded-full transition-all duration-700",
+                  machineComplete === MACHINE_CHECK_ITEMS.length ? "bg-success" : "bg-warning",
+                )}
                 style={{ width: `${machinePct}%` }}
               />
             </div>

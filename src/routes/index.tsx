@@ -54,7 +54,6 @@ export const Route = createFileRoute("/")({
 export interface DashboardActions {
   toggleTimeOutItem: (id: TimeOutId) => ArtiToolResult;
   adjustInstrumentCount: (item: InstrumentId, delta: number) => ArtiToolResult;
-  toggleSterileCockpit: (enabled?: boolean) => ArtiToolResult;
   dismissAlert: (index: number) => ArtiToolResult;
   openQuadView: () => ArtiToolResult;
   focusQuadPanel: (panel: QuadPanelId) => ArtiToolResult;
@@ -66,6 +65,7 @@ export interface DashboardActions {
   openPatientDetails: () => ArtiToolResult;
   closePatientDetails: () => ArtiToolResult;
   toggleOpeningChecklistItem: (index: number) => ArtiToolResult;
+  toggleMachineCheckItem: (index: number) => ArtiToolResult;
   openTableLayoutImages: () => ArtiToolResult;
   lightboxNext: () => ArtiToolResult;
   lightboxPrev: () => ArtiToolResult;
@@ -185,8 +185,6 @@ function ArtiWallRoot() {
         dashboardActionsRef.current?.toggleTimeOutItem(id) ?? notAvailable(),
       onAdjustInstrumentCount: (item, delta) =>
         dashboardActionsRef.current?.adjustInstrumentCount(item, delta) ?? notAvailable(),
-      onToggleSterileCockpit: (enabled) =>
-        dashboardActionsRef.current?.toggleSterileCockpit(enabled) ?? notAvailable(),
       onDismissAlert: (index) => dashboardActionsRef.current?.dismissAlert(index) ?? notAvailable(),
       onOpenQuadView: () => dashboardActionsRef.current?.openQuadView() ?? notAvailable(),
       onFocusQuadPanel: (panel) =>
@@ -205,6 +203,8 @@ function ArtiWallRoot() {
         dashboardActionsRef.current?.closePatientDetails() ?? notAvailable(),
       onToggleOpeningChecklistItem: (index) =>
         dashboardActionsRef.current?.toggleOpeningChecklistItem(index) ?? notAvailable(),
+      onToggleMachineCheckItem: (index) =>
+        dashboardActionsRef.current?.toggleMachineCheckItem(index) ?? notAvailable(),
       onOpenTableLayoutImages: () =>
         dashboardActionsRef.current?.openTableLayoutImages() ?? notAvailable(),
       onLightboxNext: () => dashboardActionsRef.current?.lightboxNext() ?? notAvailable(),

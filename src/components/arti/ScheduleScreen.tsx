@@ -124,8 +124,6 @@ export function ScheduleScreen({
           staffName={staffName}
           staffRole={staffRole}
           initials={initials}
-          cockpitMode={false}
-          onToggleCockpit={() => {}}
         />
 
         <main

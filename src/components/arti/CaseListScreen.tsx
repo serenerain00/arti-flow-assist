@@ -47,8 +47,6 @@ export function CaseListScreen({
           staffName={staffName}
           staffRole={staffRole}
           initials={initials}
-          cockpitMode={false}
-          onToggleCockpit={() => {}}
         />
 
         <main data-scroll className="min-h-0 flex-1 overflow-y-auto px-8 py-6 animate-fade-in">

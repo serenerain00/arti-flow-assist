@@ -13,7 +13,11 @@ import { PatientDetailsModal } from "./PatientDetailsModal";
 import { ArtiInvoker } from "./ArtiInvoker";
 import { ImageLightboxModal, type LightboxHandle, type LightboxImage } from "./ImageLightboxModal";
 import { RoleSwitcherBar, type ActiveRole } from "./RoleSwitcherBar";
-import { AnesthesiaPanel } from "./AnesthesiaPanel";
+import {
+  AnesthesiaPanel,
+  MACHINE_CHECK_ITEMS,
+  MACHINE_CHECK_INITIAL_DONE,
+} from "./AnesthesiaPanel";
 import { ScrubTechPanel, SCRUB_LIGHTBOX_IMAGES, OPENING_CHECKLIST_ITEMS, OPENING_CHECKLIST_INITIAL_DONE } from "./ScrubTechPanel";
 import { SurgeonPanel } from "./SurgeonPanel";
 import { ArrowLeft, LayoutGrid } from "lucide-react";
@@ -56,7 +60,7 @@ function resolveVideoTitle(title?: string): string {
   return VIDEO_TITLES.default;
 }
 
-/** Suggestions shown in the invoker when NOT in sterile cockpit. */
+/** Suggestions shown in the ArtiInvoker on the preop dashboard. */
 const DEFAULT_SUGGESTIONS = ["Show team", "Read time-out", "Back to cases"];
 
 export function AwakeDashboard({
@@ -71,7 +75,6 @@ export function AwakeDashboard({
   dashboardContextRef,
   onSidebarNavigate,
 }: Props) {
-  const [cockpit, setCockpit] = useState(false);
   const [howToOpen, setHowToOpen] = useState(false);
   const [howToTitle, setHowToTitle] = useState(VIDEO_TITLES.default);
   const [timeOutChecked, setTimeOutChecked] = useState<Set<TimeOutId>>(new Set());
@@ -92,6 +95,7 @@ export function AwakeDashboard({
   const [lightboxIndex, setLightboxIndex] = useState(0);
   const lightboxRef = useRef<LightboxHandle>(null);
   const [openingChecklist, setOpeningChecklist] = useState<Set<number>>(() => new Set(OPENING_CHECKLIST_INITIAL_DONE));
+  const [machineCheck, setMachineCheck] = useState<Set<number>>(() => new Set(MACHINE_CHECK_INITIAL_DONE));
 
   const openLightbox = useCallback((images: LightboxImage[], index = 0) => {
     setLightboxImages(images);
@@ -123,7 +127,6 @@ export function AwakeDashboard({
     dashboardContextRef.current = () => [
       `Active dashboard view: ${ROLE_LABEL[activeRole]}`,
       `Available role views: Circulating Nurse, Scrub Tech, Surgeon, Anesthesiologist`,
-      `Sterile cockpit: ${cockpit ? "ON (suppress suggestions, direct commands only)" : "OFF"}`,
       `Time-out checklist: ${timeOutChecked.size}/4 confirmed`,
       checkedItems.length ? `  Confirmed: ${checkedItems.join(", ")}` : "  None confirmed yet",
       pendingItems.length ? `  Pending: ${pendingItems.join(", ")}` : "  All items confirmed",
@@ -133,7 +136,8 @@ export function AwakeDashboard({
         ? "  ⚠ COUNT DISCREPANCY — investigate before closure"
         : "  All counts nominal",
       `Dismissed alerts: ${dismissedAlerts.size}`,
-      `Opening checklist: ${openingChecklist.size}/${OPENING_CHECKLIST_ITEMS.length} done`,
+      `Opening checklist (scrub tech): ${openingChecklist.size}/${OPENING_CHECKLIST_ITEMS.length} done. Items by index: ${OPENING_CHECKLIST_ITEMS.map((label, i) => `${i}=${label}${openingChecklist.has(i) ? " ✓" : ""}`).join(" · ")}`,
+      `Machine check (anesthesia): ${machineCheck.size}/${MACHINE_CHECK_ITEMS.length} done. Items by index: ${MACHINE_CHECK_ITEMS.map((label, i) => `${i}=${label}${machineCheck.has(i) ? " ✓" : ""}`).join(" · ")}`,
       lightboxOpen
         ? `Image lightbox: OPEN (${lightboxIndex + 1} of ${lightboxImages.length}) — "next image"/"previous image"/"close" are valid commands`
         : `Image lightbox: closed`,
@@ -162,15 +166,15 @@ export function AwakeDashboard({
             `Implants: ${clinical.implantPlan.map((i) => `${i.component} ${i.spec}${i.confirmed ? "" : " [UNCONFIRMED]"}`).join(", ")}`,
           ].join("\n")
         : "",
-      `Actions available from this screen: toggle time-out items, adjust instrument counts, sterile cockpit, dismiss advisory alerts, open quad view, show preference card, show table layout images, open scrub tech table layout images, toggle opening checklist items, switch role view, open patient details, open how-to video`,
+      `Actions available from this screen: toggle time-out items, adjust instrument counts, dismiss advisory alerts, open quad view, show preference card, show table layout images, open scrub tech table layout images, toggle opening checklist items, toggle machine check items, switch role view, open patient details, open how-to video`,
     ].join("\n");
   }, [
     activeRole,
-    cockpit,
     timeOutChecked,
     counts,
     dismissedAlerts,
     openingChecklist,
+    machineCheck,
     lightboxOpen,
     lightboxIndex,
     lightboxImages.length,
@@ -229,11 +233,6 @@ export function AwakeDashboard({
     return { ok: true };
   }, []);
 
-  const toggleSterileCockpit = useCallback((enabled?: boolean): ArtiToolResult => {
-    setCockpit((c) => (typeof enabled === "boolean" ? enabled : !c));
-    return { ok: true };
-  }, []);
-
   const openHowToVideo = useCallback((title?: string): ArtiToolResult => {
     setHowToTitle(resolveVideoTitle(title));
     setHowToOpen(true);
@@ -281,6 +280,19 @@ export function AwakeDashboard({
     return { ok: true };
   }, []);
 
+  const toggleMachineCheckItem = useCallback((index: number): ArtiToolResult => {
+    if (index < 0 || index >= MACHINE_CHECK_ITEMS.length) {
+      return { ok: false, reason: "invalid machine-check index" };
+    }
+    setMachineCheck((prev) => {
+      const next = new Set(prev);
+      if (next.has(index)) next.delete(index);
+      else next.add(index);
+      return next;
+    });
+    return { ok: true };
+  }, []);
+
   const openTableLayoutImages = useCallback((): ArtiToolResult => {
     openLightbox(SCRUB_LIGHTBOX_IMAGES, 0);
     return { ok: true };
@@ -320,7 +332,6 @@ export function AwakeDashboard({
     () => ({
       toggleTimeOutItem,
       adjustInstrumentCount,
-      toggleSterileCockpit,
       dismissAlert,
       openQuadView,
       focusQuadPanel,
@@ -332,6 +343,7 @@ export function AwakeDashboard({
       openPatientDetails,
       closePatientDetails,
       toggleOpeningChecklistItem,
+      toggleMachineCheckItem,
       openTableLayoutImages,
       lightboxNext,
       lightboxPrev,
@@ -342,7 +354,6 @@ export function AwakeDashboard({
     [
       toggleTimeOutItem,
       adjustInstrumentCount,
-      toggleSterileCockpit,
       dismissAlert,
       openQuadView,
       focusQuadPanel,
@@ -354,6 +365,7 @@ export function AwakeDashboard({
       openPatientDetails,
       closePatientDetails,
       toggleOpeningChecklistItem,
+      toggleMachineCheckItem,
       openTableLayoutImages,
       lightboxNext,
       lightboxPrev,
@@ -377,13 +389,7 @@ export function AwakeDashboard({
       <Sidebar onSleep={onSleep} activeKey="patients" onNavigate={onSidebarNavigate} />
 
       <div className="flex min-w-0 flex-1 flex-col overflow-hidden">
-        <TopBar
-          staffName={staffName}
-          staffRole={staffRole}
-          initials={initials}
-          cockpitMode={cockpit}
-          onToggleCockpit={() => setCockpit((c) => !c)}
-        />
+        <TopBar staffName={staffName} staffRole={staffRole} initials={initials} />
 
         <RoleSwitcherBar activeRole={activeRole} onRoleChange={setActiveRole} />
 
@@ -400,7 +406,6 @@ export function AwakeDashboard({
 
             <CaseHeader
               activeCase={activeCase}
-              cockpitMode={cockpit}
               onOpenPatientDetails={() => setPatientDetailsOpen(true)}
             />
 
@@ -445,7 +450,13 @@ export function AwakeDashboard({
             )}
 
             {/* ── Anesthesia view ── */}
-            {activeRole === "anesthesia" && <AnesthesiaPanel activeCase={activeCase} />}
+            {activeRole === "anesthesia" && (
+              <AnesthesiaPanel
+                activeCase={activeCase}
+                machineCheckDone={machineCheck}
+                onToggleMachineCheck={(i) => toggleMachineCheckItem(i)}
+              />
+            )}
 
             <div className="h-24" />
           </div>
@@ -489,11 +500,9 @@ export function AwakeDashboard({
       />
 
       <ArtiInvoker
-        placeholder={
-          cockpit ? "Sterile cockpit · direct commands only" : "Ask Arti about this case…"
-        }
+        placeholder="Ask Arti about this case…"
         onSubmit={onPrompt}
-        suggestions={cockpit ? [] : DEFAULT_SUGGESTIONS}
+        suggestions={DEFAULT_SUGGESTIONS}
       />
     </div>
   );

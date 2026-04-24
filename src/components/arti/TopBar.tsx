@@ -1,21 +1,17 @@
 import { useEffect, useState } from "react";
-import { Volume2, Shield, Thermometer } from "lucide-react";
+import { Volume2, Thermometer } from "lucide-react";
 import { cn } from "@/lib/utils";
 
 interface Props {
   staffName: string;
   staffRole: string;
   initials: string;
-  cockpitMode: boolean;
-  onToggleCockpit: () => void;
 }
 
 /**
- * Ambient OR vitals strip — noise meter, temp, sterile field, cockpit mode toggle.
- * "Sterile cockpit" silences non-critical alerts during critical case steps
- * (FAA-derived safety pattern adopted by surgical teams).
+ * Ambient OR vitals strip — noise meter, room temperature, staff identity.
  */
-export function TopBar({ staffName, staffRole, initials, cockpitMode, onToggleCockpit }: Props) {
+export function TopBar({ staffName, staffRole, initials }: Props) {
   const [time, setTime] = useState(new Date());
   const [noise, setNoise] = useState(42);
 
@@ -79,25 +75,6 @@ export function TopBar({ staffName, staffRole, initials, cockpitMode, onToggleCo
           <Thermometer className="h-4 w-4 text-muted-foreground" />
           <span className="tabular-nums">21.4°C</span>
         </div>
-
-        {/* Sterile cockpit — psychology: explicit mode reduces salient interruptions */}
-        <button
-          onClick={onToggleCockpit}
-          className={cn(
-            "glass flex items-center gap-2 rounded-full px-4 py-2 text-sm font-light transition-colors",
-            cockpitMode && "border-primary/50 text-primary",
-          )}
-          aria-pressed={cockpitMode}
-        >
-          <Shield className="h-4 w-4" />
-          Sterile Cockpit
-          <span
-            className={cn(
-              "ml-1 inline-block h-1.5 w-1.5 rounded-full",
-              cockpitMode ? "bg-primary" : "bg-muted-foreground/40",
-            )}
-          />
-        </button>
 
         <div className="ml-2 flex items-center gap-3">
           <div className="text-right">

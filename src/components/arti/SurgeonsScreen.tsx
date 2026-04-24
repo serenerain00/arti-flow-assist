@@ -123,8 +123,6 @@ export function SurgeonsScreen({
           staffName={staffName}
           staffRole={staffRole}
           initials={initials}
-          cockpitMode={false}
-          onToggleCockpit={() => {}}
         />
 
         <main

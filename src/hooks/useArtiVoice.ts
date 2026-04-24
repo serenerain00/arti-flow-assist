@@ -47,7 +47,6 @@ export interface ArtiVoiceCallbacks {
   onClosePersonSchedule?: () => void;
   onToggleTimeOutItem?: (id: TimeOutId) => ArtiToolResult;
   onAdjustInstrumentCount?: (item: InstrumentId, delta: number) => ArtiToolResult;
-  onToggleSterileCockpit?: (enabled?: boolean) => ArtiToolResult;
   onDismissAlert?: (index: number) => ArtiToolResult;
   onOpenQuadView?: () => ArtiToolResult;
   onFocusQuadPanel?: (panel: QuadPanelId) => ArtiToolResult;
@@ -59,6 +58,7 @@ export interface ArtiVoiceCallbacks {
   onOpenPatientDetails?: () => ArtiToolResult;
   onClosePatientDetails?: () => ArtiToolResult;
   onToggleOpeningChecklistItem?: (index: number) => ArtiToolResult;
+  onToggleMachineCheckItem?: (index: number) => ArtiToolResult;
   onOpenTableLayoutImages?: () => ArtiToolResult;
   onLightboxNext?: () => ArtiToolResult;
   onLightboxPrev?: () => ArtiToolResult;
@@ -120,7 +120,6 @@ function executeToolCall(call: ArtiToolCall, cb: ArtiVoiceCallbacks): void {
     case "close_person_schedule":      cb.onClosePersonSchedule?.(); break;
     case "toggle_timeout_item":        cb.onToggleTimeOutItem?.(inp.id as TimeOutId); break;
     case "adjust_instrument_count":    cb.onAdjustInstrumentCount?.(inp.item as InstrumentId, Number(inp.delta)); break;
-    case "toggle_sterile_cockpit":     cb.onToggleSterileCockpit?.(inp.enabled == null ? undefined : Boolean(inp.enabled)); break;
     case "dismiss_alert":              cb.onDismissAlert?.(Number(inp.index)); break;
     case "open_quad_view":             cb.onOpenQuadView?.(); break;
     case "focus_quad_panel":           cb.onFocusQuadPanel?.(inp.panel as QuadPanelId); break;
@@ -132,6 +131,7 @@ function executeToolCall(call: ArtiToolCall, cb: ArtiVoiceCallbacks): void {
     case "open_patient_details":       cb.onOpenPatientDetails?.(); break;
     case "close_patient_details":      cb.onClosePatientDetails?.(); break;
     case "toggle_opening_checklist_item": cb.onToggleOpeningChecklistItem?.(Number(inp.index)); break;
+    case "toggle_machine_check_item":  cb.onToggleMachineCheckItem?.(Number(inp.index)); break;
     case "open_table_layout_images":   cb.onOpenTableLayoutImages?.(); break;
     case "lightbox_next":              cb.onLightboxNext?.(); break;
     case "lightbox_prev":              cb.onLightboxPrev?.(); break;
