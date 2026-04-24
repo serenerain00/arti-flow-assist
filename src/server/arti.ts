@@ -67,6 +67,74 @@ const TOOLS: Anthropic.Tool[] = [
     input_schema: { type: "object" as const, properties: {}, required: [] },
   },
   {
+    name: "set_reminder",
+    description:
+      "Schedule a one-shot reminder. Use when the user says 'remind me to X in Y minutes/hours', 'remind me in 10 to check the counts', 'set a reminder for 5 minutes to call Dr. Patel', etc. Convert hours to minutes ('in an hour' → 60, 'in 30 minutes' → 30, 'in half an hour' → 30). Use imperative form for `text` — strip leading 'to' ('to check the counts' → 'check the counts'). When the reminder fires Arti will speak it and show a toast.",
+    input_schema: {
+      type: "object" as const,
+      properties: {
+        text: {
+          type: "string",
+          description:
+            "Imperative phrase describing what to remind the user about. E.g. 'check the instrument counts', 'call the blood bank'. Do NOT include 'remind me to' or 'to'.",
+        },
+        minutes: {
+          type: "number",
+          description:
+            "How many minutes from now to fire the reminder. Must be > 0. Hours → multiply by 60.",
+        },
+      },
+      required: ["text", "minutes"],
+    },
+  },
+  {
+    name: "cancel_reminders",
+    description:
+      "Cancel all pending reminders. Use for 'cancel my reminders', 'clear my reminders', 'never mind the reminders', 'forget the reminders'.",
+    input_schema: { type: "object" as const, properties: {}, required: [] },
+  },
+  {
+    name: "schedule_set_service_lines",
+    description:
+      "Set which service lines are visible on the Schedule screen. Pass the FINAL desired list, not a delta — if the user says 'also show cardiothoracic', read the current 'Schedule filters' line in live context, then pass current-plus-Cardiothoracic. Examples: 'show only orthopedics' → ['Orthopedics']. 'show orthopedics and spine' → ['Orthopedics','Spine']. 'hide general' → (current without General). 'show all service lines' → all five. Use only when the user wants to filter by service line, not by surgeon.",
+    input_schema: {
+      type: "object" as const,
+      properties: {
+        lines: {
+          type: "array",
+          items: {
+            type: "string",
+            enum: ["Orthopedics", "Cardiothoracic", "General", "Spine", "ENT"],
+          },
+          description: "Final list of service lines that should remain visible.",
+        },
+      },
+      required: ["lines"],
+    },
+  },
+  {
+    name: "schedule_set_surgeon",
+    description:
+      "Filter the Schedule screen to one surgeon's cases. Resolve the user's reference ('Patel', 'Dr. Foster', 'the spine surgeon') to a full surgeon name from the Schedule / Full OR schedule context. Pass an empty string to clear the surgeon filter (show all surgeons). Examples: 'filter by Dr. Patel' → 'Dr. Anika Patel'. 'show Foster's cases' → 'Dr. Jamal Foster'. 'clear the surgeon filter' → ''.",
+    input_schema: {
+      type: "object" as const,
+      properties: {
+        surgeon: {
+          type: "string",
+          description:
+            "Full surgeon name as it appears in the schedule, or empty string to clear.",
+        },
+      },
+      required: ["surgeon"],
+    },
+  },
+  {
+    name: "schedule_clear_filters",
+    description:
+      "Reset all Schedule filters — show every service line and every surgeon. Use for 'clear the filters', 'clear all filters', 'show everything', 'reset the filters', 'show all cases', 'remove the filter'.",
+    input_schema: { type: "object" as const, properties: {}, required: [] },
+  },
+  {
     name: "open_case",
     description: "Open a specific case by patient name, procedure keyword, or 'next'.",
     input_schema: {
@@ -278,7 +346,7 @@ const TOOLS: Anthropic.Tool[] = [
 
 export interface ArtiToolCall {
   name: string;
-  input: Record<string, string | number | boolean | null>;
+  input: Record<string, string | number | boolean | null | string[]>;
 }
 
 export const processVoiceCommand = createServerFn({ method: "POST" })
@@ -327,7 +395,7 @@ export const processVoiceCommand = createServerFn({ method: "POST" })
     );
     const toolCalls: ArtiToolCall[] = toolUseBlocks.map((b) => ({
       name: b.name,
-      input: b.input as Record<string, string | number | boolean | null>,
+      input: b.input as Record<string, string | number | boolean | null | string[]>,
     }));
 
     // Silent tools: the screen change itself is the confirmation, so skip TTS
@@ -367,6 +435,10 @@ export const processVoiceCommand = createServerFn({ method: "POST" })
       "open_how_to_video",
       // Role view switch — the panel visibly changes, audio is redundant.
       "switch_role",
+      // Schedule filters — the chips and case grid visibly update.
+      "schedule_set_service_lines",
+      "schedule_set_surgeon",
+      "schedule_clear_filters",
     ]);
     const isSilent = toolCalls.length > 0 && toolCalls.every((tc) => SILENT_TOOLS.has(tc.name));
 

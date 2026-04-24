@@ -45,6 +45,12 @@ interface Props {
   /** Click a case → try to open its preop if it matches a known case. */
   onOpenCase?: (caseId: string, query: string) => void;
   onSidebarNavigate?: (key: SidebarKey) => void;
+  /** Controlled service-line filter. Lifted so voice tools can drive it. */
+  activeLines?: Set<ServiceLine>;
+  onActiveLinesChange?: (next: Set<ServiceLine>) => void;
+  /** Controlled surgeon filter ("all" = no filter). */
+  surgeonFilter?: string | "all";
+  onSurgeonFilterChange?: (next: string | "all") => void;
 }
 
 // ──────────────────────────────────────────────────────────────────────────
@@ -61,6 +67,10 @@ export function ScheduleScreen({
   onSelectDate,
   onOpenCase,
   onSidebarNavigate,
+  activeLines: activeLinesProp,
+  onActiveLinesChange,
+  surgeonFilter: surgeonFilterProp,
+  onSurgeonFilterChange,
 }: Props) {
   // Anchor month (first of month). Defaults to today's month.
   const [anchor, setAnchor] = useState(() => {
@@ -68,9 +78,22 @@ export function ScheduleScreen({
     return new Date(now.getFullYear(), now.getMonth(), 1);
   });
 
-  // Filters
-  const [activeLines, setActiveLines] = useState<Set<ServiceLine>>(() => new Set(SERVICE_LINES));
-  const [surgeonFilter, setSurgeonFilter] = useState<string | "all">("all");
+  // Controlled-with-fallback pattern: prefer props (voice drives these from
+  // the route), fall back to local state when the parent doesn't pass them.
+  const [activeLinesLocal, setActiveLinesLocal] = useState<Set<ServiceLine>>(
+    () => new Set(SERVICE_LINES),
+  );
+  const [surgeonFilterLocal, setSurgeonFilterLocal] = useState<string | "all">("all");
+  const activeLines = activeLinesProp ?? activeLinesLocal;
+  const surgeonFilter = surgeonFilterProp ?? surgeonFilterLocal;
+  const setActiveLines = (next: Set<ServiceLine>) => {
+    if (onActiveLinesChange) onActiveLinesChange(next);
+    else setActiveLinesLocal(next);
+  };
+  const setSurgeonFilter = (next: string | "all") => {
+    if (onSurgeonFilterChange) onSurgeonFilterChange(next);
+    else setSurgeonFilterLocal(next);
+  };
 
   // When a voice command selects a day in another month, pan the calendar to it.
   useEffect(() => {
@@ -169,12 +192,10 @@ export function ScheduleScreen({
                   key={line}
                   type="button"
                   onClick={() => {
-                    setActiveLines((prev) => {
-                      const next = new Set(prev);
-                      if (next.has(line)) next.delete(line);
-                      else next.add(line);
-                      return next;
-                    });
+                    const next = new Set(activeLines);
+                    if (next.has(line)) next.delete(line);
+                    else next.add(line);
+                    setActiveLines(next);
                   }}
                   className={cn(
                     "flex items-center gap-1.5 rounded-full border px-3 py-1 text-xs font-light transition-colors",

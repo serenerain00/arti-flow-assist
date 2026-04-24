@@ -6,6 +6,7 @@ import { HomeDashboard } from "@/components/arti/HomeDashboard";
 import { CaseListScreen } from "@/components/arti/CaseListScreen";
 import { AwakeDashboard } from "@/components/arti/AwakeDashboard";
 import { ScheduleScreen } from "@/components/arti/ScheduleScreen";
+import { ReminderToast, type FiredReminder } from "@/components/arti/ReminderToast";
 import { TODAY_CASES, PATIENT_CLINICAL, type CaseItem } from "@/components/arti/cases";
 import {
   getCasesForDate,
@@ -13,6 +14,7 @@ import {
   toDateKey,
   summarizeDay,
   SCHEDULE_CASES,
+  type ServiceLine,
 } from "@/components/arti/schedule";
 import { ArtiVoiceProvider, useArtiVoiceContext } from "@/hooks/ArtiVoiceContext";
 import type {
@@ -89,6 +91,11 @@ function ArtiWallRoot() {
       | "onShowSchedule"
       | "onShowScheduleDay"
       | "onCloseScheduleDay"
+      | "onSetReminder"
+      | "onCancelReminders"
+      | "onScheduleSetServiceLines"
+      | "onScheduleSetSurgeon"
+      | "onScheduleClearFilters"
     >
   >({
     onWake: () => {},
@@ -99,6 +106,11 @@ function ArtiWallRoot() {
     onShowSchedule: () => {},
     onShowScheduleDay: () => {},
     onCloseScheduleDay: () => {},
+    onSetReminder: () => {},
+    onCancelReminders: () => {},
+    onScheduleSetServiceLines: () => {},
+    onScheduleSetSurgeon: () => {},
+    onScheduleClearFilters: () => {},
   });
 
   // Dashboard-only tool bridge. `null` when no dashboard is mounted.
@@ -140,6 +152,12 @@ function ArtiWallRoot() {
       onShowSchedule: () => navCallbacksRef.current.onShowSchedule?.(),
       onShowScheduleDay: (date) => navCallbacksRef.current.onShowScheduleDay?.(date),
       onCloseScheduleDay: () => navCallbacksRef.current.onCloseScheduleDay?.(),
+      onSetReminder: (text, minutes) => navCallbacksRef.current.onSetReminder?.(text, minutes),
+      onCancelReminders: () => navCallbacksRef.current.onCancelReminders?.(),
+      onScheduleSetServiceLines: (lines) =>
+        navCallbacksRef.current.onScheduleSetServiceLines?.(lines),
+      onScheduleSetSurgeon: (s) => navCallbacksRef.current.onScheduleSetSurgeon?.(s),
+      onScheduleClearFilters: () => navCallbacksRef.current.onScheduleClearFilters?.(),
 
       onToggleTimeOutItem: (id) =>
         dashboardActionsRef.current?.toggleTimeOutItem(id) ?? notAvailable(),
@@ -227,6 +245,11 @@ interface ArtiWallProps {
       | "onShowSchedule"
       | "onShowScheduleDay"
       | "onCloseScheduleDay"
+      | "onSetReminder"
+      | "onCancelReminders"
+      | "onScheduleSetServiceLines"
+      | "onScheduleSetSurgeon"
+      | "onScheduleClearFilters"
     >
   >;
   dashboardActionsRef: DashboardActionsRef;
@@ -243,6 +266,16 @@ interface ArtiWallProps {
 
 // px-per-frame for continuous scroll
 const SCROLL_SPEED_PX: Record<string, number> = { slow: 2, normal: 5, fast: 12 };
+
+// Canonical list of service lines — used both as default filter and as the
+// set of valid values that voice-driven filter changes are narrowed to.
+const ALL_SERVICE_LINES: ServiceLine[] = [
+  "Orthopedics",
+  "Cardiothoracic",
+  "General",
+  "Spine",
+  "ENT",
+];
 
 function getScrollTarget(): HTMLElement {
   // Prefer the explicitly marked container if it actually has overflow.
@@ -317,21 +350,55 @@ function ArtiWall({
   // Which day's detail drawer is open on the Schedule screen. Null = closed.
   const [selectedScheduleDate, setSelectedScheduleDate] = useState<string | null>(null);
 
+  // Schedule filter state — lifted up from ScheduleScreen so voice tools can
+  // drive it. Service lines default to all visible; surgeon "all" = no filter.
+  const [activeScheduleLines, setActiveScheduleLines] = useState<Set<ServiceLine>>(
+    () => new Set(ALL_SERVICE_LINES),
+  );
+  const [scheduleSurgeonFilter, setScheduleSurgeonFilter] = useState<string | "all">("all");
+
+  // ── Reminders ────────────────────────────────────────────────────────────
+  // Pending reminders are scheduled one-shot via setTimeout. When a reminder
+  // fires we (1) move it to firedReminders so the toast component renders
+  // it, and (2) ask v.speak() to announce it. Toast auto-dismisses after
+  // 30 s or on tap. State is in-memory only — not persisted.
+  interface PendingReminder {
+    id: string;
+    text: string;
+    dueAt: number;
+  }
+  const [pendingReminders, setPendingReminders] = useState<PendingReminder[]>([]);
+  const [firedReminders, setFiredReminders] = useState<FiredReminder[]>([]);
+  const reminderTimersRef = useRef<Map<string, ReturnType<typeof setTimeout>>>(new Map());
+
   const staff = { name: "Melissa Quinn", role: "Circulating Nurse", initials: "MQ" };
 
   // ── Idle-sleep timer ─────────────────────────────────────────────────────
   const idleTimerRef = useRef<ReturnType<typeof setTimeout> | null>(null);
   const v = useArtiVoiceContext();
 
+  // Ref mirror of pendingReminders so armIdleTimer can read the live list
+  // without re-creating the callback on every reminder change.
+  const pendingRemindersRef = useRef<PendingReminder[]>([]);
+  pendingRemindersRef.current = pendingReminders;
+
   const armIdleTimer = useCallback(() => {
     if (idleTimerRef.current) clearTimeout(idleTimerRef.current);
     idleTimerRef.current = setTimeout(async () => {
       if (!v) return;
+      // Don't nap while the user is waiting on a pending reminder — silence
+      // here is expected (they're waiting for Arti to fire). Re-arm instead
+      // so we'll re-check in another minute; once the reminder fires the
+      // list will empty and normal nap behavior resumes.
+      if (pendingRemindersRef.current.length > 0) {
+        idleResetRef.current();
+        return;
+      }
       await v.speak("I haven't heard from you in almost a minute, I'm going to take a nap.");
       artiNapSetterRef.current(true);
       v.stopListening();
     }, 60_000);
-  }, [v, artiNapSetterRef]);
+  }, [v, artiNapSetterRef, idleResetRef]);
 
   // Expose armIdleTimer through the ref so stableCallbacks can reset on user activity.
   idleResetRef.current = armIdleTimer;
@@ -428,7 +495,25 @@ function ArtiWall({
         : `Active case patient basics — chart not available`,
       `Today's board:\n${board}`,
       `Navigation available: home dashboard, case list, schedule/calendar, pre-op dashboard, sleep`,
+      pendingReminders.length
+        ? `Pending reminders (${pendingReminders.length}):\n${pendingReminders
+            .map((r) => {
+              const minsLeft = Math.max(0, Math.round((r.dueAt - Date.now()) / 60_000));
+              return `  - "${r.text}" in ${minsLeft} minute${minsLeft === 1 ? "" : "s"}`;
+            })
+            .join("\n")}`
+        : `Pending reminders: none`,
     ];
+
+    // Schedule filter state — always included so Arti knows the current
+    // filters and can compute additive changes like "also show spine".
+    lines.push(
+      `Schedule filters — Service lines: ${
+        activeScheduleLines.size === ALL_SERVICE_LINES.length
+          ? "All"
+          : [...activeScheduleLines].join(", ") || "None"
+      } · Surgeon: ${scheduleSurgeonFilter === "all" ? "All" : scheduleSurgeonFilter}`,
+    );
 
     // Schedule-specific context (only relevant when on the schedule screen).
     if (phase === "schedule") {
@@ -529,6 +614,56 @@ function ArtiWall({
     [armIdleTimer],
   );
 
+  const handleSetReminder = useCallback((text: string, minutes: number) => {
+    if (!text || !Number.isFinite(minutes) || minutes <= 0) return;
+    const id = `rem-${Date.now()}-${Math.random().toString(36).slice(2, 8)}`;
+    const dueAt = Date.now() + minutes * 60_000;
+    setPendingReminders((prev) => [...prev, { id, text, dueAt }]);
+    const timer = setTimeout(() => {
+      reminderTimersRef.current.delete(id);
+      setPendingReminders((prev) => prev.filter((r) => r.id !== id));
+      setFiredReminders((prev) => [...prev, { id, text, firedAt: Date.now() }]);
+      void vForSleepRef.current?.speak(`Reminder — ${text}`);
+    }, minutes * 60_000);
+    reminderTimersRef.current.set(id, timer);
+  }, []);
+
+  const handleCancelReminders = useCallback(() => {
+    for (const t of reminderTimersRef.current.values()) clearTimeout(t);
+    reminderTimersRef.current.clear();
+    setPendingReminders([]);
+  }, []);
+
+  const handleDismissFiredReminder = useCallback((id: string) => {
+    setFiredReminders((prev) => prev.filter((r) => r.id !== id));
+  }, []);
+
+  const handleScheduleSetServiceLines = useCallback((lines: string[]) => {
+    const valid = lines.filter((l): l is ServiceLine =>
+      (ALL_SERVICE_LINES as string[]).includes(l),
+    );
+    setActiveScheduleLines(new Set(valid));
+  }, []);
+
+  const handleScheduleSetSurgeon = useCallback((surgeon: string) => {
+    const trimmed = surgeon.trim();
+    setScheduleSurgeonFilter(trimmed ? trimmed : "all");
+  }, []);
+
+  const handleScheduleClearFilters = useCallback(() => {
+    setActiveScheduleLines(new Set(ALL_SERVICE_LINES));
+    setScheduleSurgeonFilter("all");
+  }, []);
+
+  // Clean up any pending timers on unmount.
+  useEffect(() => {
+    const map = reminderTimersRef.current;
+    return () => {
+      for (const t of map.values()) clearTimeout(t);
+      map.clear();
+    };
+  }, []);
+
   const handleOpenCaseFromSchedule = useCallback(
     (caseId: string, query: string) => {
       // Prefer a direct ID match against TODAY_CASES; fall back to fuzzy match
@@ -587,6 +722,11 @@ function ArtiWall({
       // Only close the drawer — don't change the phase.
       setSelectedScheduleDate(null);
     },
+    onSetReminder: handleSetReminder,
+    onCancelReminders: handleCancelReminders,
+    onScheduleSetServiceLines: handleScheduleSetServiceLines,
+    onScheduleSetSurgeon: handleScheduleSetSurgeon,
+    onScheduleClearFilters: handleScheduleClearFilters,
   };
 
   /**
@@ -648,6 +788,10 @@ function ArtiWall({
         onSelectDate={setSelectedScheduleDate}
         onOpenCase={handleOpenCaseFromSchedule}
         onSidebarNavigate={handleSidebarNavigate}
+        activeLines={activeScheduleLines}
+        onActiveLinesChange={setActiveScheduleLines}
+        surgeonFilter={scheduleSurgeonFilter}
+        onSurgeonFilterChange={setScheduleSurgeonFilter}
       />
     );
   } else if (phase === "home") {
@@ -693,6 +837,7 @@ function ArtiWall({
           {screen}
         </motion.div>
       </AnimatePresence>
+      <ReminderToast reminders={firedReminders} onDismiss={handleDismissFiredReminder} />
     </div>
   );
 }

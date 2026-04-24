@@ -23,6 +23,16 @@ export interface ArtiVoiceCallbacks {
   onShowScheduleDay?: (date: string) => void;
   /** Close the Schedule day-detail drawer without leaving the Schedule screen. */
   onCloseScheduleDay?: () => void;
+  /** Schedule a one-shot reminder. `minutes` is from-now delay. */
+  onSetReminder?: (text: string, minutes: number) => void;
+  /** Cancel all pending reminders. */
+  onCancelReminders?: () => void;
+  /** Set visible service lines on Schedule. Pass full desired list. */
+  onScheduleSetServiceLines?: (lines: string[]) => void;
+  /** Filter Schedule by surgeon. Empty string = clear surgeon filter. */
+  onScheduleSetSurgeon?: (surgeon: string) => void;
+  /** Reset all Schedule filters to defaults. */
+  onScheduleClearFilters?: () => void;
   onToggleTimeOutItem?: (id: TimeOutId) => ArtiToolResult;
   onAdjustInstrumentCount?: (item: InstrumentId, delta: number) => ArtiToolResult;
   onToggleSterileCockpit?: (enabled?: boolean) => ArtiToolResult;
@@ -85,6 +95,11 @@ function executeToolCall(call: ArtiToolCall, cb: ArtiVoiceCallbacks): void {
     case "navigate_schedule":          cb.onShowSchedule?.(); break;
     case "show_schedule_day":          cb.onShowScheduleDay?.(String(inp.date ?? "")); break;
     case "close_schedule_day":         cb.onCloseScheduleDay?.(); break;
+    case "set_reminder":               cb.onSetReminder?.(String(inp.text ?? ""), Number(inp.minutes ?? 0)); break;
+    case "cancel_reminders":           cb.onCancelReminders?.(); break;
+    case "schedule_set_service_lines": cb.onScheduleSetServiceLines?.(Array.isArray(inp.lines) ? inp.lines.map(String) : []); break;
+    case "schedule_set_surgeon":       cb.onScheduleSetSurgeon?.(String(inp.surgeon ?? "")); break;
+    case "schedule_clear_filters":     cb.onScheduleClearFilters?.(); break;
     case "toggle_timeout_item":        cb.onToggleTimeOutItem?.(inp.id as TimeOutId); break;
     case "adjust_instrument_count":    cb.onAdjustInstrumentCount?.(inp.item as InstrumentId, Number(inp.delta)); break;
     case "toggle_sterile_cockpit":     cb.onToggleSterileCockpit?.(inp.enabled == null ? undefined : Boolean(inp.enabled)); break;
