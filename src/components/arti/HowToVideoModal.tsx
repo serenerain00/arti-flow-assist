@@ -24,6 +24,7 @@ import {
   PanelRightClose,
   ExternalLink,
 } from "lucide-react";
+import { AnimatePresence, motion } from "framer-motion";
 import { cn } from "@/lib/utils";
 import {
   findLatestVideo,
@@ -172,6 +173,12 @@ interface Props {
   title?: string;
   /** Preferred: free-text procedure / keyword used to resolve a video. */
   procedure?: string;
+  /**
+   * Direct library-id override. When set, opens that exact video and skips
+   * keyword resolution. Used by the Video Library cards so a click opens
+   * the specific video the user picked, not just the best fuzzy match.
+   */
+  videoId?: string;
   /** When true, modal opens with research papers panel expanded. */
   initialPapersOpen?: boolean;
   /**
@@ -206,18 +213,23 @@ function paperPool(video: ProcedureVideo): ResearchPaper[] {
  * playing without lifting state up.
  */
 export const HowToVideoModal = forwardRef<HowToVideoHandle, Props>(function HowToVideoModal(
-  { open, onClose, title, procedure, initialPapersOpen, initialPaperQuery }: Props,
+  { open, onClose, title, procedure, videoId, initialPapersOpen, initialPaperQuery }: Props,
   ref,
 ) {
   const playerContainerId = useId().replace(/[:]/g, "-") + "-yt";
   const playerRef = useRef<YTPlayer | null>(null);
   const playerReadyRef = useRef(false);
 
-  // Resolve which video to show. `procedure` wins; fall back to legacy title.
-  const video = useMemo<ProcedureVideo>(
-    () => findLatestVideo(procedure ?? title ?? undefined),
-    [procedure, title],
-  );
+  // Resolve which video to show. Priority: explicit videoId > procedure
+  // keyword > legacy title. Lets library cards open exact videos while
+  // voice commands still flow through fuzzy keyword resolution.
+  const video = useMemo<ProcedureVideo>(() => {
+    if (videoId) {
+      const direct = PROCEDURE_VIDEOS.find((v) => v.id === videoId);
+      if (direct) return direct;
+    }
+    return findLatestVideo(procedure ?? title ?? undefined);
+  }, [videoId, procedure, title]);
 
   const papers = useMemo<ResearchPaper[]>(() => paperPool(video), [video]);
 
@@ -227,6 +239,17 @@ export const HowToVideoModal = forwardRef<HowToVideoHandle, Props>(function HowT
   const [speed, setSpeed] = useState(1);
   const [papersOpen, setPapersOpen] = useState<boolean>(Boolean(initialPapersOpen));
   const [activePaperId, setActivePaperId] = useState<string | null>(null);
+  /**
+   * Set when YT.Player onError fires. The most common causes are
+   *   2  → invalid videoId
+   *   5  → HTML5 player error
+   *   100 → video removed / made private
+   *   101 / 150 → owner disabled embedding (or video age-restricted)
+   * In any of these cases we can't recover; we render a fallback card with
+   * a "Watch on YouTube" link instead of leaving the user staring at a
+   * blank black box.
+   */
+  const [embedError, setEmbedError] = useState(false);
 
   // Always-fresh refs so imperative methods don't need to be memoized on
   // every state change to read the latest values.
@@ -296,6 +319,7 @@ export const HowToVideoModal = forwardRef<HowToVideoHandle, Props>(function HowT
             },
             onError: () => {
               playerReadyRef.current = false;
+              setEmbedError(true);
             },
           },
         });
@@ -350,6 +374,7 @@ export const HowToVideoModal = forwardRef<HowToVideoHandle, Props>(function HowT
   useEffect(() => {
     if (!open) return;
     setSpeed(1);
+    setEmbedError(false); // Reset error so the new video gets a clean shot.
     setPapersOpen(Boolean(initialPapersOpen) || Boolean(initialPaperQuery));
     if (initialPaperQuery) {
       const found = resolvePaper(papers, { keyword: initialPaperQuery });
@@ -540,8 +565,6 @@ export const HowToVideoModal = forwardRef<HowToVideoHandle, Props>(function HowT
     ],
   );
 
-  if (!open) return null;
-
   const togglePlay = () =>
     safe((p) => {
       const state = p.getPlayerState();
@@ -567,296 +590,350 @@ export const HowToVideoModal = forwardRef<HowToVideoHandle, Props>(function HowT
   const progressPct = durationSec > 0 ? (currentSec / durationSec) * 100 : 0;
 
   return (
-    <div
-      role="dialog"
-      aria-modal
-      aria-label={video.title}
-      className="fixed inset-0 z-50 flex items-center justify-center bg-background/85 p-6 backdrop-blur-md animate-fade-in"
-      onClick={onClose}
-    >
-      <div
-        className="glass relative flex max-h-[calc(100vh-3rem)] w-full max-w-6xl overflow-hidden rounded-3xl"
-        onClick={(e) => e.stopPropagation()}
-      >
-        <div data-scroll-modal className="flex min-w-0 flex-1 flex-col overflow-y-auto">
-          {/* ── Header ───────────────────────────────────────────── */}
-          <div className="flex items-center justify-between border-b border-border px-6 py-4">
-            <div className="min-w-0">
-              <div className="flex items-center gap-2 font-mono text-[10px] uppercase tracking-[0.3em] text-primary">
-                <span>{video.channel}</span>
-                <span className="text-muted-foreground">·</span>
-                <span className="text-muted-foreground">Pulled by Arti</span>
-              </div>
-              <h3 className="mt-1 truncate text-xl font-light">{video.title}</h3>
-              <div className="mt-1 flex items-center gap-3 text-[11px] font-light text-muted-foreground">
-                <span>{video.surgeon}</span>
-                <span>·</span>
-                <span>{video.affiliation}</span>
-                <span>·</span>
-                <span className="tabular-nums">Published {video.publishedYear}</span>
-                <a
-                  href={video.watchUrl}
-                  target="_blank"
-                  rel="noopener noreferrer"
-                  className="ml-1 inline-flex items-center gap-1 text-primary hover:text-foreground"
-                  onClick={(e) => e.stopPropagation()}
-                >
-                  <ExternalLink className="h-3 w-3" /> YouTube
-                </a>
-              </div>
-            </div>
-            <div className="flex items-center gap-2">
-              <button
-                onClick={() => setPapersOpen((p) => !p)}
-                className={cn(
-                  "flex items-center gap-2 rounded-full border px-3 py-1.5 text-xs font-light transition-colors",
-                  papersOpen
-                    ? "border-primary/60 bg-primary/10 text-foreground"
-                    : "border-border text-muted-foreground hover:text-foreground",
-                )}
-                aria-pressed={papersOpen}
-                title={papersOpen ? "Hide research" : "Show research"}
-              >
-                {papersOpen ? (
-                  <PanelRightClose className="h-3.5 w-3.5" />
-                ) : (
-                  <PanelRightOpen className="h-3.5 w-3.5" />
-                )}
-                {papersOpen ? "Hide research" : `Research (${papers.length})`}
-              </button>
-              <button
-                className="flex items-center gap-2 rounded-full border border-border px-3 py-1.5 text-xs font-light text-muted-foreground hover:text-foreground"
-                title="Save to favorites"
-              >
-                <BookmarkPlus className="h-3.5 w-3.5" /> Save
-              </button>
-              <button
-                onClick={onClose}
-                className="flex h-9 w-9 items-center justify-center rounded-full text-muted-foreground hover:bg-surface-3 hover:text-foreground"
-                aria-label="Close"
-              >
-                <X className="h-4 w-4" />
-              </button>
-            </div>
-          </div>
-
-          {/* ── Video area ───────────────────────────────────────── */}
-          <div className="relative aspect-video bg-black">
-            {/* The YouTube IFrame API replaces this div with the iframe on init. */}
-            <div id={playerContainerId} className="absolute inset-0 h-full w-full" />
-
-            {/* Click-to-toggle overlay (subtle so the video is visible). */}
-            <button
-              onClick={togglePlay}
-              className="group absolute inset-0 flex items-center justify-center bg-gradient-to-t from-black/30 via-transparent to-transparent text-white"
-              aria-label={playing ? "Pause" : "Play"}
-            >
-              <span
-                className={cn(
-                  "flex h-16 w-16 items-center justify-center rounded-full bg-primary text-primary-foreground glow-primary transition-opacity",
-                  playing ? "opacity-0 group-hover:opacity-100" : "opacity-90",
-                )}
-              >
-                {playing ? <Pause className="h-7 w-7" /> : <Play className="ml-0.5 h-7 w-7" />}
-              </span>
-            </button>
-
-            {/* Chapter pill: tells the user what they're looking at. */}
-            {currentChapterIndex !== null && (
-              <div className="pointer-events-none absolute bottom-4 left-4 flex items-center gap-2 rounded-full bg-black/65 px-3 py-1.5 font-mono text-[10px] uppercase tracking-wider text-white/85 backdrop-blur-sm">
-                <span className="rounded-full bg-primary/30 px-1.5 py-0.5 text-primary-foreground">
-                  Step {currentChapterIndex + 1} of {video.chapters.length}
-                </span>
-                <span className="truncate normal-case tracking-normal">
-                  {video.chapters[currentChapterIndex].title}
-                </span>
-              </div>
-            )}
-          </div>
-
-          {/* ── Progress + chapter ticks ────────────────────────── */}
-          <div className="px-6 pt-4">
-            <button
-              type="button"
-              onClick={seekProgressBar}
-              aria-label="Seek"
-              className="relative block h-3 w-full cursor-pointer items-center"
-              style={{ background: "transparent" }}
-            >
-              <span className="pointer-events-none absolute left-0 right-0 top-1/2 h-1.5 -translate-y-1/2 rounded-full bg-surface-3" />
-              <span
-                className="pointer-events-none absolute left-0 top-1/2 h-1.5 -translate-y-1/2 rounded-full bg-primary"
-                style={{ width: `${progressPct}%` }}
-              />
-            </button>
-            {/* Chapter ticks — each is a wide invisible hit-area centered on a thin tick. */}
-            <div className="relative -mt-3 h-3 w-full">
-              {video.chapters.map((ch, i) => {
-                const left = ch.position * 100;
-                const isActive = currentChapterIndex === i;
-                return (
+    <AnimatePresence>
+      {open && (
+        <motion.div
+          key="howto-root"
+          role="dialog"
+          aria-modal
+          aria-label={video.title}
+          initial={{ opacity: 0 }}
+          animate={{ opacity: 1 }}
+          exit={{ opacity: 0 }}
+          transition={{ duration: 0.16 }}
+          className="fixed inset-0 z-50 flex items-center justify-center bg-background/85 p-6 backdrop-blur-md"
+          onClick={onClose}
+        >
+          <motion.div
+            initial={{ scale: 0.92, opacity: 0 }}
+            animate={{ scale: 1, opacity: 1 }}
+            exit={{ scale: 0.94, opacity: 0 }}
+            transition={{ type: "tween", duration: 0.22, ease: [0.22, 1, 0.36, 1] }}
+            className="glass relative flex max-h-[calc(100vh-3rem)] w-full max-w-6xl overflow-hidden rounded-3xl"
+            onClick={(e) => e.stopPropagation()}
+          >
+            <div data-scroll-modal className="flex min-w-0 flex-1 flex-col overflow-y-auto">
+              {/* ── Header ───────────────────────────────────────────── */}
+              <div className="flex items-center justify-between border-b border-border px-6 py-4">
+                <div className="min-w-0">
+                  <div className="flex items-center gap-2 font-mono text-[10px] uppercase tracking-[0.3em] text-primary">
+                    <span>{video.channel}</span>
+                    <span className="text-muted-foreground">·</span>
+                    <span className="text-muted-foreground">Pulled by Arti</span>
+                  </div>
+                  <h3 className="mt-1 truncate text-xl font-light">{video.title}</h3>
+                  <div className="mt-1 flex items-center gap-3 text-[11px] font-light text-muted-foreground">
+                    <span>{video.surgeon}</span>
+                    <span>·</span>
+                    <span>{video.affiliation}</span>
+                    <span>·</span>
+                    <span className="tabular-nums">Published {video.publishedYear}</span>
+                    <a
+                      href={video.watchUrl}
+                      target="_blank"
+                      rel="noopener noreferrer"
+                      className="ml-1 inline-flex items-center gap-1 text-primary hover:text-foreground"
+                      onClick={(e) => e.stopPropagation()}
+                    >
+                      <ExternalLink className="h-3 w-3" /> YouTube
+                    </a>
+                  </div>
+                </div>
+                <div className="flex items-center gap-2">
                   <button
-                    key={ch.title}
-                    onClick={(e) => {
-                      e.stopPropagation();
-                      seekToFraction(ch.position);
-                    }}
-                    aria-label={`Jump to ${ch.title}`}
-                    className="group absolute top-0 -translate-x-1/2 px-2 py-0.5"
-                    style={{ left: `${left}%` }}
+                    onClick={() => setPapersOpen((p) => !p)}
+                    className={cn(
+                      "flex items-center gap-2 rounded-full border px-3 py-1.5 text-xs font-light transition-colors",
+                      papersOpen
+                        ? "border-primary/60 bg-primary/10 text-foreground"
+                        : "border-border text-muted-foreground hover:text-foreground",
+                    )}
+                    aria-pressed={papersOpen}
+                    title={papersOpen ? "Hide research" : "Show research"}
+                  >
+                    {papersOpen ? (
+                      <PanelRightClose className="h-3.5 w-3.5" />
+                    ) : (
+                      <PanelRightOpen className="h-3.5 w-3.5" />
+                    )}
+                    {papersOpen ? "Hide research" : `Research (${papers.length})`}
+                  </button>
+                  <button
+                    className="flex items-center gap-2 rounded-full border border-border px-3 py-1.5 text-xs font-light text-muted-foreground hover:text-foreground"
+                    title="Save to favorites"
+                  >
+                    <BookmarkPlus className="h-3.5 w-3.5" /> Save
+                  </button>
+                  <button
+                    onClick={onClose}
+                    className="flex h-9 w-9 items-center justify-center rounded-full text-muted-foreground hover:bg-surface-3 hover:text-foreground"
+                    aria-label="Close"
+                  >
+                    <X className="h-4 w-4" />
+                  </button>
+                </div>
+              </div>
+
+              {/* ── Video area ───────────────────────────────────────── */}
+              <div className="relative aspect-video bg-black">
+                {/* The YouTube IFrame API replaces this div with the iframe on init. */}
+                <div id={playerContainerId} className="absolute inset-0 h-full w-full" />
+
+                {/* Click-to-toggle overlay (subtle so the video is visible). */}
+                {!embedError && (
+                  <button
+                    onClick={togglePlay}
+                    className="group absolute inset-0 flex items-center justify-center bg-gradient-to-t from-black/30 via-transparent to-transparent text-white"
+                    aria-label={playing ? "Pause" : "Play"}
                   >
                     <span
                       className={cn(
-                        "block h-3 w-[3px] rounded-sm transition-colors",
-                        isActive
-                          ? "bg-primary-foreground"
-                          : "bg-foreground/40 group-hover:bg-foreground/80",
+                        "flex h-16 w-16 items-center justify-center rounded-full bg-primary text-primary-foreground glow-primary transition-opacity",
+                        playing ? "opacity-0 group-hover:opacity-100" : "opacity-90",
                       )}
-                    />
+                    >
+                      {playing ? (
+                        <Pause className="h-7 w-7" />
+                      ) : (
+                        <Play className="ml-0.5 h-7 w-7" />
+                      )}
+                    </span>
                   </button>
-                );
-              })}
-            </div>
-            <div className="mt-1 flex items-center justify-between text-[11px] font-mono tabular-nums text-muted-foreground">
-              <span>{fmtTime(currentSec)}</span>
-              <span>{fmtTime(durationSec)}</span>
-            </div>
-          </div>
+                )}
 
-          {/* ── Transport row ──────────────────────────────────── */}
-          <div className="flex items-center justify-between gap-3 px-6 py-4">
-            <div className="flex items-center gap-2">
-              <TransportButton onClick={() => seekToSec(0)} title="Restart" aria="Restart">
-                <RotateCcw className="h-4 w-4" />
-              </TransportButton>
-              <TransportButton
-                onClick={() => seekToSec(currentSec - 10)}
-                title="Rewind 10 s"
-                aria="Rewind 10 seconds"
-              >
-                <ChevronsBack />
-              </TransportButton>
-              <button
-                onClick={togglePlay}
-                className="flex h-12 w-12 items-center justify-center rounded-full bg-primary text-primary-foreground glow-primary transition-transform hover:scale-105"
-                aria-label={playing ? "Pause" : "Play"}
-                title={playing ? "Pause" : "Play"}
-              >
-                {playing ? <Pause className="h-5 w-5" /> : <Play className="ml-0.5 h-5 w-5" />}
-              </button>
-              <TransportButton
-                onClick={() => seekToSec(currentSec + 10)}
-                title="Forward 10 s"
-                aria="Forward 10 seconds"
-              >
-                <ChevronsForward />
-              </TransportButton>
-            </div>
+                {/* Embed-error fallback. Renders when YouTube refuses to embed
+                    (age gate, embedding disabled, removed video). Gives the
+                    user a clean way to escape — open the video in a new tab,
+                    or close the modal and pick a different one. */}
+                {embedError && (
+                  <div className="absolute inset-0 flex flex-col items-center justify-center gap-4 bg-black/85 px-6 text-center backdrop-blur-md">
+                    <div className="font-mono text-[10px] uppercase tracking-[0.3em] text-rose-300">
+                      Embed unavailable
+                    </div>
+                    <div className="max-w-md text-base font-light text-white/85">
+                      This video can't play here — the uploader has disabled embedding or restricted
+                      playback for this domain.
+                    </div>
+                    <div className="flex items-center gap-3">
+                      <a
+                        href={video.watchUrl}
+                        target="_blank"
+                        rel="noopener noreferrer"
+                        className="inline-flex items-center gap-2 rounded-full border border-primary/60 bg-primary/15 px-4 py-2 text-xs font-light text-primary hover:bg-primary/25"
+                      >
+                        <ExternalLink className="h-3.5 w-3.5" />
+                        Watch on YouTube
+                      </a>
+                      <button
+                        onClick={onClose}
+                        className="inline-flex items-center gap-2 rounded-full border border-white/15 px-4 py-2 text-xs font-light text-white/70 hover:bg-white/5 hover:text-white"
+                      >
+                        Close · pick another
+                      </button>
+                    </div>
+                  </div>
+                )}
 
-            <div className="flex items-center gap-2">
-              <TransportButton
-                onClick={() => {
-                  if (!video.chapters.length) return;
-                  const i = liveChapterIndex();
-                  const target = i > 0 ? video.chapters[i - 1] : video.chapters[0];
-                  seekToFraction(target.position);
-                }}
-                title="Previous chapter"
-                aria="Previous chapter"
-              >
-                <SkipBack className="h-4 w-4" />
-              </TransportButton>
-              <TransportButton
-                onClick={() => {
-                  if (!video.chapters.length) return;
-                  const i = liveChapterIndex();
-                  if (i >= video.chapters.length - 1) return;
-                  seekToFraction(video.chapters[i + 1].position);
-                }}
-                title="Next chapter"
-                aria="Next chapter"
-              >
-                <SkipForward className="h-4 w-4" />
-              </TransportButton>
-              <button
-                onClick={cycleSpeed}
-                className="flex items-center gap-1.5 rounded-full border border-border px-3 py-1.5 text-xs font-mono tabular-nums text-muted-foreground transition-colors hover:border-primary/50 hover:text-foreground"
-                title="Change playback speed"
-                aria-label="Change playback speed"
-              >
-                <Gauge className="h-3.5 w-3.5" />
-                {speed}×
-              </button>
-            </div>
-          </div>
-
-          {/* ── Chapter list (compact) ──────────────────────────── */}
-          <div className="border-t border-border bg-surface-2/40 px-6 py-3">
-            <div className="font-mono text-[10px] uppercase tracking-wider text-muted-foreground">
-              Chapters
-            </div>
-            <div className="mt-2 flex flex-wrap gap-1.5">
-              {video.chapters.map((ch, i) => (
-                <button
-                  key={ch.title}
-                  onClick={() => seekToFraction(ch.position)}
-                  className={cn(
-                    "rounded-full border px-3 py-1 text-[11px] font-light transition-colors",
-                    i === currentChapterIndex
-                      ? "border-primary/60 bg-primary/15 text-foreground"
-                      : "border-border text-muted-foreground hover:border-primary/40 hover:text-foreground",
-                  )}
-                >
-                  <span className="font-mono tabular-nums text-[10px] text-muted-foreground/80">
-                    {String(i + 1).padStart(2, "0")}
-                  </span>
-                  <span className="ml-1.5">{ch.title}</span>
-                </button>
-              ))}
-            </div>
-          </div>
-
-          {/* ── Voice hints footer ─────────────────────────────── */}
-          <div className="border-t border-border bg-surface-2/60 px-6 py-2.5 font-mono text-[10px] uppercase tracking-wider text-muted-foreground">
-            Voice <span className="text-primary">›</span> "play" · "pause" · "rewind 10" · "forward
-            30" · "next chapter" · "show research" · "open paper one" · "close video"
-          </div>
-        </div>
-
-        {/* ── Research papers panel ──────────────────────────────── */}
-        {papersOpen && (
-          <aside
-            data-scroll-modal
-            className="flex w-[360px] shrink-0 flex-col overflow-y-auto border-l border-border bg-surface-2/60"
-          >
-            <div className="flex items-center justify-between border-b border-border px-5 py-4">
-              <div>
-                <div className="font-mono text-[10px] uppercase tracking-[0.3em] text-primary">
-                  Related research
-                </div>
-                <div className="mt-0.5 text-sm font-light text-foreground">{video.procedure}</div>
+                {/* Chapter pill: tells the user what they're looking at. */}
+                {currentChapterIndex !== null && (
+                  <div className="pointer-events-none absolute bottom-4 left-4 flex items-center gap-2 rounded-full bg-black/65 px-3 py-1.5 font-mono text-[10px] uppercase tracking-wider text-white/85 backdrop-blur-sm">
+                    <span className="rounded-full bg-primary/30 px-1.5 py-0.5 text-primary-foreground">
+                      Step {currentChapterIndex + 1} of {video.chapters.length}
+                    </span>
+                    <span className="truncate normal-case tracking-normal">
+                      {video.chapters[currentChapterIndex].title}
+                    </span>
+                  </div>
+                )}
               </div>
-              <button
-                onClick={() => {
-                  setPapersOpen(false);
-                  setActivePaperId(null);
-                }}
-                className="flex h-8 w-8 items-center justify-center rounded-full text-muted-foreground hover:bg-surface-3 hover:text-foreground"
-                aria-label="Hide research"
-              >
-                <PanelRightClose className="h-4 w-4" />
-              </button>
+
+              {/* ── Progress + chapter ticks ────────────────────────── */}
+              <div className="px-6 pt-4">
+                <button
+                  type="button"
+                  onClick={seekProgressBar}
+                  aria-label="Seek"
+                  className="relative block h-3 w-full cursor-pointer items-center"
+                  style={{ background: "transparent" }}
+                >
+                  <span className="pointer-events-none absolute left-0 right-0 top-1/2 h-1.5 -translate-y-1/2 rounded-full bg-surface-3" />
+                  <span
+                    className="pointer-events-none absolute left-0 top-1/2 h-1.5 -translate-y-1/2 rounded-full bg-primary"
+                    style={{ width: `${progressPct}%` }}
+                  />
+                </button>
+                {/* Chapter ticks — each is a wide invisible hit-area centered on a thin tick. */}
+                <div className="relative -mt-3 h-3 w-full">
+                  {video.chapters.map((ch, i) => {
+                    const left = ch.position * 100;
+                    const isActive = currentChapterIndex === i;
+                    return (
+                      <button
+                        key={ch.title}
+                        onClick={(e) => {
+                          e.stopPropagation();
+                          seekToFraction(ch.position);
+                        }}
+                        aria-label={`Jump to ${ch.title}`}
+                        className="group absolute top-0 -translate-x-1/2 px-2 py-0.5"
+                        style={{ left: `${left}%` }}
+                      >
+                        <span
+                          className={cn(
+                            "block h-3 w-[3px] rounded-sm transition-colors",
+                            isActive
+                              ? "bg-primary-foreground"
+                              : "bg-foreground/40 group-hover:bg-foreground/80",
+                          )}
+                        />
+                      </button>
+                    );
+                  })}
+                </div>
+                <div className="mt-1 flex items-center justify-between text-[11px] font-mono tabular-nums text-muted-foreground">
+                  <span>{fmtTime(currentSec)}</span>
+                  <span>{fmtTime(durationSec)}</span>
+                </div>
+              </div>
+
+              {/* ── Transport row ──────────────────────────────────── */}
+              <div className="flex items-center justify-between gap-3 px-6 py-4">
+                <div className="flex items-center gap-2">
+                  <TransportButton onClick={() => seekToSec(0)} title="Restart" aria="Restart">
+                    <RotateCcw className="h-4 w-4" />
+                  </TransportButton>
+                  <TransportButton
+                    onClick={() => seekToSec(currentSec - 10)}
+                    title="Rewind 10 s"
+                    aria="Rewind 10 seconds"
+                  >
+                    <ChevronsBack />
+                  </TransportButton>
+                  <button
+                    onClick={togglePlay}
+                    className="flex h-12 w-12 items-center justify-center rounded-full bg-primary text-primary-foreground glow-primary transition-transform hover:scale-105"
+                    aria-label={playing ? "Pause" : "Play"}
+                    title={playing ? "Pause" : "Play"}
+                  >
+                    {playing ? <Pause className="h-5 w-5" /> : <Play className="ml-0.5 h-5 w-5" />}
+                  </button>
+                  <TransportButton
+                    onClick={() => seekToSec(currentSec + 10)}
+                    title="Forward 10 s"
+                    aria="Forward 10 seconds"
+                  >
+                    <ChevronsForward />
+                  </TransportButton>
+                </div>
+
+                <div className="flex items-center gap-2">
+                  <TransportButton
+                    onClick={() => {
+                      if (!video.chapters.length) return;
+                      const i = liveChapterIndex();
+                      const target = i > 0 ? video.chapters[i - 1] : video.chapters[0];
+                      seekToFraction(target.position);
+                    }}
+                    title="Previous chapter"
+                    aria="Previous chapter"
+                  >
+                    <SkipBack className="h-4 w-4" />
+                  </TransportButton>
+                  <TransportButton
+                    onClick={() => {
+                      if (!video.chapters.length) return;
+                      const i = liveChapterIndex();
+                      if (i >= video.chapters.length - 1) return;
+                      seekToFraction(video.chapters[i + 1].position);
+                    }}
+                    title="Next chapter"
+                    aria="Next chapter"
+                  >
+                    <SkipForward className="h-4 w-4" />
+                  </TransportButton>
+                  <button
+                    onClick={cycleSpeed}
+                    className="flex items-center gap-1.5 rounded-full border border-border px-3 py-1.5 text-xs font-mono tabular-nums text-muted-foreground transition-colors hover:border-primary/50 hover:text-foreground"
+                    title="Change playback speed"
+                    aria-label="Change playback speed"
+                  >
+                    <Gauge className="h-3.5 w-3.5" />
+                    {speed}×
+                  </button>
+                </div>
+              </div>
+
+              {/* ── Chapter list (compact) ──────────────────────────── */}
+              <div className="border-t border-border bg-surface-2/40 px-6 py-3">
+                <div className="font-mono text-[10px] uppercase tracking-wider text-muted-foreground">
+                  Chapters
+                </div>
+                <div className="mt-2 flex flex-wrap gap-1.5">
+                  {video.chapters.map((ch, i) => (
+                    <button
+                      key={ch.title}
+                      onClick={() => seekToFraction(ch.position)}
+                      className={cn(
+                        "rounded-full border px-3 py-1 text-[11px] font-light transition-colors",
+                        i === currentChapterIndex
+                          ? "border-primary/60 bg-primary/15 text-foreground"
+                          : "border-border text-muted-foreground hover:border-primary/40 hover:text-foreground",
+                      )}
+                    >
+                      <span className="font-mono tabular-nums text-[10px] text-muted-foreground/80">
+                        {String(i + 1).padStart(2, "0")}
+                      </span>
+                      <span className="ml-1.5">{ch.title}</span>
+                    </button>
+                  ))}
+                </div>
+              </div>
+
+              {/* ── Voice hints footer ─────────────────────────────── */}
+              <div className="border-t border-border bg-surface-2/60 px-6 py-2.5 font-mono text-[10px] uppercase tracking-wider text-muted-foreground">
+                Voice <span className="text-primary">›</span> "play" · "pause" · "rewind 10" ·
+                "forward 30" · "next chapter" · "show research" · "open paper one" · "close video"
+              </div>
             </div>
 
-            {activePaper ? (
-              <PaperDetail paper={activePaper} onBack={() => setActivePaperId(null)} />
-            ) : (
-              <PaperList papers={papers} onOpen={(id) => setActivePaperId(id)} />
+            {/* ── Research papers panel ──────────────────────────────── */}
+            {papersOpen && (
+              <aside
+                data-scroll-modal
+                className="flex w-[360px] shrink-0 flex-col overflow-y-auto border-l border-border bg-surface-2/60"
+              >
+                <div className="flex items-center justify-between border-b border-border px-5 py-4">
+                  <div>
+                    <div className="font-mono text-[10px] uppercase tracking-[0.3em] text-primary">
+                      Related research
+                    </div>
+                    <div className="mt-0.5 text-sm font-light text-foreground">
+                      {video.procedure}
+                    </div>
+                  </div>
+                  <button
+                    onClick={() => {
+                      setPapersOpen(false);
+                      setActivePaperId(null);
+                    }}
+                    className="flex h-8 w-8 items-center justify-center rounded-full text-muted-foreground hover:bg-surface-3 hover:text-foreground"
+                    aria-label="Hide research"
+                  >
+                    <PanelRightClose className="h-4 w-4" />
+                  </button>
+                </div>
+
+                {activePaper ? (
+                  <PaperDetail paper={activePaper} onBack={() => setActivePaperId(null)} />
+                ) : (
+                  <PaperList papers={papers} onOpen={(id) => setActivePaperId(id)} />
+                )}
+              </aside>
             )}
-          </aside>
-        )}
-      </div>
-    </div>
+          </motion.div>
+        </motion.div>
+      )}
+    </AnimatePresence>
   );
 });
 

@@ -9,12 +9,18 @@ import { ScheduleScreen } from "@/components/arti/ScheduleScreen";
 import { SurgeonsScreen } from "@/components/arti/SurgeonsScreen";
 import { PatientsScreen } from "@/components/arti/PatientsScreen";
 import { ConsolesScreen } from "@/components/arti/ConsolesScreen";
+import { VideoLibraryScreen } from "@/components/arti/VideoLibraryScreen";
 import {
   CONSOLES,
   findConsole,
   summarizeConsoles,
   type ConsoleId,
 } from "@/components/arti/consoles";
+import {
+  filterLibrary,
+  PROCEDURE_VIDEOS,
+  type VideoCategory,
+} from "@/components/arti/videoLibrary";
 import { ReminderToast, type FiredReminder } from "@/components/arti/ReminderToast";
 import { PersonScheduleModal } from "@/components/arti/PersonScheduleModal";
 import { HowToVideoModal, type HowToVideoHandle } from "@/components/arti/HowToVideoModal";
@@ -104,6 +110,11 @@ function ArtiWallRoot() {
       | "onShowPatients"
       | "onShowConsoles"
       | "onFocusConsole"
+      | "onShowLibrary"
+      | "onLibraryFilterCategory"
+      | "onLibrarySearch"
+      | "onLibrarySetAnimatedOnly"
+      | "onLibraryClearFilters"
       | "onShowScheduleDay"
       | "onCloseScheduleDay"
       | "onSetReminder"
@@ -148,6 +159,11 @@ function ArtiWallRoot() {
     onShowPatients: () => {},
     onShowConsoles: () => {},
     onFocusConsole: () => {},
+    onShowLibrary: () => {},
+    onLibraryFilterCategory: () => {},
+    onLibrarySearch: () => {},
+    onLibrarySetAnimatedOnly: () => {},
+    onLibraryClearFilters: () => {},
     onShowScheduleDay: () => {},
     onCloseScheduleDay: () => {},
     onSetReminder: () => {},
@@ -223,6 +239,11 @@ function ArtiWallRoot() {
       onShowPatients: () => navCallbacksRef.current.onShowPatients?.(),
       onShowConsoles: () => navCallbacksRef.current.onShowConsoles?.(),
       onFocusConsole: (id) => navCallbacksRef.current.onFocusConsole?.(id),
+      onShowLibrary: () => navCallbacksRef.current.onShowLibrary?.(),
+      onLibraryFilterCategory: (c) => navCallbacksRef.current.onLibraryFilterCategory?.(c),
+      onLibrarySearch: (q) => navCallbacksRef.current.onLibrarySearch?.(q),
+      onLibrarySetAnimatedOnly: (v) => navCallbacksRef.current.onLibrarySetAnimatedOnly?.(v),
+      onLibraryClearFilters: () => navCallbacksRef.current.onLibraryClearFilters?.(),
       onShowScheduleDay: (date) => navCallbacksRef.current.onShowScheduleDay?.(date),
       onCloseScheduleDay: () => navCallbacksRef.current.onCloseScheduleDay?.(),
       onSetReminder: (text, minutes) => navCallbacksRef.current.onSetReminder?.(text, minutes),
@@ -245,8 +266,8 @@ function ArtiWallRoot() {
       onFocusQuadPanel: (panel) =>
         dashboardActionsRef.current?.focusQuadPanel(panel) ?? notAvailable(),
       onCloseQuadView: () => dashboardActionsRef.current?.closeQuadView() ?? notAvailable(),
-      onOpenHowToVideo: (procedure, title) =>
-        navCallbacksRef.current.onOpenHowToVideo?.(procedure, title) ?? notAvailable(),
+      onOpenHowToVideo: (procedure, title, id) =>
+        navCallbacksRef.current.onOpenHowToVideo?.(procedure, title, id) ?? notAvailable(),
       onOpenResearchPapers: (procedure, topic) =>
         navCallbacksRef.current.onOpenResearchPapers?.(procedure, topic) ?? notAvailable(),
       onVideoPlay: () => navCallbacksRef.current.onVideoPlay?.() ?? notAvailable(),
@@ -334,7 +355,8 @@ type ArtiPhase =
   | "schedule"
   | "surgeons"
   | "patients"
-  | "consoles";
+  | "consoles"
+  | "library";
 
 interface ArtiWallProps {
   navCallbacksRef: React.MutableRefObject<
@@ -350,6 +372,11 @@ interface ArtiWallProps {
       | "onShowPatients"
       | "onShowConsoles"
       | "onFocusConsole"
+      | "onShowLibrary"
+      | "onLibraryFilterCategory"
+      | "onLibrarySearch"
+      | "onLibrarySetAnimatedOnly"
+      | "onLibraryClearFilters"
       | "onShowScheduleDay"
       | "onCloseScheduleDay"
       | "onSetReminder"
@@ -503,6 +530,14 @@ function ArtiWall({
   // (the screen falls back to whichever console is currently 'active').
   const [focusedConsoleId, setFocusedConsoleId] = useState<ConsoleId | null>(null);
 
+  // Video Library filter state — lifted from VideoLibraryScreen so voice
+  // tools (library_search / library_filter_category / library_clear_filters)
+  // can drive the same controls the user can click. The screen itself is
+  // controlled by these props.
+  const [librarySearch, setLibrarySearch] = useState("");
+  const [libraryCategory, setLibraryCategory] = useState<VideoCategory | "All">("All");
+  const [libraryAnimatedOnly, setLibraryAnimatedOnly] = useState(false);
+
   // Person Schedule modal — overlay that shows one person's cases.
   interface PersonScheduleState {
     open: boolean;
@@ -523,6 +558,11 @@ function ArtiWall({
   // preop. Imperative ref drives all voice transport (play/pause/seek/etc.).
   const [howToOpen, setHowToOpen] = useState(false);
   const [howToProcedure, setHowToProcedure] = useState<string | undefined>(undefined);
+  // Direct library override — when set, the modal opens that exact video
+  // and skips findLatestVideo's keyword resolution. Cleared when the modal
+  // closes, or when a non-library open (voice "show me a rotator cuff
+  // video") sets a fresh procedure.
+  const [howToVideoId, setHowToVideoId] = useState<string | undefined>(undefined);
   const [howToInitialPapersOpen, setHowToInitialPapersOpen] = useState(false);
   const [howToInitialPaperQuery, setHowToInitialPaperQuery] = useState<string | undefined>(
     undefined,
@@ -639,6 +679,7 @@ function ArtiWall({
     surgeons: "surgeons directory",
     patients: "patients today",
     consoles: "OR equipment tower / consoles",
+    library: "video library",
   };
 
   // Keep contextRef current so Claude always gets a fresh state snapshot.
@@ -735,6 +776,38 @@ function ArtiWall({
       // "is the fluid pump connected?" / "what's the camera console doing?"
       // from any screen, not just when on the consoles view.
       summarizeConsoles(focusedConsoleId),
+      // Library filter state + the actual filtered result list. The result
+      // list is the key piece — when the user says "open it" / "play that
+      // one" / "open the video", Claude reads this block, sees there's a
+      // single matching video, and passes its `id` to open_how_to_video.
+      // No more keyword-resolution gambling on terse deictic references.
+      phase === "library"
+        ? (() => {
+            const filtered = filterLibrary({
+              search: librarySearch,
+              category: libraryCategory,
+              animatedOnly: libraryAnimatedOnly,
+            });
+            const head = `Video Library filters — search: ${librarySearch ? `"${librarySearch}"` : "(none)"} · category: ${libraryCategory} · animated only: ${libraryAnimatedOnly ? "on" : "off"}`;
+            const list =
+              filtered.length === 0
+                ? "  (no videos match — broaden the filters)"
+                : filtered
+                    .slice(0, 12)
+                    .map(
+                      (v, i) =>
+                        `  ${i + 1}. id="${v.id}" · "${v.title}" · ${v.category} · ${v.publishedYear} · procedure="${v.procedure}"`,
+                    )
+                    .join("\n");
+            const guidance =
+              filtered.length === 1
+                ? `\n  → ONLY ONE video shown. If user says "open it" / "play it" / "open the video" / "show me that" — call open_how_to_video with id="${filtered[0].id}".`
+                : filtered.length > 1
+                  ? `\n  → ${filtered.length} videos shown. If user says "open it" / "play that" without naming one, ask which (or pick #1 if their tone is decisive).`
+                  : "";
+            return `${head}\nFiltered library (${filtered.length} of ${PROCEDURE_VIDEOS.length} match):\n${list}${guidance}`;
+          })()
+        : "",
       phase === "consoles" && focusedConsoleId
         ? `Focused console on tower: ${focusedConsoleId}. Telemetry detail panel is showing.`
         : "",
@@ -822,6 +895,29 @@ function ArtiWall({
     setPhase("preop");
   }, []);
 
+  /**
+   * Close every route-level overlay before navigating somewhere new.
+   *
+   * Why: the lightbox / how-to video / person-schedule modal all live in
+   * the route's stacking order ABOVE the screen. If the user navigates
+   * (sidebar tap or voice) without closing the modal first, the modal
+   * keeps rendering on top of the new screen — and the live context
+   * still says "lightbox: OPEN", which makes Haiku refuse follow-up
+   * commands that don't match the modal's tool surface ("filter by
+   * knee" vs "next image"). Closing on every nav keeps state in sync
+   * with what the user perceives.
+   *
+   * NOT called from the modal-OPENING handlers
+   * (handleShowPreferenceCardLayoutImages, handleOpenLibraryVideo,
+   * handleOpenHowToVideo, handleShowPersonSchedule) — those need the
+   * overlay state to STAY true after they navigate.
+   */
+  const closeOverlays = useCallback(() => {
+    setLightboxOpen(false);
+    setHowToOpen(false);
+    setPersonSchedule((prev) => (prev.open ? { ...prev, open: false } : prev));
+  }, []);
+
   // Shared sidebar click handler — used by every screen that renders <Sidebar>.
   const handleSidebarNavigate = useCallback(
     (
@@ -836,6 +932,7 @@ function ArtiWall({
         | "preferences",
     ) => {
       armIdleTimer();
+      closeOverlays();
       switch (key) {
         case "home":
           setPhase("home");
@@ -857,12 +954,14 @@ function ArtiWall({
           setPhase("consoles");
           break;
         case "library":
+          setPhase("library");
+          break;
         case "preferences":
           // not yet implemented — ignore
           break;
       }
     },
-    [armIdleTimer],
+    [armIdleTimer, closeOverlays],
   );
 
   const handleSetReminder = useCallback((text: string, minutes: number) => {
@@ -979,19 +1078,49 @@ function ArtiWall({
   // Defined inline (no useCallback needed — the navCallbacksRef rebinds every
   // render, which is the same pattern used by the schedule / reminder
   // handlers above).
-  const handleOpenHowToVideo = (procedure?: string, title?: string): ArtiToolResult => {
-    setHowToProcedure(procedure ?? title);
+  const handleOpenHowToVideo = (
+    procedure?: string,
+    title?: string,
+    id?: string,
+  ): ArtiToolResult => {
+    // Priority: id > procedure > title. id skips findLatestVideo entirely
+    // so when Claude reads a "Filtered library" block in live context,
+    // "open it" / "play it" lands on the exact filtered video.
+    if (id) {
+      // Validate the id exists. Bad ids (model hallucinated) fall through to
+      // procedure / title resolution rather than opening the wrong video.
+      const exists = PROCEDURE_VIDEOS.some((v) => v.id === id);
+      if (exists) {
+        setHowToVideoId(id);
+        setHowToProcedure(undefined);
+      } else {
+        setHowToVideoId(undefined);
+        setHowToProcedure(procedure ?? title);
+      }
+    } else {
+      setHowToVideoId(undefined);
+      setHowToProcedure(procedure ?? title);
+    }
     setHowToInitialPapersOpen(false);
     setHowToInitialPaperQuery(undefined);
     setHowToOpen(true);
     return { ok: true };
   };
   const handleOpenResearchPapers = (procedure?: string, topic?: string): ArtiToolResult => {
+    setHowToVideoId(undefined);
     setHowToProcedure(procedure);
     setHowToInitialPapersOpen(true);
     setHowToInitialPaperQuery(topic);
     setHowToOpen(true);
     return { ok: true };
+  };
+  /** Library card click — open that exact video, no keyword resolution. */
+  const handleOpenLibraryVideo = (videoId: string) => {
+    setHowToVideoId(videoId);
+    setHowToProcedure(undefined);
+    setHowToInitialPapersOpen(false);
+    setHowToInitialPaperQuery(undefined);
+    setHowToOpen(true);
   };
   const requireVideoOpen = (): ArtiToolResult | null =>
     howToOpen ? null : { ok: false, reason: "video modal not open" };
@@ -1132,9 +1261,16 @@ function ArtiWall({
     onWake: () => {
       setPhase((p) => (p === "sleep" ? "waking" : p));
     },
-    onGoHome: () => setPhase("home"),
-    onShowCases: () => setPhase("cases"),
+    onGoHome: () => {
+      closeOverlays();
+      setPhase("home");
+    },
+    onShowCases: () => {
+      closeOverlays();
+      setPhase("cases");
+    },
     onOpenCase: (query: string) => {
+      closeOverlays();
       const match = findCase(query);
       if (match) {
         setActiveCase(match);
@@ -1148,14 +1284,22 @@ function ArtiWall({
       vForSleepRef.current?.stopListening();
     },
     onShowSchedule: () => {
+      closeOverlays();
       setSelectedScheduleDate(null);
       setPhase("schedule");
     },
-    onShowSurgeons: () => setPhase("surgeons"),
-    onShowPatients: () => setPhase("patients"),
+    onShowSurgeons: () => {
+      closeOverlays();
+      setPhase("surgeons");
+    },
+    onShowPatients: () => {
+      closeOverlays();
+      setPhase("patients");
+    },
     onShowConsoles: () => {
       // Clear any prior focus when entering the screen so it picks up the
       // current ACTIVE device by default (matches ConsolesScreen behavior).
+      closeOverlays();
       setFocusedConsoleId(null);
       setPhase("consoles");
     },
@@ -1166,11 +1310,48 @@ function ArtiWall({
       const direct = (CONSOLES.find((c) => c.id === id)?.id ?? null) as ConsoleId | null;
       const match = direct ?? findConsole(id)?.id ?? null;
       if (!match) return;
+      closeOverlays();
       setFocusedConsoleId(match);
       setPhase("consoles");
     },
+    onShowLibrary: () => {
+      closeOverlays();
+      setPhase("library");
+    },
+    onLibraryFilterCategory: (c: string) => {
+      // Coerce to a valid category, defaulting to "All" for unknown input.
+      const valid: Array<VideoCategory | "All"> = [
+        "All",
+        "Shoulder",
+        "Knee",
+        "Hip",
+        "Foot/Ankle",
+        "Hand/Wrist",
+      ];
+      const next = (valid as string[]).includes(c) ? (c as VideoCategory | "All") : "All";
+      closeOverlays();
+      setLibraryCategory(next);
+      setPhase("library");
+    },
+    onLibrarySearch: (q: string) => {
+      closeOverlays();
+      setLibrarySearch(q);
+      setPhase("library");
+    },
+    onLibrarySetAnimatedOnly: (enabled: boolean) => {
+      closeOverlays();
+      setLibraryAnimatedOnly(enabled);
+      setPhase("library");
+    },
+    onLibraryClearFilters: () => {
+      closeOverlays();
+      setLibrarySearch("");
+      setLibraryCategory("All");
+      setLibraryAnimatedOnly(false);
+    },
     onShowScheduleDay: (date: string) => {
       if (!date) return;
+      closeOverlays();
       setSelectedScheduleDate(date);
       setPhase("schedule");
     },
@@ -1281,6 +1462,24 @@ function ArtiWall({
         onFocusChange={setFocusedConsoleId}
       />
     );
+  } else if (phase === "library") {
+    screen = (
+      <VideoLibraryScreen
+        staffName={staff.name}
+        staffRole={staff.role}
+        initials={staff.initials}
+        onSleep={handleSleep}
+        onPrompt={handlePrompt}
+        onSidebarNavigate={handleSidebarNavigate}
+        onOpenVideo={handleOpenLibraryVideo}
+        search={librarySearch}
+        onSearchChange={setLibrarySearch}
+        category={libraryCategory}
+        onCategoryChange={setLibraryCategory}
+        animatedOnly={libraryAnimatedOnly}
+        onAnimatedOnlyChange={setLibraryAnimatedOnly}
+      />
+    );
   } else if (phase === "surgeons") {
     screen = (
       <SurgeonsScreen
@@ -1370,6 +1569,7 @@ function ArtiWall({
         open={howToOpen}
         onClose={() => setHowToOpen(false)}
         procedure={howToProcedure}
+        videoId={howToVideoId}
         initialPapersOpen={howToInitialPapersOpen}
         initialPaperQuery={howToInitialPaperQuery}
       />

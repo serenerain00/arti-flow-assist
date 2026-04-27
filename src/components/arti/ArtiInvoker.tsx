@@ -86,7 +86,12 @@ export function ArtiInvoker({ onSubmit, onWake, placeholder, suggestions = [], c
   };
 
   return (
-    <div className={cn("pointer-events-none absolute bottom-0 right-0 z-[60] p-6", className)}>
+    // `fixed` so the invoker escapes the screen's stacking context. z-[100]
+    // sits above every modal in the app (highest is PersonScheduleModal at
+    // z-[81]), which is intentional — Arti must remain reachable while a
+    // modal is open so the user can voice/type follow-up commands without
+    // dismissing what they're looking at.
+    <div className={cn("pointer-events-none fixed bottom-0 right-0 z-[100] p-6", className)}>
       <div className="relative flex items-end justify-end">
 
         {/* Collapsed orb — fades out when panel opens, dims when napping */}

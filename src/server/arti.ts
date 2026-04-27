@@ -82,6 +82,86 @@ const TOOLS: Anthropic.Tool[] = [
     input_schema: { type: "object" as const, properties: {}, required: [] },
   },
   {
+    name: "navigate_library",
+    description:
+      "Open the curated surgical Video Library — a searchable, filterable grid of every how-to video Arti has indexed (shoulder, knee, hip, hand/wrist, foot/ankle). Use for: 'show me the video library', 'open the library', 'pull up the surgical videos', 'browse the videos', 'show me all the how-to videos', 'show me what videos you have', 'what videos are available'. The user can then tap a card or say 'show me the [procedure] video' to play one. Differs from open_how_to_video — that one immediately plays the latest matching video; navigate_library opens the browse-and-search UI.",
+    input_schema: { type: "object" as const, properties: {}, required: [] },
+  },
+  {
+    name: "library_filter_category",
+    description:
+      "Filter the Video Library to a specific anatomic region. " +
+      "ALWAYS works — closes any open overlay, navigates to the library if not already there, applies the filter. Never refuse this command because of an open modal. " +
+      "OR STAFF SPEAK IS TERSE — recognize ALL of these short imperative patterns and map to the right enum: " +
+      "  'knee' / 'knees' / 'knee videos' / 'knee procedures' / 'knee stuff' / 'just knee' / 'knee only' / 'filter knee' / 'show knee' / 'narrow to knee' → 'Knee'. " +
+      "  'shoulder' / 'shoulders' / 'shoulder videos' / 'just shoulder' / 'filter shoulder' / 'rotator stuff' / 'cuff stuff' → 'Shoulder'. " +
+      "  'hip' / 'hips' / 'hip videos' / 'hip stuff' / 'just hip' / 'filter hip' → 'Hip'. " +
+      "  'foot' / 'ankle' / 'foot ankle' / 'foot and ankle' / 'ankle stuff' / 'achilles videos' → 'Foot/Ankle'. " +
+      "  'hand' / 'wrist' / 'hand and wrist' / 'hand wrist' / 'carpal' / 'wrist stuff' → 'Hand/Wrist'. " +
+      "  'all' / 'all videos' / 'everything' / 'all categories' / 'show me all' / 'no filter' / 'remove filter' → 'All'. " +
+      "Body region words are ALWAYS a category filter — even if the user says only 'knee' with no other context. Specific procedure names (ACL, meniscus, Bankart, RTSA, rotator cuff repair, biceps tenodesis, etc.) are SEARCH queries — use library_search for those. When the user says both ('knee videos with Denard' / 'knee meniscus') call BOTH tools.",
+    input_schema: {
+      type: "object" as const,
+      properties: {
+        category: {
+          type: "string",
+          enum: ["All", "Shoulder", "Knee", "Hip", "Foot/Ankle", "Hand/Wrist"],
+          description: "Anatomic region. 'All' clears the filter.",
+        },
+      },
+      required: ["category"],
+    },
+  },
+  {
+    name: "library_search",
+    description:
+      "Set the Video Library search box. " +
+      "ALWAYS works — closes any open overlay, navigates to the library, applies the search. Never refuse because of an open modal. " +
+      "Use this for SPECIFIC PROCEDURE / TECHNIQUE / SURGEON / CHANNEL keywords — anything more specific than a body region. " +
+      "OR STAFF SPEAK PATTERNS — recognize all of these as search requests, extract the keyword: " +
+      "  'find ACL' / 'ACL videos' / 'show me ACL' / 'pull up ACL' → query='ACL'. " +
+      "  'search meniscus' / 'meniscus videos' / 'meniscus repair' / 'just meniscus' → query='meniscus'. " +
+      "  'rotator cuff' / 'cuff repair' / 'find a cuff video' / 'speedbridge' → query='rotator cuff' (or 'speedbridge'). " +
+      "  'Bankart' / 'SLAP' / 'tenodesis' / 'biceps' / 'subacromial' → query as said. " +
+      "  'RTSA' / 'reverse shoulder' / 'TKA' / 'total knee' → query as said. " +
+      "  'Denard' / 'Millett' / 'Arthrex' / 'animations only' / 'find videos with [name]' → query=[that name]. " +
+      "  'clear search' / 'reset search' / 'remove keyword' → query='' (empty). " +
+      "Filters by title, procedure, surgeon, channel, and tags simultaneously. If the user combines a region + procedure ('knee meniscus', 'shoulder rotator cuff'), call BOTH library_filter_category and library_search in the same turn.",
+    input_schema: {
+      type: "object" as const,
+      properties: {
+        query: {
+          type: "string",
+          description: "Free-text search keywords. Pass empty string to clear.",
+        },
+      },
+      required: ["query"],
+    },
+  },
+  {
+    name: "library_set_animated_only",
+    description:
+      "Toggle the 'Animated only' filter on the Video Library. ALWAYS works — closes any open modal and navigates to the library if needed. Use for: 'show only animated videos', 'animated only', 'just the animations', 'turn off animated only', 'show all video types'. Pass true to restrict to animated content (safest for embed reliability), false to show everything.",
+    input_schema: {
+      type: "object" as const,
+      properties: {
+        enabled: {
+          type: "boolean",
+          description: "true = restrict to animated only; false = show all videos.",
+        },
+      },
+      required: ["enabled"],
+    },
+  },
+  {
+    name: "library_clear_filters",
+    description:
+      "Reset every Video Library filter — clear search, set category to 'All', turn off animated-only. ALWAYS works regardless of current screen or open modal. " +
+      "OR STAFF SPEAK — recognize all of these terse imperatives: 'clear filters' / 'clear it' / 'reset' / 'reset filters' / 'reset library' / 'show all' / 'show all videos' / 'show me everything' / 'everything' / 'no filters' / 'remove filters' / 'drop the filter' / 'wipe filters' / 'start over'. " +
+      "Prefer this over library_filter_category('All') when the user wants a TOTAL reset (also clears search + animated-only). Use library_filter_category('All') only when they want to keep the search but drop the region filter.",
+    input_schema: { type: "object" as const, properties: {}, required: [] },
+  },
+  {
     name: "focus_console",
     description:
       "Highlight one specific console on the OR tower (rotates the 3D view toward it and opens its detail panel with telemetry + attachments). " +
@@ -326,21 +406,29 @@ const TOOLS: Anthropic.Tool[] = [
   {
     name: "open_how_to_video",
     description:
-      "Open the in-OR surgical how-to viewer with the latest video matching a procedure or keyword. Use for: 'show me the how-to video for X', 'show me how-to videos for this procedure', 'show me a video for this case's procedure', 'pull up the latest reverse shoulder video', 'play the SLAP repair walkthrough'. " +
-      "PRONOUN RESOLUTION: When the user says 'this procedure', 'this case', 'this case's procedure', or refers to the procedure without naming it, look at the Active case line in live context and use that procedure name as the argument. Same applies when a case is highlighted in a list (use that case's procedure). " +
-      "NARRATION REQUIRED: When you call this tool, in the SAME turn ALSO return ONE short sentence text quoting the matched video's title (or procedure), the surgeon/channel, and the published year — followed by 1–2 voice command suggestions. Use the Reference library section in the system prompt to look up the exact title/surgeon/year. Example: 'Reverse Total Shoulder Replacement, Arthrex, 2017. Try saying play, next chapter, or show research.'",
+      "Open the in-OR surgical how-to viewer with a specific video. Use for: 'show me the how-to video for X', 'show me how-to videos for this procedure', 'pull up the latest reverse shoulder video', 'play the SLAP repair walkthrough', and — when on the library — 'open it', 'play it', 'open the video', 'show me that one'. " +
+      "ARG PRIORITY: id > procedure > title. " +
+      "  • `id` (PREFERRED when available) — exact library video id like 'v-acl-repair'. When the live context contains a 'Filtered library' block, ALWAYS prefer passing the id of the right entry over the keyword. If the user says a deictic reference ('open it', 'open that one', 'play the video') AND the filtered list shows exactly one video, pass that one's id. If the filtered list shows multiple, pick the most relevant id based on the user's words; if truly ambiguous, pass procedure instead and let the latest-match resolver pick. " +
+      "  • `procedure` — keyword for fuzzy match (use when user names a procedure that's NOT on a filtered list). " +
+      "  • `title` — legacy alias for procedure. " +
+      "PRONOUN RESOLUTION: 'this procedure' / 'this case' → use the active case's procedure from live context. " +
+      "NARRATION REQUIRED: in the SAME turn return ONE short sentence quoting the matched video's title, surgeon/channel, and year, plus 1–2 voice-command suggestions. Use the Reference library block in the system prompt for exact metadata. Example: 'ACL Repair TightRope, Arthrex animation, 2022. Try saying play, next chapter, or show research.'",
     input_schema: {
       type: "object" as const,
       properties: {
+        id: {
+          type: "string",
+          description:
+            "Exact library video id (e.g. 'v-acl-repair'). PREFER passing this when you can read the right id from the 'Filtered library' block in live context. Skips fuzzy resolution.",
+        },
         procedure: {
           type: "string",
           description:
-            "Procedure name, implant name, or technique keyword. Examples: 'reverse total shoulder', 'rotator cuff', 'Bankart', 'SLAP', 'subacromial decompression', 'glenoid baseplate', 'biceps tenodesis'.",
+            "Procedure name, implant name, or technique keyword. Examples: 'reverse total shoulder', 'rotator cuff', 'Bankart', 'SLAP', 'subacromial decompression', 'glenoid baseplate', 'biceps tenodesis'. Used when no `id` is available.",
         },
         title: {
           type: "string",
-          description:
-            "Legacy free-text fallback. Prefer `procedure`. Either argument is sufficient.",
+          description: "Legacy free-text fallback. Prefer `id` or `procedure`.",
         },
       },
       required: [],
@@ -711,6 +799,11 @@ export const processVoiceCommand = createServerFn({ method: "POST" })
       "navigate_surgeons",
       "navigate_patients",
       "navigate_consoles",
+      "navigate_library",
+      "library_filter_category",
+      "library_search",
+      "library_set_animated_only",
+      "library_clear_filters",
       // focus_console is intentionally NOT silent — when the user asks
       // "is the pump connected?" Arti reads the live tower status block
       // and speaks a one-sentence telemetry answer in the same turn.

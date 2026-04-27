@@ -1,4 +1,5 @@
 import { useEffect, useMemo } from "react";
+import { AnimatePresence, motion } from "framer-motion";
 import {
   AlertTriangle,
   Calendar as CalendarIcon,
@@ -91,158 +92,166 @@ export function PersonScheduleModal({
     };
   }, [cases]);
 
-  if (!open) return null;
-
   return (
-    <>
-      {/* Backdrop */}
-      <div
-        onClick={onClose}
-        className="fixed inset-0 z-[80] bg-background/70 backdrop-blur-sm animate-in fade-in duration-200"
-      />
+    <AnimatePresence>
+      {open && (
+        <>
+          {/* Backdrop */}
+          <motion.div
+            key="ps-backdrop"
+            onClick={onClose}
+            initial={{ opacity: 0 }}
+            animate={{ opacity: 1 }}
+            exit={{ opacity: 0 }}
+            transition={{ duration: 0.16 }}
+            className="fixed inset-0 z-[80] bg-background/70 backdrop-blur-sm"
+          />
 
-      {/* Modal */}
-      <div
-        role="dialog"
-        aria-modal
-        aria-label={`${person?.name ?? "Person"} schedule`}
-        className="fixed left-1/2 top-1/2 z-[81] flex max-h-[92vh] w-[min(92vw,720px)] -translate-x-1/2 -translate-y-1/2 flex-col overflow-hidden rounded-3xl border border-border/60 bg-surface/95 shadow-2xl backdrop-blur-xl animate-in zoom-in-95 fade-in duration-200"
-      >
-        {/* Header */}
-        <header className="shrink-0 border-b border-border/60 px-6 py-5">
-          <div className="flex items-start gap-4">
-            {/* Avatar */}
-            <div
-              className="flex h-14 w-14 shrink-0 items-center justify-center rounded-2xl text-base font-medium text-white"
-              style={{
-                background: person
-                  ? `linear-gradient(135deg, var(--primary), var(--accent))`
-                  : "var(--surface-2)",
-              }}
-            >
-              {person?.initials ?? "—"}
-            </div>
-
-            {/* Identity */}
-            <div className="min-w-0 flex-1">
-              <div className="font-mono text-[10px] uppercase tracking-[0.4em] text-primary">
-                Schedule
-              </div>
-              <h2 className="mt-1 truncate text-2xl font-light tracking-tight text-foreground">
-                {person?.name ?? personName ?? "Unknown"}
-              </h2>
-              <p className="mt-0.5 text-xs font-light text-muted-foreground">
-                {person ? (
-                  <>
-                    {ROLE_LABEL[person.role]}
-                    {person.specialty ? ` · ${person.specialty}` : ""}
-                  </>
-                ) : (
-                  <span className="text-warning">
-                    Not found in roster
-                    {personRole ? ` (${ROLE_LABEL[personRole]})` : ""}
-                  </span>
-                )}
-              </p>
-            </div>
-
-            {/* Close */}
-            <button
-              type="button"
-              onClick={onClose}
-              aria-label="Close"
-              className="flex h-9 w-9 items-center justify-center rounded-full text-muted-foreground transition-colors hover:bg-surface-2 hover:text-foreground"
-            >
-              <X className="h-4 w-4" />
-            </button>
-          </div>
-
-          {/* View toggle + range */}
-          <div className="mt-4 flex flex-wrap items-center justify-between gap-3">
-            <div className="flex items-center gap-1 rounded-full border border-border bg-surface/60 p-1">
-              {(["day", "week", "month"] as const).map((v) => (
-                <button
-                  key={v}
-                  type="button"
-                  onClick={() => onChangeView(v)}
-                  className={cn(
-                    "rounded-full px-3 py-1 text-xs font-mono uppercase tracking-wider transition-colors",
-                    v === view
-                      ? "bg-primary text-primary-foreground"
-                      : "text-muted-foreground hover:text-foreground",
-                  )}
+          {/* Modal */}
+          <motion.div
+            key="ps-card"
+            role="dialog"
+            aria-modal
+            aria-label={`${person?.name ?? "Person"} schedule`}
+            initial={{ opacity: 0, scale: 0.94 }}
+            animate={{ opacity: 1, scale: 1 }}
+            exit={{ opacity: 0, scale: 0.96 }}
+            transition={{ type: "tween", duration: 0.2, ease: [0.22, 1, 0.36, 1] }}
+            className="fixed left-1/2 top-1/2 z-[81] flex max-h-[92vh] w-[min(92vw,720px)] -translate-x-1/2 -translate-y-1/2 flex-col overflow-hidden rounded-3xl border border-border/60 bg-surface/95 shadow-2xl backdrop-blur-xl"
+          >
+            {/* Header */}
+            <header className="shrink-0 border-b border-border/60 px-6 py-5">
+              <div className="flex items-start gap-4">
+                {/* Avatar */}
+                <div
+                  className="flex h-14 w-14 shrink-0 items-center justify-center rounded-2xl text-base font-medium text-white"
+                  style={{
+                    background: person
+                      ? `linear-gradient(135deg, var(--primary), var(--accent))`
+                      : "var(--surface-2)",
+                  }}
                 >
-                  {v}
+                  {person?.initials ?? "—"}
+                </div>
+
+                {/* Identity */}
+                <div className="min-w-0 flex-1">
+                  <div className="font-mono text-[10px] uppercase tracking-[0.4em] text-primary">
+                    Schedule
+                  </div>
+                  <h2 className="mt-1 truncate text-2xl font-light tracking-tight text-foreground">
+                    {person?.name ?? personName ?? "Unknown"}
+                  </h2>
+                  <p className="mt-0.5 text-xs font-light text-muted-foreground">
+                    {person ? (
+                      <>
+                        {ROLE_LABEL[person.role]}
+                        {person.specialty ? ` · ${person.specialty}` : ""}
+                      </>
+                    ) : (
+                      <span className="text-warning">
+                        Not found in roster
+                        {personRole ? ` (${ROLE_LABEL[personRole]})` : ""}
+                      </span>
+                    )}
+                  </p>
+                </div>
+
+                {/* Close */}
+                <button
+                  type="button"
+                  onClick={onClose}
+                  aria-label="Close"
+                  className="flex h-9 w-9 items-center justify-center rounded-full text-muted-foreground transition-colors hover:bg-surface-2 hover:text-foreground"
+                >
+                  <X className="h-4 w-4" />
                 </button>
-              ))}
-            </div>
-            <div className="font-mono text-[11px] uppercase tracking-wider text-muted-foreground">
-              {range.label}
-            </div>
-          </div>
+              </div>
 
-          {/* Quick stats */}
-          {person && (
-            <div className="mt-4 flex flex-wrap items-center gap-2 text-[11px]">
-              <Stat label={`${stats.total} case${stats.total === 1 ? "" : "s"}`} />
-              {stats.hours > 0 && <Stat label={`~${stats.hours} h`} />}
-              {stats.implants > 0 && (
-                <Stat
-                  icon={<Package className="h-3 w-3" />}
-                  label={`${stats.implants} implant`}
-                />
-              )}
-              {stats.highRisk > 0 && (
-                <Stat
-                  tone="warn"
-                  icon={<AlertTriangle className="h-3 w-3" />}
-                  label={`${stats.highRisk} ASA III+`}
-                />
-              )}
-              {stats.lines.map((l) => (
-                <Stat
-                  key={l}
-                  swatch={SERVICE_LINE_COLORS[l]}
-                  label={l}
-                />
-              ))}
-            </div>
-          )}
-        </header>
+              {/* View toggle + range */}
+              <div className="mt-4 flex flex-wrap items-center justify-between gap-3">
+                <div className="flex items-center gap-1 rounded-full border border-border bg-surface/60 p-1">
+                  {(["day", "week", "month"] as const).map((v) => (
+                    <button
+                      key={v}
+                      type="button"
+                      onClick={() => onChangeView(v)}
+                      className={cn(
+                        "rounded-full px-3 py-1 text-xs font-mono uppercase tracking-wider transition-colors",
+                        v === view
+                          ? "bg-primary text-primary-foreground"
+                          : "text-muted-foreground hover:text-foreground",
+                      )}
+                    >
+                      {v}
+                    </button>
+                  ))}
+                </div>
+                <div className="font-mono text-[11px] uppercase tracking-wider text-muted-foreground">
+                  {range.label}
+                </div>
+              </div>
 
-        {/* Card stack — data-scroll-modal flags this as the active scroll
+              {/* Quick stats */}
+              {person && (
+                <div className="mt-4 flex flex-wrap items-center gap-2 text-[11px]">
+                  <Stat label={`${stats.total} case${stats.total === 1 ? "" : "s"}`} />
+                  {stats.hours > 0 && <Stat label={`~${stats.hours} h`} />}
+                  {stats.implants > 0 && (
+                    <Stat
+                      icon={<Package className="h-3 w-3" />}
+                      label={`${stats.implants} implant`}
+                    />
+                  )}
+                  {stats.highRisk > 0 && (
+                    <Stat
+                      tone="warn"
+                      icon={<AlertTriangle className="h-3 w-3" />}
+                      label={`${stats.highRisk} ASA III+`}
+                    />
+                  )}
+                  {stats.lines.map((l) => (
+                    <Stat key={l} swatch={SERVICE_LINE_COLORS[l]} label={l} />
+                  ))}
+                </div>
+              )}
+            </header>
+
+            {/* Card stack — data-scroll-modal flags this as the active scroll
             target so voice "scroll down" targets the modal, not the body
             behind it. */}
-        <div data-scroll-modal className="min-h-0 flex-1 overflow-y-auto px-6 py-5">
-          {!person ? (
-            <EmptyState
-              icon={<UserIcon className="h-10 w-10" strokeWidth={1.3} />}
-              title="No match in roster"
-              hint={`Try saying their full name. Resolved query: "${personName ?? ""}"`}
-            />
-          ) : cases.length === 0 ? (
-            <EmptyState
-              icon={<CalendarIcon className="h-10 w-10" strokeWidth={1.3} />}
-              title={`No cases ${view === "day" ? "today" : view === "week" ? "this week" : "this month"}`}
-              hint={`${person.name} has nothing on the board for ${range.label}.`}
-            />
-          ) : (
-            <ul className="space-y-3">
-              {cases.map((c) => (
-                <PersonCaseCard
-                  key={c.id}
-                  c={c}
-                  viewerRole={person.role}
-                  onOpen={
-                    onOpenCase ? () => onOpenCase(c.id, `${c.patientName}'s case`) : undefined
-                  }
+            <div data-scroll-modal className="min-h-0 flex-1 overflow-y-auto px-6 py-5">
+              {!person ? (
+                <EmptyState
+                  icon={<UserIcon className="h-10 w-10" strokeWidth={1.3} />}
+                  title="No match in roster"
+                  hint={`Try saying their full name. Resolved query: "${personName ?? ""}"`}
                 />
-              ))}
-            </ul>
-          )}
-        </div>
-      </div>
-    </>
+              ) : cases.length === 0 ? (
+                <EmptyState
+                  icon={<CalendarIcon className="h-10 w-10" strokeWidth={1.3} />}
+                  title={`No cases ${view === "day" ? "today" : view === "week" ? "this week" : "this month"}`}
+                  hint={`${person.name} has nothing on the board for ${range.label}.`}
+                />
+              ) : (
+                <ul className="space-y-3">
+                  {cases.map((c) => (
+                    <PersonCaseCard
+                      key={c.id}
+                      c={c}
+                      viewerRole={person.role}
+                      onOpen={
+                        onOpenCase ? () => onOpenCase(c.id, `${c.patientName}'s case`) : undefined
+                      }
+                    />
+                  ))}
+                </ul>
+              )}
+            </div>
+          </motion.div>
+        </>
+      )}
+    </AnimatePresence>
   );
 }
 
@@ -270,24 +279,14 @@ function Stat({
           : "border-border bg-surface-2/60 text-muted-foreground",
       )}
     >
-      {swatch && (
-        <span className="h-2 w-2 rounded-full" style={{ backgroundColor: swatch }} />
-      )}
+      {swatch && <span className="h-2 w-2 rounded-full" style={{ backgroundColor: swatch }} />}
       {icon}
       {label}
     </span>
   );
 }
 
-function EmptyState({
-  icon,
-  title,
-  hint,
-}: {
-  icon: React.ReactNode;
-  title: string;
-  hint: string;
-}) {
+function EmptyState({ icon, title, hint }: { icon: React.ReactNode; title: string; hint: string }) {
   return (
     <div className="flex h-full flex-col items-center justify-center px-6 py-12 text-center">
       <span className="text-muted-foreground/40">{icon}</span>

@@ -27,6 +27,16 @@ export interface ArtiVoiceCallbacks {
   onShowConsoles?: () => void;
   /** Focus one console on the tower (camera/pump/shaver/rf/light/image). */
   onFocusConsole?: (id: string) => void;
+  /** Navigate to the curated surgical Video Library screen. */
+  onShowLibrary?: () => void;
+  /** Filter the Video Library by anatomic region (or "All" to clear). */
+  onLibraryFilterCategory?: (category: string) => void;
+  /** Set the Video Library search box (empty string clears). */
+  onLibrarySearch?: (query: string) => void;
+  /** Toggle the Video Library "Animated only" checkbox. */
+  onLibrarySetAnimatedOnly?: (enabled: boolean) => void;
+  /** Reset every Video Library filter to defaults. */
+  onLibraryClearFilters?: () => void;
   /** Open the day detail on the Schedule. `date` is an ISO key YYYY-MM-DD. */
   onShowScheduleDay?: (date: string) => void;
   /** Close the Schedule day-detail drawer without leaving the Schedule screen. */
@@ -55,7 +65,7 @@ export interface ArtiVoiceCallbacks {
   onOpenQuadView?: () => ArtiToolResult;
   onFocusQuadPanel?: (panel: QuadPanelId) => ArtiToolResult;
   onCloseQuadView?: () => ArtiToolResult;
-  onOpenHowToVideo?: (procedure?: string, title?: string) => ArtiToolResult;
+  onOpenHowToVideo?: (procedure?: string, title?: string, id?: string) => ArtiToolResult;
   /** Open the how-to viewer with the research-papers panel expanded. */
   onOpenResearchPapers?: (procedure?: string, topic?: string) => ArtiToolResult;
   /** Resume video playback. */
@@ -158,6 +168,21 @@ function executeToolCall(call: ArtiToolCall, cb: ArtiVoiceCallbacks): void {
     case "focus_console":
       cb.onFocusConsole?.(String(inp.id ?? ""));
       break;
+    case "navigate_library":
+      cb.onShowLibrary?.();
+      break;
+    case "library_filter_category":
+      cb.onLibraryFilterCategory?.(String(inp.category ?? "All"));
+      break;
+    case "library_search":
+      cb.onLibrarySearch?.(String(inp.query ?? ""));
+      break;
+    case "library_set_animated_only":
+      cb.onLibrarySetAnimatedOnly?.(Boolean(inp.enabled));
+      break;
+    case "library_clear_filters":
+      cb.onLibraryClearFilters?.();
+      break;
     case "show_schedule_day":
       cb.onShowScheduleDay?.(String(inp.date ?? ""));
       break;
@@ -213,6 +238,7 @@ function executeToolCall(call: ArtiToolCall, cb: ArtiVoiceCallbacks): void {
       cb.onOpenHowToVideo?.(
         inp.procedure != null ? String(inp.procedure) : undefined,
         inp.title != null ? String(inp.title) : undefined,
+        inp.id != null ? String(inp.id) : undefined,
       );
       break;
     case "open_research_papers":

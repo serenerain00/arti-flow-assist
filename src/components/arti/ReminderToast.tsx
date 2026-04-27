@@ -1,4 +1,5 @@
 import { useEffect } from "react";
+import { AnimatePresence, motion } from "framer-motion";
 import { Bell, X } from "lucide-react";
 import { cn } from "@/lib/utils";
 
@@ -32,39 +33,42 @@ export function ReminderToast({ reminders, onDismiss, autoDismissMs = 30_000 }: 
     };
   }, [reminders, onDismiss, autoDismissMs]);
 
-  if (reminders.length === 0) return null;
-
   return (
     <div className="pointer-events-none fixed left-1/2 top-6 z-[70] flex -translate-x-1/2 flex-col items-center gap-3">
-      {reminders.map((r) => (
-        <div
-          key={r.id}
-          role="status"
-          aria-live="polite"
-          className={cn(
-            "pointer-events-auto flex min-w-[320px] max-w-[560px] items-start gap-3 rounded-2xl border border-primary/40 bg-surface/95 px-5 py-4 shadow-[var(--shadow-elevated)] backdrop-blur-xl",
-            "animate-in slide-in-from-top-4 fade-in duration-300",
-          )}
-        >
-          <span className="mt-0.5 flex h-8 w-8 shrink-0 items-center justify-center rounded-full bg-primary/15 text-primary">
-            <Bell className="h-4 w-4" strokeWidth={1.8} />
-          </span>
-          <div className="min-w-0 flex-1">
-            <div className="font-mono text-[10px] uppercase tracking-[0.35em] text-primary">
-              Reminder
-            </div>
-            <div className="mt-1 text-sm font-light text-foreground">{r.text}</div>
-          </div>
-          <button
-            type="button"
-            onClick={() => onDismiss(r.id)}
-            aria-label="Dismiss reminder"
-            className="flex h-8 w-8 shrink-0 items-center justify-center rounded-full text-muted-foreground transition-colors hover:bg-surface-2 hover:text-foreground"
+      <AnimatePresence initial={false}>
+        {reminders.map((r) => (
+          <motion.div
+            key={r.id}
+            role="status"
+            aria-live="polite"
+            initial={{ opacity: 0, scale: 0.9 }}
+            animate={{ opacity: 1, scale: 1 }}
+            exit={{ opacity: 0, scale: 0.92 }}
+            transition={{ type: "tween", duration: 0.18, ease: [0.22, 1, 0.36, 1] }}
+            className={cn(
+              "pointer-events-auto flex min-w-[320px] max-w-[560px] items-start gap-3 rounded-2xl border border-primary/40 bg-surface/95 px-5 py-4 shadow-[var(--shadow-elevated)] backdrop-blur-xl",
+            )}
           >
-            <X className="h-4 w-4" />
-          </button>
-        </div>
-      ))}
+            <span className="mt-0.5 flex h-8 w-8 shrink-0 items-center justify-center rounded-full bg-primary/15 text-primary">
+              <Bell className="h-4 w-4" strokeWidth={1.8} />
+            </span>
+            <div className="min-w-0 flex-1">
+              <div className="font-mono text-[10px] uppercase tracking-[0.35em] text-primary">
+                Reminder
+              </div>
+              <div className="mt-1 text-sm font-light text-foreground">{r.text}</div>
+            </div>
+            <button
+              type="button"
+              onClick={() => onDismiss(r.id)}
+              aria-label="Dismiss reminder"
+              className="flex h-8 w-8 shrink-0 items-center justify-center rounded-full text-muted-foreground transition-colors hover:bg-surface-2 hover:text-foreground"
+            >
+              <X className="h-4 w-4" />
+            </button>
+          </motion.div>
+        ))}
+      </AnimatePresence>
     </div>
   );
 }

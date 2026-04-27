@@ -23,10 +23,15 @@ export interface VideoChapter {
   position: number;
 }
 
+/** Anatomic region — drives library filtering and chip groups. */
+export type VideoCategory = "Shoulder" | "Knee" | "Hip" | "Foot/Ankle" | "Hand/Wrist";
+
 export interface ProcedureVideo {
   id: string;
   title: string;
   procedure: string;
+  /** Anatomic region for the library's category filter. */
+  category: VideoCategory;
   /** Lower-case keywords / synonyms used by findLatestVideo. */
   tags: string[];
   /** YouTube video ID — used by the IFrame API. */
@@ -38,12 +43,22 @@ export interface ProcedureVideo {
   /** Where the surgeon practices, when known. */
   affiliation: string;
   publishedYear: number;
+  /**
+   * True for animated/illustrated technique demos (no live tissue).
+   * Animated content has the lowest age-restriction risk in YouTube embeds.
+   */
+  isAnimated: boolean;
   description: string;
   chapters: VideoChapter[];
   /** Cross-references into RESEARCH_PAPERS by id. */
   paperIds: string[];
   /** Direct YouTube watch URL — useful for context / "open in browser" UX. */
   watchUrl: string;
+}
+
+/** Standard YouTube thumbnail URL — `hq` is a sharp 480×360 default. */
+export function youtubeThumbnail(youtubeId: string): string {
+  return `https://i.ytimg.com/vi/${youtubeId}/hqdefault.jpg`;
 }
 
 export interface ResearchPaper {
@@ -226,6 +241,8 @@ export const PROCEDURE_VIDEOS: ProcedureVideo[] = [
     id: "v-rtsa",
     title: "Reverse Total Shoulder Replacement with Univers Revers™ System",
     procedure: "Reverse Total Shoulder Arthroplasty",
+    category: "Shoulder",
+    isAnimated: false,
     tags: [
       "reverse",
       "rsa",
@@ -264,6 +281,8 @@ export const PROCEDURE_VIDEOS: ProcedureVideo[] = [
     id: "v-rcr",
     title: "Rotator Cuff Repair with Arthrex® SpeedBridge™",
     procedure: "Arthroscopic Rotator Cuff Repair",
+    category: "Shoulder",
+    isAnimated: false,
     tags: [
       "rotator",
       "cuff",
@@ -299,6 +318,8 @@ export const PROCEDURE_VIDEOS: ProcedureVideo[] = [
     id: "v-bankart",
     title: "Bankart Repair with the Knotless SutureTak® Anchor",
     procedure: "Arthroscopic Bankart Repair",
+    category: "Shoulder",
+    isAnimated: false,
     tags: [
       "bankart",
       "labrum",
@@ -334,6 +355,8 @@ export const PROCEDURE_VIDEOS: ProcedureVideo[] = [
     id: "v-slap",
     title: "SLAP Repair with Knotless SutureTak® Anchors",
     procedure: "SLAP Repair with Biceps Tenodesis",
+    category: "Shoulder",
+    isAnimated: false,
     tags: [
       "slap",
       "biceps",
@@ -360,6 +383,8 @@ export const PROCEDURE_VIDEOS: ProcedureVideo[] = [
     id: "v-subacrom",
     title: "Arthroscopic Subacromial Decompression and Acromioplasty",
     procedure: "Subacromial Decompression",
+    category: "Shoulder",
+    isAnimated: false,
     tags: [
       "subacromial",
       "decompression",
@@ -387,6 +412,328 @@ export const PROCEDURE_VIDEOS: ProcedureVideo[] = [
     paperIds: ["p-subacrom-rct"],
     watchUrl: "https://www.youtube.com/watch?v=Wah6b0kC9ao",
   },
+
+  // ── Library expansion (verified embeddable, non-age-restricted) ──────────
+  // 16 additional surgical technique videos covering shoulder / knee / hip /
+  // hand / foot. Each id was checked against the YouTube oEmbed endpoint to
+  // confirm the video is publicly embeddable. Animated/illustrated content
+  // dominates this set — that's the safest category for OR wall display use
+  // because it almost never triggers age gates and stays appropriate for a
+  // mixed-staff environment.
+
+  {
+    id: "v-rtsa-apex",
+    title: "Univers™ Apex Reverse Total Shoulder Arthroplasty",
+    procedure: "Reverse Total Shoulder Arthroplasty",
+    category: "Shoulder",
+    isAnimated: true,
+    tags: ["reverse", "rsa", "rtsa", "univers", "apex", "arthroplasty", "glenoid", "glenosphere"],
+    youtubeId: "qAwu5zkGsDk",
+    channel: "What's New in Orthopedics",
+    surgeon: "Arthrex Univers Apex (animated technique)",
+    affiliation: "Arthrex, Inc.",
+    publishedYear: 2024,
+    description:
+      "Animated walkthrough of the next-generation Univers Apex reverse shoulder system — glenoid prep, baseplate, glenosphere, and humeral stem.",
+    chapters: STANDARD_OPEN_CHAPTERS,
+    paperIds: ["p-rtsa-lateralization"],
+    watchUrl: "https://www.youtube.com/watch?v=qAwu5zkGsDk",
+  },
+  {
+    id: "v-rsa-fxbridge",
+    title: "FxBridge™ Tuberosity Repair · Reverse TSA for Fracture",
+    procedure: "Reverse TSA for Proximal Humerus Fracture",
+    category: "Shoulder",
+    isAnimated: true,
+    tags: ["fxbridge", "fracture", "rsa", "rtsa", "tuberosity", "reverse", "humerus"],
+    youtubeId: "2KLS_GRfOxE",
+    channel: "What's New in Orthopedics",
+    surgeon: "Arthrex FxBridge (animated technique)",
+    affiliation: "Arthrex, Inc.",
+    publishedYear: 2024,
+    description:
+      "Tuberosity repair construct during reverse shoulder arthroplasty for 4-part proximal humerus fracture.",
+    chapters: STANDARD_OPEN_CHAPTERS,
+    paperIds: [],
+    watchUrl: "https://www.youtube.com/watch?v=2KLS_GRfOxE",
+  },
+  {
+    id: "v-tsa-univers2",
+    title: "Total Shoulder Replacement — Univers™ II Anatomic",
+    procedure: "Anatomic Total Shoulder Arthroplasty",
+    category: "Shoulder",
+    isAnimated: true,
+    tags: [
+      "anatomic",
+      "tsa",
+      "total shoulder",
+      "univers",
+      "arthroplasty",
+      "humeral head",
+      "glenoid",
+    ],
+    youtubeId: "K1Vf0tHHdPI",
+    channel: "Arthrex",
+    surgeon: "Arthrex Univers II (animated technique)",
+    affiliation: "Arthrex, Inc.",
+    publishedYear: 2017,
+    description:
+      "Anatomic total shoulder arthroplasty using the Univers II system — humeral head osteotomy, glenoid prep, polyethylene placement.",
+    chapters: STANDARD_OPEN_CHAPTERS,
+    paperIds: [],
+    watchUrl: "https://www.youtube.com/watch?v=K1Vf0tHHdPI",
+  },
+  {
+    id: "v-rcr-fibertak",
+    title: "FiberTak® SpeedBridge™ Rotator Cuff Repair",
+    procedure: "Arthroscopic Rotator Cuff Repair",
+    category: "Shoulder",
+    isAnimated: false,
+    tags: [
+      "rotator",
+      "cuff",
+      "rcr",
+      "fibertak",
+      "speedbridge",
+      "knotless",
+      "all suture",
+      "double row",
+    ],
+    youtubeId: "5wi3PLQB4d8",
+    channel: "What's New in Orthopedics",
+    surgeon: "Patrick J. Denard, MD",
+    affiliation: "Southern Oregon Orthopedics",
+    publishedYear: 2022,
+    description:
+      "Knotless transosseous-equivalent rotator cuff repair using all-suture FiberTak anchors and SpeedBridge construct.",
+    chapters: STANDARD_OPEN_CHAPTERS,
+    paperIds: ["p-rcr-singledouble"],
+    watchUrl: "https://www.youtube.com/watch?v=5wi3PLQB4d8",
+  },
+  {
+    id: "v-rcr-allosync",
+    title: "SpeedBridge™ RCR with Knotless SwiveLock® + AlloSync™ Buttons",
+    procedure: "Arthroscopic Rotator Cuff Repair (augmented)",
+    category: "Shoulder",
+    isAnimated: false,
+    tags: ["rotator", "cuff", "rcr", "swivelock", "allosync", "augment", "biologic", "speedbridge"],
+    youtubeId: "lIO-9P_RGxU",
+    channel: "What's New in Orthopedics",
+    surgeon: "Demonstration team (cadaveric)",
+    affiliation: "Arthrex education series",
+    publishedYear: 2024,
+    description:
+      "Rotator cuff repair augmented with biologic AlloSync buttons under a SpeedBridge knotless construct.",
+    chapters: STANDARD_OPEN_CHAPTERS,
+    paperIds: ["p-rcr-singledouble"],
+    watchUrl: "https://www.youtube.com/watch?v=lIO-9P_RGxU",
+  },
+  {
+    id: "v-tenodesis",
+    title: "Subpectoral Biceps Tenodesis with SwiveLock®",
+    procedure: "Subpectoral Biceps Tenodesis",
+    category: "Shoulder",
+    isAnimated: true,
+    tags: ["biceps", "tenodesis", "subpectoral", "swivelock", "long head", "lhbt"],
+    youtubeId: "19EbYgiMJUY",
+    channel: "Mr Alistair Jepson — Orthopaedic Surgeon",
+    surgeon: "Alistair Jepson, MD",
+    affiliation: "UK consultant orthopaedic surgeon",
+    publishedYear: 2020,
+    description:
+      "Surgeon-narrated animation of subpectoral long-head biceps tenodesis using a unicortical SwiveLock anchor.",
+    chapters: STANDARD_OPEN_CHAPTERS,
+    paperIds: ["p-slap-tenodesis"],
+    watchUrl: "https://www.youtube.com/watch?v=19EbYgiMJUY",
+  },
+
+  // ── Knee ─────────────────────────────────────────────────────────────────
+  {
+    id: "v-acl-recon",
+    title: "Arthrex® ACL Reconstruction",
+    procedure: "ACL Reconstruction",
+    category: "Knee",
+    isAnimated: true,
+    tags: ["acl", "anterior cruciate", "reconstruction", "graft", "femoral tunnel", "knee"],
+    youtubeId: "vsZPCJSpdhg",
+    channel: "What's New in Orthopedics",
+    surgeon: "Arthrex (animated technique)",
+    affiliation: "Arthrex, Inc.",
+    publishedYear: 2023,
+    description:
+      "Foundational ACL reconstruction animation — tunnel placement, graft passage, and TightRope fixation.",
+    chapters: STANDARD_OPEN_CHAPTERS,
+    paperIds: [],
+    watchUrl: "https://www.youtube.com/watch?v=vsZPCJSpdhg",
+  },
+  {
+    id: "v-acl-repair",
+    title: "ACL Repair — TightRope® Surgical Technique",
+    procedure: "ACL Primary Repair",
+    category: "Knee",
+    isAnimated: true,
+    tags: ["acl", "repair", "tightrope", "primary", "proximal tear", "knee"],
+    youtubeId: "R_-23ZdG5h4",
+    channel: "What's New in Orthopedics",
+    surgeon: "Arthrex (animated technique)",
+    affiliation: "Arthrex, Inc.",
+    publishedYear: 2022,
+    description:
+      "Primary ACL repair animation using the TightRope construct for proximal-third avulsion tears.",
+    chapters: STANDARD_OPEN_CHAPTERS,
+    paperIds: [],
+    watchUrl: "https://www.youtube.com/watch?v=R_-23ZdG5h4",
+  },
+  {
+    id: "v-acl-bio",
+    title: "BioACL™ Augmentation Technique",
+    procedure: "ACL Reconstruction (BioACL augment)",
+    category: "Knee",
+    isAnimated: true,
+    tags: ["acl", "bioacl", "augment", "biologic", "scaffold", "reconstruction"],
+    youtubeId: "iQxgxKmhclQ",
+    channel: "What's New in Orthopedics",
+    surgeon: "Arthrex (animated technique)",
+    affiliation: "Arthrex, Inc.",
+    publishedYear: 2023,
+    description:
+      "Biologic augmentation of an ACL graft with the BioACL scaffold to support healing and ingrowth.",
+    chapters: STANDARD_OPEN_CHAPTERS,
+    paperIds: [],
+    watchUrl: "https://www.youtube.com/watch?v=iQxgxKmhclQ",
+  },
+  {
+    id: "v-meniscus",
+    title: "FiberStitch™ 1.5 All-Inside Meniscus Repair",
+    procedure: "Meniscus Repair",
+    category: "Knee",
+    isAnimated: true,
+    tags: ["meniscus", "all-inside", "fiberstitch", "tear", "knee", "repair"],
+    youtubeId: "S0WV7U1rV6s",
+    channel: "What's New in Orthopedics",
+    surgeon: "Arthrex (animated technique)",
+    affiliation: "Arthrex, Inc.",
+    publishedYear: 2024,
+    description:
+      "All-inside meniscus repair using FiberStitch 1.5 implants for vertical longitudinal tears.",
+    chapters: STANDARD_OPEN_CHAPTERS,
+    paperIds: [],
+    watchUrl: "https://www.youtube.com/watch?v=S0WV7U1rV6s",
+  },
+  {
+    id: "v-knee-arthroscopy",
+    title: "Diagnostic Knee Arthroscopy",
+    procedure: "Knee Arthroscopy",
+    category: "Knee",
+    isAnimated: true,
+    tags: ["knee", "arthroscopy", "diagnostic", "scope", "portal"],
+    youtubeId: "pguNCtOwzEc",
+    channel: "Nucleus Ortho Education",
+    surgeon: "Nucleus Medical Media (animated)",
+    affiliation: "Nucleus Medical Media",
+    publishedYear: 2010,
+    description:
+      "Foundational knee arthroscopy walkthrough — portal placement, diagnostic compartment-by-compartment exam.",
+    chapters: STANDARD_OPEN_CHAPTERS,
+    paperIds: [],
+    watchUrl: "https://www.youtube.com/watch?v=pguNCtOwzEc",
+  },
+  {
+    id: "v-tka",
+    title: "LEGION® Total Knee Arthroplasty — Full Animation",
+    procedure: "Total Knee Arthroplasty",
+    category: "Knee",
+    isAnimated: true,
+    tags: ["tka", "total knee", "arthroplasty", "legion", "knee replacement"],
+    youtubeId: "PQhC14mHm4s",
+    channel: "Smith Nephew Content",
+    surgeon: "Smith+Nephew (animated technique)",
+    affiliation: "Smith+Nephew",
+    publishedYear: 2020,
+    description:
+      "Full-case animation of LEGION primary total knee replacement — femoral cuts, tibial prep, trial reduction, cementing.",
+    chapters: STANDARD_OPEN_CHAPTERS,
+    paperIds: [],
+    watchUrl: "https://www.youtube.com/watch?v=PQhC14mHm4s",
+  },
+
+  // ── Hip ──────────────────────────────────────────────────────────────────
+  {
+    id: "v-hip-suturetak",
+    title: "Hip Labral Repair · Knotless Hip SutureTak® Anchors",
+    procedure: "Hip Arthroscopy / Labral Repair",
+    category: "Hip",
+    isAnimated: true,
+    tags: ["hip", "labral", "labrum", "arthroscopy", "suturetak", "fai", "knotless"],
+    youtubeId: "FaoTjt-T3pE",
+    channel: "Arthrex",
+    surgeon: "Arthrex (animated technique)",
+    affiliation: "Arthrex, Inc.",
+    publishedYear: 2023,
+    description:
+      "Hip arthroscopy labral repair using knotless SutureTak anchors for FAI-related labral tears.",
+    chapters: STANDARD_OPEN_CHAPTERS,
+    paperIds: [],
+    watchUrl: "https://www.youtube.com/watch?v=FaoTjt-T3pE",
+  },
+  {
+    id: "v-hip-fibertak",
+    title: "Hip Labral Repair · 1.8 Knotless FiberTak® + Labral Base Stitch",
+    procedure: "Hip Arthroscopy / Labral Base Repair",
+    category: "Hip",
+    isAnimated: true,
+    tags: ["hip", "labral", "labrum", "fibertak", "labral base", "arthroscopy"],
+    youtubeId: "WmjHtjOdQ5k",
+    channel: "What's New in Orthopedics",
+    surgeon: "Arthrex (animated technique)",
+    affiliation: "Arthrex, Inc.",
+    publishedYear: 2024,
+    description:
+      "Labral base-stitch hip repair preserving the chondrolabral junction with 1.8 mm FiberTak anchors.",
+    chapters: STANDARD_OPEN_CHAPTERS,
+    paperIds: [],
+    watchUrl: "https://www.youtube.com/watch?v=WmjHtjOdQ5k",
+  },
+
+  // ── Hand / Wrist ─────────────────────────────────────────────────────────
+  {
+    id: "v-carpal",
+    title: "Endoscopic Carpal Tunnel Release · NanoScopic™",
+    procedure: "Carpal Tunnel Release",
+    category: "Hand/Wrist",
+    isAnimated: false,
+    tags: ["carpal tunnel", "median nerve", "endoscopic", "nanoscopic", "release", "wrist"],
+    youtubeId: "2Z-GmkslIhA",
+    channel: "What's New in Orthopedics",
+    surgeon: "Steven S. Shin, MD",
+    affiliation: "Cedars-Sinai Kerlan-Jobe Institute",
+    publishedYear: 2023,
+    description:
+      "Endoscopic carpal tunnel release using the NanoScopic system — minimal-incision transverse carpal ligament release.",
+    chapters: STANDARD_OPEN_CHAPTERS,
+    paperIds: [],
+    watchUrl: "https://www.youtube.com/watch?v=2Z-GmkslIhA",
+  },
+
+  // ── Foot / Ankle ─────────────────────────────────────────────────────────
+  {
+    id: "v-achilles",
+    title: "Midsubstance Achilles Repair · SpeedBridge™",
+    procedure: "Achilles Tendon Repair",
+    category: "Foot/Ankle",
+    isAnimated: true,
+    tags: ["achilles", "tendon", "rupture", "speedbridge", "pars", "ankle"],
+    youtubeId: "J88MTr6DUFc",
+    channel: "What's New in Orthopedics",
+    surgeon: "Arthrex (animated technique)",
+    affiliation: "Arthrex, Inc.",
+    publishedYear: 2024,
+    description:
+      "Midsubstance Achilles tendon repair using the SpeedBridge construct with PARS percutaneous suturing.",
+    chapters: STANDARD_OPEN_CHAPTERS,
+    paperIds: [],
+    watchUrl: "https://www.youtube.com/watch?v=J88MTr6DUFc",
+  },
 ];
 
 /**
@@ -394,6 +741,30 @@ export const PROCEDURE_VIDEOS: ProcedureVideo[] = [
  * the RTSA video (the OR's headline procedure) when no match is found,
  * matching the legacy behavior of HowToVideoModal.
  */
+/**
+ * Apply the same filter rules the Video Library screen uses. Lifted here
+ * so the route's live-context builder can describe what the user sees
+ * without duplicating filter logic in two places.
+ */
+export function filterLibrary(opts: {
+  search?: string;
+  category?: VideoCategory | "All";
+  animatedOnly?: boolean;
+}): ProcedureVideo[] {
+  const q = opts.search?.trim().toLowerCase() ?? "";
+  return PROCEDURE_VIDEOS.filter((v) => {
+    if (opts.category && opts.category !== "All" && v.category !== opts.category) {
+      return false;
+    }
+    if (opts.animatedOnly && !v.isAnimated) return false;
+    if (!q) return true;
+    const haystack = [v.title, v.procedure, v.surgeon, v.channel, ...v.tags]
+      .join(" ")
+      .toLowerCase();
+    return haystack.includes(q);
+  });
+}
+
 export function findLatestVideo(query?: string): ProcedureVideo {
   const fallback = PROCEDURE_VIDEOS.find((v) => v.id === "v-rtsa") ?? PROCEDURE_VIDEOS[0];
   if (!query) return fallback;
