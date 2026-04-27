@@ -71,7 +71,7 @@ const Section = ({
   title,
   children,
 }: {
-  icon: React.ElementType;
+  icon: import("lucide-react").LucideIcon;
   title: string;
   children: React.ReactNode;
 }) => (

@@ -575,10 +575,10 @@ export const HowToVideoModal = forwardRef<HowToVideoHandle, Props>(function HowT
       onClick={onClose}
     >
       <div
-        className="glass relative flex w-full max-w-6xl overflow-hidden rounded-3xl"
+        className="glass relative flex max-h-[calc(100vh-3rem)] w-full max-w-6xl overflow-hidden rounded-3xl"
         onClick={(e) => e.stopPropagation()}
       >
-        <div className="flex min-w-0 flex-1 flex-col">
+        <div data-scroll-modal className="flex min-w-0 flex-1 flex-col overflow-y-auto">
           {/* ── Header ───────────────────────────────────────────── */}
           <div className="flex items-center justify-between border-b border-border px-6 py-4">
             <div className="min-w-0">

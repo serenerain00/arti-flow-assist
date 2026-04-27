@@ -1,6 +1,7 @@
 import {
   BookOpen,
   Calendar,
+  Cpu,
   Home,
   LayoutDashboard,
   Power,
@@ -16,6 +17,7 @@ export type SidebarKey =
   | "schedule"
   | "surgeons"
   | "patients"
+  | "consoles"
   | "library"
   | "preferences";
 
@@ -33,6 +35,7 @@ const ITEMS: Array<{ key: SidebarKey; icon: typeof Home; label: string }> = [
   { key: "schedule", icon: Calendar, label: "Schedule" },
   { key: "surgeons", icon: Stethoscope, label: "Surgeons" },
   { key: "patients", icon: Users, label: "Patients" },
+  { key: "consoles", icon: Cpu, label: "Consoles" },
   { key: "library", icon: BookOpen, label: "Library" },
   { key: "preferences", icon: Settings, label: "Preferences" },
 ];

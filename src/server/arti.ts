@@ -76,6 +76,37 @@ const TOOLS: Anthropic.Tool[] = [
     input_schema: { type: "object" as const, properties: {}, required: [] },
   },
   {
+    name: "navigate_consoles",
+    description:
+      "Open the OR equipment-tower status screen — a stylized 3D view of the integrated arthroscopy stack (light source, 4K camera console, image management, fluid pump, shaver, RF console) with live connection status and per-device telemetry (pressure, flow, RPM, intensity, etc). Use for: 'show me the OR consoles', 'show the equipment tower', 'console status', 'tower status', 'show me the equipment', 'pull up the consoles', 'are the consoles ready', 'check the tower'. After this nav opens, the user can voice-focus an individual console with focus_console.",
+    input_schema: { type: "object" as const, properties: {}, required: [] },
+  },
+  {
+    name: "focus_console",
+    description:
+      "Highlight one specific console on the OR tower (rotates the 3D view toward it and opens its detail panel with telemetry + attachments). " +
+      "Use for: 'show me the camera console', 'show me the 4K camera', 'show the Nano camera' (→ camera), 'show the fluid pump' / 'is the pump connected' / 'pump status' (→ pump), 'shaver console' / 'show the shaver' / 'show the burr' (→ shaver), 'RF console' / 'show me the radiofrequency' / 'show the wand' (→ rf), 'light source' / 'show me the light' (→ light), 'show me the image manager' / 'recorder' / 'Synergy ID' (→ image). " +
+      "If the user says 'is X connected' or asks about a console's status, ALSO answer the question in spoken text (one short sentence) — read the live context's 'OR tower consoles' block to find the actual status and telemetry. Example: 'Fluid pump is active — 60 mmHg, 200 mL/min.'",
+    input_schema: {
+      type: "object" as const,
+      properties: {
+        id: {
+          type: "string",
+          enum: ["camera", "pump", "shaver", "rf", "light", "image"],
+          description:
+            "Canonical console id. Map free-text references using these synonyms: " +
+            "camera = camera console, 4K, Nano, CCU, scope, endoscope, Synergy 4K. " +
+            "pump = fluid pump, fluid management, irrigation pump, arthroscopy pump, DualWave. " +
+            "shaver = shaver console, burr, blade, APS, power instrument. " +
+            "rf = RF console, radiofrequency, ablation, coag, wand, Quantum. " +
+            "light = light source, LED, lamp, illuminator. " +
+            "image = image management, Synergy ID, recorder, captures.",
+        },
+      },
+      required: ["id"],
+    },
+  },
+  {
     name: "show_schedule_day",
     description:
       "Open a specific day's detail on the Schedule. Use whenever the user mentions a date — e.g. 'show me May 20th', 'what's on April 27', 'pull up next Tuesday'. Convert the spoken date to ISO format YYYY-MM-DD using 'Today is …' from context as the reference year; pick the closest future or past occurrence if ambiguous.",
@@ -457,8 +488,28 @@ const TOOLS: Anthropic.Tool[] = [
   },
   {
     name: "show_preference_card_layout_images",
-    description: "Open the full-screen image lightbox showing surgical table layout photos.",
-    input_schema: { type: "object" as const, properties: {}, required: [] },
+    description:
+      "Open the full-screen lightbox showing the surgeon's preference-card photos for a case. " +
+      "Use for: 'show me the preference card images', 'pull up the prep card photos', 'show preference card for the next case', 'show me the pref card for Marcus Chen', 'show me the preference card for reverse shoulder', 'bring up the preference card images for this procedure'. " +
+      "WORKS FROM ANY SCREEN — home, cases, schedule, preop. If `case_query` or `procedure` resolves to a specific case, the wall auto-navigates to that case's preop screen first so the patient/team load correctly. With no args, uses the active case. " +
+      "PRONOUN RESOLUTION: 'this procedure' / 'this case' → use the active case's procedure from live context. 'next case' → resolves to the case with status='next' on TODAY_CASES. " +
+      "NARRATION REQUIRED: When you call this tool, in the SAME turn ALSO return ONE short sentence text quoting the patient name and procedure. Examples: 'Preference card for Marcus Chen, reverse total shoulder.' or 'Pulling up the pref card for the next case, Bankart repair.'",
+    input_schema: {
+      type: "object" as const,
+      properties: {
+        case_query: {
+          type: "string",
+          description:
+            "Patient name, procedure short-code (RCR/RSA/SLAP/BNK/SAD), or 'next' to resolve a specific case. Optional — defaults to the active case.",
+        },
+        procedure: {
+          type: "string",
+          description:
+            "Procedure name to match (e.g. 'reverse shoulder', 'rotator cuff', 'Bankart'). Optional alternative to case_query.",
+        },
+      },
+      required: [],
+    },
   },
   {
     name: "switch_role",
@@ -659,6 +710,10 @@ export const processVoiceCommand = createServerFn({ method: "POST" })
       "navigate_schedule",
       "navigate_surgeons",
       "navigate_patients",
+      "navigate_consoles",
+      // focus_console is intentionally NOT silent — when the user asks
+      // "is the pump connected?" Arti reads the live tower status block
+      // and speaks a one-sentence telemetry answer in the same turn.
       "show_schedule_day",
       "close_schedule_day",
       // Modals & overlays
@@ -674,8 +729,10 @@ export const processVoiceCommand = createServerFn({ method: "POST" })
       "lightbox_zoom_out",
       "close_lightbox",
       "show_preference_card",
-      "show_preference_card_layout_images",
       "open_table_layout_images",
+      // show_preference_card_layout_images is intentionally NOT silent — Arti
+      // narrates the resolved patient name + procedure so the OR team hears
+      // which case's pref card just came up without looking at the screen.
       // Media — open_how_to_video and open_research_papers are intentionally
       // NOT silent. The agent narrates the matched video/paper title, author,
       // and year in the same turn so the OR team knows what was loaded

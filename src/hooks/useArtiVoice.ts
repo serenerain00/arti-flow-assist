@@ -23,6 +23,10 @@ export interface ArtiVoiceCallbacks {
   onShowSurgeons?: () => void;
   /** Navigate to today's Patients screen. */
   onShowPatients?: () => void;
+  /** Navigate to the OR equipment-tower Consoles screen. */
+  onShowConsoles?: () => void;
+  /** Focus one console on the tower (camera/pump/shaver/rf/light/image). */
+  onFocusConsole?: (id: string) => void;
   /** Open the day detail on the Schedule. `date` is an ISO key YYYY-MM-DD. */
   onShowScheduleDay?: (date: string) => void;
   /** Close the Schedule day-detail drawer without leaving the Schedule screen. */
@@ -70,7 +74,13 @@ export interface ArtiVoiceCallbacks {
   onVideoClosePaper?: () => ArtiToolResult;
   onCloseHowToVideo?: () => ArtiToolResult;
   onShowPreferenceCard?: () => ArtiToolResult;
-  onShowPreferenceCardLayoutImages?: () => ArtiToolResult;
+  /**
+   * Open the surgeon preference-card images lightbox. Optional args resolve a
+   * specific case (by patient name / 'next' / procedure short-code) when the
+   * user asks "show pref card images for the next case" from any screen.
+   * Auto-navigates to that case's preop and opens the lightbox.
+   */
+  onShowPreferenceCardLayoutImages?: (caseQuery?: string, procedure?: string) => ArtiToolResult;
   onSwitchRole?: (role: ActiveRole) => ArtiToolResult;
   onOpenPatientDetails?: () => ArtiToolResult;
   onClosePatientDetails?: () => ArtiToolResult;
@@ -141,6 +151,12 @@ function executeToolCall(call: ArtiToolCall, cb: ArtiVoiceCallbacks): void {
       break;
     case "navigate_patients":
       cb.onShowPatients?.();
+      break;
+    case "navigate_consoles":
+      cb.onShowConsoles?.();
+      break;
+    case "focus_console":
+      cb.onFocusConsole?.(String(inp.id ?? ""));
       break;
     case "show_schedule_day":
       cb.onShowScheduleDay?.(String(inp.date ?? ""));
@@ -251,7 +267,10 @@ function executeToolCall(call: ArtiToolCall, cb: ArtiVoiceCallbacks): void {
       cb.onShowPreferenceCard?.();
       break;
     case "show_preference_card_layout_images":
-      cb.onShowPreferenceCardLayoutImages?.();
+      cb.onShowPreferenceCardLayoutImages?.(
+        inp.case_query != null ? String(inp.case_query) : undefined,
+        inp.procedure != null ? String(inp.procedure) : undefined,
+      );
       break;
     case "switch_role":
       cb.onSwitchRole?.(inp.role as ActiveRole);
@@ -353,22 +372,25 @@ export function useArtiVoice(callbacks: ArtiVoiceCallbacks) {
     restartRecognition();
   }, [restartRecognition]);
 
-  const speak = useCallback(
-    async (text: string) => {
+  // Plays pre-fetched MP3 base64 audio. Split out from speak() so the TTS
+  // network call can be kicked off in parallel with tool execution — by the
+  // time tools finish their state updates, the MP3 bytes are usually ready.
+  const playAudio = useCallback(
+    async (audioBase64: string) => {
       isSpeakingRef.current = true;
       setIsSpeaking(true);
-      // Stop the recognizer before TTS so restartRecognition() after playback
-      // sees it in a known-stopped state. Without this, continuous recognition
-      // keeps running through TTS and rec.start() below throws "already started",
-      // which the catch used to treat as fatal — orphaning the live rec and
-      // leaving the mic unrecoverable after the first response.
+      // Stop the recognizer before audio plays so restartRecognition() after
+      // playback sees it in a known-stopped state. Without this, continuous
+      // recognition keeps running through TTS and rec.start() below throws
+      // "already started", which the catch used to treat as fatal —
+      // orphaning the live rec and leaving the mic unrecoverable after the
+      // first response.
       try {
         recognitionRef.current?.abort();
       } catch {
         /* ignore */
       }
       try {
-        const { audioBase64 } = await speakText({ data: { text } });
         await new Promise<void>((resolve, reject) => {
           speakResolveRef.current = resolve;
           const audio = new Audio(`data:audio/mp3;base64,${audioBase64}`);
@@ -381,10 +403,13 @@ export function useArtiVoice(callbacks: ArtiVoiceCallbacks) {
           };
           audio.onended = () => {
             cleanup();
+            // 250 ms cooldown is enough to clear speaker reverb at typical
+            // OR-display volume; the previous 500 ms felt sluggish in
+            // back-to-back turns.
             postSpeechCooldownRef.current = true;
             setTimeout(() => {
               postSpeechCooldownRef.current = false;
-            }, 500);
+            }, 250);
             restartRecognition();
             resolve();
           };
@@ -400,13 +425,30 @@ export function useArtiVoice(callbacks: ArtiVoiceCallbacks) {
         setIsSpeaking(false);
         activeAudioRef.current = null;
         speakResolveRef.current = null;
-        // We aborted the rec before TTS — if TTS fails, restart it so the
-        // mic doesn't stay dead on the next utterance.
+        restartRecognition();
+        console.error("[arti-voice] Audio error", err);
+      }
+    },
+    [restartRecognition],
+  );
+
+  const speak = useCallback(
+    async (text: string) => {
+      try {
+        const { audioBase64 } = await speakText({ data: { text } });
+        await playAudio(audioBase64);
+      } catch (err) {
+        isSpeakingRef.current = false;
+        setIsSpeaking(false);
+        activeAudioRef.current = null;
+        speakResolveRef.current = null;
+        // TTS request failed — make sure the mic is restored so the next
+        // utterance still gets through.
         restartRecognition();
         console.error("[arti-voice] TTS error", err);
       }
     },
-    [restartRecognition],
+    [playAudio, restartRecognition],
   );
 
   // voiceInput=true  → must contain wake word OR be within the 10s follow-up window.
@@ -459,6 +501,13 @@ export function useArtiVoice(callbacks: ArtiVoiceCallbacks) {
           response = "I don't have that.";
         }
 
+        // Kick off the TTS request in parallel with tool execution. The
+        // ElevenLabs roundtrip is ~300–500 ms; tool execution is ~5–50 ms of
+        // synchronous React state updates. Overlapping them shaves the tool
+        // execution time off perceived latency, and means audio starts the
+        // moment tools finish instead of after a serial network call.
+        const ttsPromise = response ? speakText({ data: { text: response } }) : null;
+
         for (const call of toolCalls) {
           console.log("[arti-voice] executing tool:", call.name);
           executeToolCall(call, cbRef.current);
@@ -471,7 +520,13 @@ export function useArtiVoice(callbacks: ArtiVoiceCallbacks) {
             { role: "user" as const, content: transcript },
             { role: "assistant" as const, content: response },
           ].slice(-8);
-          await speak(response);
+          try {
+            const { audioBase64 } = await ttsPromise!;
+            await playAudio(audioBase64);
+          } catch (err) {
+            console.error("[arti-voice] TTS error", err);
+            restartRecognition();
+          }
         }
 
         const isSleep = toolCalls.some((t) => t.name === "sleep");
@@ -497,7 +552,7 @@ export function useArtiVoice(callbacks: ArtiVoiceCallbacks) {
         processingRef.current = false;
       }
     },
-    [speak],
+    [playAudio, restartRecognition],
   );
 
   const startListening = useCallback(() => {
@@ -531,7 +586,12 @@ export function useArtiVoice(callbacks: ArtiVoiceCallbacks) {
       }
       if (finalBuffer.trim()) {
         if (flushTimer) clearTimeout(flushTimer);
-        flushTimer = setTimeout(flushBuffer, 250);
+        // 120 ms is short enough that simple commands ("play", "pause") feel
+        // instant, but long enough to still combine Chrome's occasional
+        // multi-segment final result splits within ~100 ms. Longer pauses
+        // (where the user actually paused mid-phrase) flush separately —
+        // which is what we want.
+        flushTimer = setTimeout(flushBuffer, 120);
       }
     };
 

@@ -37,7 +37,7 @@ function PanelLabel({
   children,
   color = "text-warning",
 }: {
-  icon: React.ElementType;
+  icon: import("lucide-react").LucideIcon;
   children: React.ReactNode;
   color?: string;
 }) {

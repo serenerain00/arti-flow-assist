@@ -7,7 +7,7 @@ export type { ActiveRole };
 interface RoleDef {
   id: ActiveRole;
   label: string;
-  icon: React.ElementType;
+  icon: import("lucide-react").LucideIcon;
   activeClass: string;
   indicatorClass: string;
 }

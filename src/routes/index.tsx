@@ -8,9 +8,23 @@ import { AwakeDashboard } from "@/components/arti/AwakeDashboard";
 import { ScheduleScreen } from "@/components/arti/ScheduleScreen";
 import { SurgeonsScreen } from "@/components/arti/SurgeonsScreen";
 import { PatientsScreen } from "@/components/arti/PatientsScreen";
+import { ConsolesScreen } from "@/components/arti/ConsolesScreen";
+import {
+  CONSOLES,
+  findConsole,
+  summarizeConsoles,
+  type ConsoleId,
+} from "@/components/arti/consoles";
 import { ReminderToast, type FiredReminder } from "@/components/arti/ReminderToast";
 import { PersonScheduleModal } from "@/components/arti/PersonScheduleModal";
 import { HowToVideoModal, type HowToVideoHandle } from "@/components/arti/HowToVideoModal";
+import {
+  ImageLightboxModal,
+  type LightboxHandle,
+  type LightboxImage,
+} from "@/components/arti/ImageLightboxModal";
+import { PREF_CARD_IMAGES } from "@/components/arti/PreferenceCard";
+import { SCRUB_LIGHTBOX_IMAGES } from "@/components/arti/ScrubTechPanel";
 import type { PersonRole, PersonScheduleView } from "@/components/arti/schedule";
 import { TODAY_CASES, PATIENT_CLINICAL, type CaseItem } from "@/components/arti/cases";
 import {
@@ -60,18 +74,11 @@ export interface DashboardActions {
   focusQuadPanel: (panel: QuadPanelId) => ArtiToolResult;
   closeQuadView: () => ArtiToolResult;
   showPreferenceCard: () => ArtiToolResult;
-  showPreferenceCardLayoutImages: () => ArtiToolResult;
   switchRole: (role: ActiveRole) => ArtiToolResult;
   openPatientDetails: () => ArtiToolResult;
   closePatientDetails: () => ArtiToolResult;
   toggleOpeningChecklistItem: (index: number) => ArtiToolResult;
   toggleMachineCheckItem: (index: number) => ArtiToolResult;
-  openTableLayoutImages: () => ArtiToolResult;
-  lightboxNext: () => ArtiToolResult;
-  lightboxPrev: () => ArtiToolResult;
-  lightboxZoomIn: () => ArtiToolResult;
-  lightboxZoomOut: () => ArtiToolResult;
-  closeLightbox: () => ArtiToolResult;
 }
 
 export type DashboardActionsRef = React.MutableRefObject<DashboardActions | null>;
@@ -95,6 +102,8 @@ function ArtiWallRoot() {
       | "onShowSchedule"
       | "onShowSurgeons"
       | "onShowPatients"
+      | "onShowConsoles"
+      | "onFocusConsole"
       | "onShowScheduleDay"
       | "onCloseScheduleDay"
       | "onSetReminder"
@@ -120,6 +129,13 @@ function ArtiWallRoot() {
       | "onVideoOpenPaper"
       | "onVideoClosePaper"
       | "onCloseHowToVideo"
+      | "onShowPreferenceCardLayoutImages"
+      | "onOpenTableLayoutImages"
+      | "onLightboxNext"
+      | "onLightboxPrev"
+      | "onLightboxZoomIn"
+      | "onLightboxZoomOut"
+      | "onCloseLightbox"
     >
   >({
     onWake: () => {},
@@ -130,6 +146,8 @@ function ArtiWallRoot() {
     onShowSchedule: () => {},
     onShowSurgeons: () => {},
     onShowPatients: () => {},
+    onShowConsoles: () => {},
+    onFocusConsole: () => {},
     onShowScheduleDay: () => {},
     onCloseScheduleDay: () => {},
     onSetReminder: () => {},
@@ -155,6 +173,13 @@ function ArtiWallRoot() {
     onVideoOpenPaper: () => notAvailable(),
     onVideoClosePaper: () => notAvailable(),
     onCloseHowToVideo: () => notAvailable(),
+    onShowPreferenceCardLayoutImages: () => notAvailable(),
+    onOpenTableLayoutImages: () => notAvailable(),
+    onLightboxNext: () => notAvailable(),
+    onLightboxPrev: () => notAvailable(),
+    onLightboxZoomIn: () => notAvailable(),
+    onLightboxZoomOut: () => notAvailable(),
+    onCloseLightbox: () => notAvailable(),
   });
 
   // Dashboard-only tool bridge. `null` when no dashboard is mounted.
@@ -196,6 +221,8 @@ function ArtiWallRoot() {
       onShowSchedule: () => navCallbacksRef.current.onShowSchedule?.(),
       onShowSurgeons: () => navCallbacksRef.current.onShowSurgeons?.(),
       onShowPatients: () => navCallbacksRef.current.onShowPatients?.(),
+      onShowConsoles: () => navCallbacksRef.current.onShowConsoles?.(),
+      onFocusConsole: (id) => navCallbacksRef.current.onFocusConsole?.(id),
       onShowScheduleDay: (date) => navCallbacksRef.current.onShowScheduleDay?.(date),
       onCloseScheduleDay: () => navCallbacksRef.current.onCloseScheduleDay?.(),
       onSetReminder: (text, minutes) => navCallbacksRef.current.onSetReminder?.(text, minutes),
@@ -237,8 +264,6 @@ function ArtiWallRoot() {
       onCloseHowToVideo: () => navCallbacksRef.current.onCloseHowToVideo?.() ?? notAvailable(),
       onShowPreferenceCard: () =>
         dashboardActionsRef.current?.showPreferenceCard() ?? notAvailable(),
-      onShowPreferenceCardLayoutImages: () =>
-        dashboardActionsRef.current?.showPreferenceCardLayoutImages() ?? notAvailable(),
       onSwitchRole: (role) => dashboardActionsRef.current?.switchRole(role) ?? notAvailable(),
       onOpenPatientDetails: () =>
         dashboardActionsRef.current?.openPatientDetails() ?? notAvailable(),
@@ -248,13 +273,16 @@ function ArtiWallRoot() {
         dashboardActionsRef.current?.toggleOpeningChecklistItem(index) ?? notAvailable(),
       onToggleMachineCheckItem: (index) =>
         dashboardActionsRef.current?.toggleMachineCheckItem(index) ?? notAvailable(),
+      onShowPreferenceCardLayoutImages: (caseQuery, procedure) =>
+        navCallbacksRef.current.onShowPreferenceCardLayoutImages?.(caseQuery, procedure) ??
+        notAvailable(),
       onOpenTableLayoutImages: () =>
-        dashboardActionsRef.current?.openTableLayoutImages() ?? notAvailable(),
-      onLightboxNext: () => dashboardActionsRef.current?.lightboxNext() ?? notAvailable(),
-      onLightboxPrev: () => dashboardActionsRef.current?.lightboxPrev() ?? notAvailable(),
-      onLightboxZoomIn: () => dashboardActionsRef.current?.lightboxZoomIn() ?? notAvailable(),
-      onLightboxZoomOut: () => dashboardActionsRef.current?.lightboxZoomOut() ?? notAvailable(),
-      onCloseLightbox: () => dashboardActionsRef.current?.closeLightbox() ?? notAvailable(),
+        navCallbacksRef.current.onOpenTableLayoutImages?.() ?? notAvailable(),
+      onLightboxNext: () => navCallbacksRef.current.onLightboxNext?.() ?? notAvailable(),
+      onLightboxPrev: () => navCallbacksRef.current.onLightboxPrev?.() ?? notAvailable(),
+      onLightboxZoomIn: () => navCallbacksRef.current.onLightboxZoomIn?.() ?? notAvailable(),
+      onLightboxZoomOut: () => navCallbacksRef.current.onLightboxZoomOut?.() ?? notAvailable(),
+      onCloseLightbox: () => navCallbacksRef.current.onCloseLightbox?.() ?? notAvailable(),
       onScroll: (direction, speed, continuous) =>
         scrollActionsRef.current.onScroll(direction, speed, continuous),
       onStopScroll: () => scrollActionsRef.current.onStopScroll(),
@@ -305,7 +333,8 @@ type ArtiPhase =
   | "preop"
   | "schedule"
   | "surgeons"
-  | "patients";
+  | "patients"
+  | "consoles";
 
 interface ArtiWallProps {
   navCallbacksRef: React.MutableRefObject<
@@ -319,6 +348,8 @@ interface ArtiWallProps {
       | "onShowSchedule"
       | "onShowSurgeons"
       | "onShowPatients"
+      | "onShowConsoles"
+      | "onFocusConsole"
       | "onShowScheduleDay"
       | "onCloseScheduleDay"
       | "onSetReminder"
@@ -344,6 +375,13 @@ interface ArtiWallProps {
       | "onVideoOpenPaper"
       | "onVideoClosePaper"
       | "onCloseHowToVideo"
+      | "onShowPreferenceCardLayoutImages"
+      | "onOpenTableLayoutImages"
+      | "onLightboxNext"
+      | "onLightboxPrev"
+      | "onLightboxZoomIn"
+      | "onLightboxZoomOut"
+      | "onCloseLightbox"
     >
   >;
   dashboardActionsRef: DashboardActionsRef;
@@ -460,6 +498,11 @@ function ArtiWall({
   );
   const [scheduleSurgeonFilter, setScheduleSurgeonFilter] = useState<string | "all">("all");
 
+  // Focused console on the OR-tower screen. Driven by voice (focus_console)
+  // OR by a tap on the 3D tower / detail panel. Null = no explicit focus
+  // (the screen falls back to whichever console is currently 'active').
+  const [focusedConsoleId, setFocusedConsoleId] = useState<ConsoleId | null>(null);
+
   // Person Schedule modal — overlay that shows one person's cases.
   interface PersonScheduleState {
     open: boolean;
@@ -485,6 +528,23 @@ function ArtiWall({
     undefined,
   );
   const videoModalRef = useRef<HowToVideoHandle>(null);
+
+  // ── Image lightbox (preference card / table layout / case-specific) ─────
+  // Lifted to the route so voice tools work from any screen — surgeons can
+  // ask for preference-card images on the next case from home / cases /
+  // schedule, not just preop.
+  const [lightboxOpen, setLightboxOpen] = useState(false);
+  const [lightboxImages, setLightboxImages] = useState<LightboxImage[]>([]);
+  const [lightboxIndex, setLightboxIndex] = useState(0);
+  const [lightboxTitle, setLightboxTitle] = useState<string>("Surgical Setup");
+  const lightboxRef = useRef<LightboxHandle>(null);
+
+  const openLightbox = useCallback((images: LightboxImage[], index = 0, title?: string) => {
+    setLightboxImages(images);
+    setLightboxIndex(index);
+    if (title) setLightboxTitle(title);
+    setLightboxOpen(true);
+  }, []);
 
   // ── Reminders ────────────────────────────────────────────────────────────
   // Pending reminders are scheduled one-shot via setTimeout. When a reminder
@@ -578,6 +638,7 @@ function ArtiWall({
     schedule: "schedule / calendar",
     surgeons: "surgeons directory",
     patients: "patients today",
+    consoles: "OR equipment tower / consoles",
   };
 
   // Keep contextRef current so Claude always gets a fresh state snapshot.
@@ -667,6 +728,16 @@ function ArtiWall({
           `  Voice tools: video_play, video_pause, video_seek, video_next_chapter, video_prev_chapter, video_restart, video_set_speed, video_show_papers, video_hide_papers, video_open_paper, video_close_paper, close_how_to_video`,
         ].join("\n");
       })(),
+      lightboxOpen
+        ? `Image lightbox: OPEN — "${lightboxTitle}" (${lightboxIndex + 1} of ${lightboxImages.length}). "next image" / "previous image" / "zoom in" / "zoom out" / "close" are valid commands.`
+        : `Image lightbox: closed`,
+      // OR equipment tower status — always included so Arti can answer
+      // "is the fluid pump connected?" / "what's the camera console doing?"
+      // from any screen, not just when on the consoles view.
+      summarizeConsoles(focusedConsoleId),
+      phase === "consoles" && focusedConsoleId
+        ? `Focused console on tower: ${focusedConsoleId}. Telemetry detail panel is showing.`
+        : "",
     ];
 
     // Schedule filter state — always included so Arti knows the current
@@ -753,7 +824,17 @@ function ArtiWall({
 
   // Shared sidebar click handler — used by every screen that renders <Sidebar>.
   const handleSidebarNavigate = useCallback(
-    (key: "home" | "case" | "schedule" | "surgeons" | "patients" | "library" | "preferences") => {
+    (
+      key:
+        | "home"
+        | "case"
+        | "schedule"
+        | "surgeons"
+        | "patients"
+        | "consoles"
+        | "library"
+        | "preferences",
+    ) => {
       armIdleTimer();
       switch (key) {
         case "home":
@@ -771,6 +852,9 @@ function ArtiWall({
           break;
         case "patients":
           setPhase("patients");
+          break;
+        case "consoles":
+          setPhase("consoles");
           break;
         case "library":
         case "preferences":
@@ -984,6 +1068,62 @@ function ArtiWall({
     return { ok: true };
   };
 
+  // ── Image lightbox handlers ──────────────────────────────────────────────
+  const handleShowPreferenceCardLayoutImages = (
+    caseQuery?: string,
+    procedure?: string,
+  ): ArtiToolResult => {
+    // Resolve which case the user means: explicit query → next case → active.
+    const query = (caseQuery ?? procedure ?? "").trim();
+    const match = query ? findCase(query) : undefined;
+    if (match) {
+      setActiveCase(match);
+      setPhase("preop");
+    } else if (phase !== "preop") {
+      // No specific case asked for and we're not on preop — load the active
+      // case's preop screen so the wall reflects the case being shown.
+      setPhase("preop");
+    }
+    openLightbox(PREF_CARD_IMAGES, 0, "Preference card");
+    return { ok: true };
+  };
+
+  const handleOpenTableLayoutImages = (): ArtiToolResult => {
+    openLightbox(SCRUB_LIGHTBOX_IMAGES, 0, "Table layout");
+    return { ok: true };
+  };
+
+  const requireLightboxOpen = (): ArtiToolResult | null =>
+    lightboxOpen ? null : { ok: false, reason: "lightbox not open" };
+  const handleLightboxNext = (): ArtiToolResult => {
+    const guard = requireLightboxOpen();
+    if (guard) return guard;
+    lightboxRef.current?.scrollNext();
+    return { ok: true };
+  };
+  const handleLightboxPrev = (): ArtiToolResult => {
+    const guard = requireLightboxOpen();
+    if (guard) return guard;
+    lightboxRef.current?.scrollPrev();
+    return { ok: true };
+  };
+  const handleLightboxZoomIn = (): ArtiToolResult => {
+    const guard = requireLightboxOpen();
+    if (guard) return guard;
+    lightboxRef.current?.zoomIn();
+    return { ok: true };
+  };
+  const handleLightboxZoomOut = (): ArtiToolResult => {
+    const guard = requireLightboxOpen();
+    if (guard) return guard;
+    lightboxRef.current?.zoomOut();
+    return { ok: true };
+  };
+  const handleCloseLightbox = (): ArtiToolResult => {
+    setLightboxOpen(false);
+    return { ok: true };
+  };
+
   /**
    * Voice nav callbacks. Dashboard-only tools are registered in the bridge
    * by AwakeDashboard itself — those don't need to live here.
@@ -1013,6 +1153,22 @@ function ArtiWall({
     },
     onShowSurgeons: () => setPhase("surgeons"),
     onShowPatients: () => setPhase("patients"),
+    onShowConsoles: () => {
+      // Clear any prior focus when entering the screen so it picks up the
+      // current ACTIVE device by default (matches ConsolesScreen behavior).
+      setFocusedConsoleId(null);
+      setPhase("consoles");
+    },
+    onFocusConsole: (id: string) => {
+      // Voice may pass the canonical id directly (e.g. "pump") or a free-text
+      // synonym; resolve via findConsole. If it's already on the consoles
+      // screen we don't change phase; otherwise we navigate there too.
+      const direct = (CONSOLES.find((c) => c.id === id)?.id ?? null) as ConsoleId | null;
+      const match = direct ?? findConsole(id)?.id ?? null;
+      if (!match) return;
+      setFocusedConsoleId(match);
+      setPhase("consoles");
+    },
     onShowScheduleDay: (date: string) => {
       if (!date) return;
       setSelectedScheduleDate(date);
@@ -1045,6 +1201,13 @@ function ArtiWall({
     onVideoOpenPaper: handleVideoOpenPaper,
     onVideoClosePaper: handleVideoClosePaper,
     onCloseHowToVideo: handleCloseHowToVideo,
+    onShowPreferenceCardLayoutImages: handleShowPreferenceCardLayoutImages,
+    onOpenTableLayoutImages: handleOpenTableLayoutImages,
+    onLightboxNext: handleLightboxNext,
+    onLightboxPrev: handleLightboxPrev,
+    onLightboxZoomIn: handleLightboxZoomIn,
+    onLightboxZoomOut: handleLightboxZoomOut,
+    onCloseLightbox: handleCloseLightbox,
   };
 
   /**
@@ -1078,6 +1241,7 @@ function ArtiWall({
         actionsRef={dashboardActionsRef}
         dashboardContextRef={dashboardContextRef}
         onSidebarNavigate={handleSidebarNavigate}
+        onOpenLightbox={openLightbox}
       />
     );
   } else if (phase === "cases") {
@@ -1102,6 +1266,19 @@ function ArtiWall({
         onSleep={handleSleep}
         onPrompt={handlePrompt}
         onSidebarNavigate={handleSidebarNavigate}
+      />
+    );
+  } else if (phase === "consoles") {
+    screen = (
+      <ConsolesScreen
+        staffName={staff.name}
+        staffRole={staff.role}
+        initials={staff.initials}
+        onSleep={handleSleep}
+        onPrompt={handlePrompt}
+        onSidebarNavigate={handleSidebarNavigate}
+        focusedId={focusedConsoleId}
+        onFocusChange={setFocusedConsoleId}
       />
     );
   } else if (phase === "surgeons") {
@@ -1195,6 +1372,14 @@ function ArtiWall({
         procedure={howToProcedure}
         initialPapersOpen={howToInitialPapersOpen}
         initialPaperQuery={howToInitialPaperQuery}
+      />
+      <ImageLightboxModal
+        ref={lightboxRef}
+        open={lightboxOpen}
+        onClose={() => setLightboxOpen(false)}
+        images={lightboxImages}
+        initialIndex={lightboxIndex}
+        title={lightboxTitle}
       />
     </div>
   );

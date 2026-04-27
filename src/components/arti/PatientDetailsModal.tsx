@@ -29,7 +29,13 @@ const SeverityBadge = ({ severity }: { severity: string }) => {
   );
 };
 
-const SectionTitle = ({ icon: Icon, title }: { icon: React.ElementType; title: string }) => (
+const SectionTitle = ({
+  icon: Icon,
+  title,
+}: {
+  icon: import("lucide-react").LucideIcon;
+  title: string;
+}) => (
   <div className="mb-2 flex items-center gap-2 text-xs font-semibold uppercase tracking-wider text-primary">
     <Icon className="h-3.5 w-3.5" />
     {title}

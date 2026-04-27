@@ -7,10 +7,10 @@ import { InstrumentCount } from "./InstrumentCount";
 import { TeamRoster } from "./TeamRoster";
 import { AlertStack, ALERTS as ALERT_DEFS } from "./AlertStack";
 import { QuadView, type QuadPanelId } from "./QuadView";
-import { PreferenceCard, PREF_CARD_IMAGES } from "./PreferenceCard";
+import { PreferenceCard } from "./PreferenceCard";
 import { PatientDetailsModal } from "./PatientDetailsModal";
 import { ArtiInvoker } from "./ArtiInvoker";
-import { ImageLightboxModal, type LightboxHandle, type LightboxImage } from "./ImageLightboxModal";
+import { type LightboxImage } from "./ImageLightboxModal";
 import { RoleSwitcherBar, type ActiveRole } from "./RoleSwitcherBar";
 import {
   AnesthesiaPanel,
@@ -19,7 +19,6 @@ import {
 } from "./AnesthesiaPanel";
 import {
   ScrubTechPanel,
-  SCRUB_LIGHTBOX_IMAGES,
   OPENING_CHECKLIST_ITEMS,
   OPENING_CHECKLIST_INITIAL_DONE,
 } from "./ScrubTechPanel";
@@ -42,6 +41,8 @@ interface Props {
   /** Written to by AwakeDashboard so the route's context builder can read live state. */
   dashboardContextRef?: React.MutableRefObject<() => string>;
   onSidebarNavigate?: (key: SidebarKey) => void;
+  /** Route-level lightbox opener. Used by panel thumbnail clicks. */
+  onOpenLightbox: (images: LightboxImage[], index?: number, title?: string) => void;
 }
 
 export type TimeOutId = "patient" | "site" | "procedure" | "allergies";
@@ -61,6 +62,7 @@ export function AwakeDashboard({
   actionsRef,
   dashboardContextRef,
   onSidebarNavigate,
+  onOpenLightbox,
 }: Props) {
   const [timeOutChecked, setTimeOutChecked] = useState<Set<TimeOutId>>(new Set());
   const [counts, setCounts] = useState<Record<InstrumentId, number>>({
@@ -75,22 +77,12 @@ export function AwakeDashboard({
   const [quadFocused, setQuadFocused] = useState<QuadPanelId | null>(null);
   const [patientDetailsOpen, setPatientDetailsOpen] = useState(false);
   const [activeRole, setActiveRole] = useState<ActiveRole>("nurse");
-  const [lightboxOpen, setLightboxOpen] = useState(false);
-  const [lightboxImages, setLightboxImages] = useState<LightboxImage[]>([]);
-  const [lightboxIndex, setLightboxIndex] = useState(0);
-  const lightboxRef = useRef<LightboxHandle>(null);
   const [openingChecklist, setOpeningChecklist] = useState<Set<number>>(
     () => new Set(OPENING_CHECKLIST_INITIAL_DONE),
   );
   const [machineCheck, setMachineCheck] = useState<Set<number>>(
     () => new Set(MACHINE_CHECK_INITIAL_DONE),
   );
-
-  const openLightbox = useCallback((images: LightboxImage[], index = 0) => {
-    setLightboxImages(images);
-    setLightboxIndex(index);
-    setLightboxOpen(true);
-  }, []);
 
   // Keep the route-level context builder updated with live dashboard state.
   useEffect(() => {
@@ -135,9 +127,6 @@ export function AwakeDashboard({
         `Dismissed alerts: ${dismissedAlerts.size}`,
         `Opening checklist (scrub tech): ${openingChecklist.size}/${OPENING_CHECKLIST_ITEMS.length} done. Items by index: ${OPENING_CHECKLIST_ITEMS.map((label, i) => `${i}=${label}${openingChecklist.has(i) ? " ✓" : ""}`).join(" · ")}`,
         `Machine check (anesthesia): ${machineCheck.size}/${MACHINE_CHECK_ITEMS.length} done. Items by index: ${MACHINE_CHECK_ITEMS.map((label, i) => `${i}=${label}${machineCheck.has(i) ? " ✓" : ""}`).join(" · ")}`,
-        lightboxOpen
-          ? `Image lightbox: OPEN (${lightboxIndex + 1} of ${lightboxImages.length}) — "next image"/"previous image"/"close" are valid commands`
-          : `Image lightbox: closed`,
         patientDetailsOpen
           ? `Patient details modal: OPEN — "close" / "close modal" / "close patient info" → close_patient_details`
           : `Patient details modal: closed`,
@@ -174,9 +163,6 @@ export function AwakeDashboard({
     dismissedAlerts,
     openingChecklist,
     machineCheck,
-    lightboxOpen,
-    lightboxIndex,
-    lightboxImages.length,
     patientDetailsOpen,
     quadOpen,
     quadFocused,
@@ -240,11 +226,6 @@ export function AwakeDashboard({
     return { ok: true };
   }, []);
 
-  const showPreferenceCardLayoutImages = useCallback((): ArtiToolResult => {
-    openLightbox(PREF_CARD_IMAGES, 0);
-    return { ok: true };
-  }, [openLightbox]);
-
   const switchRole = useCallback((role: ActiveRole): ArtiToolResult => {
     setActiveRole(role);
     return { ok: true };
@@ -286,40 +267,6 @@ export function AwakeDashboard({
     return { ok: true };
   }, []);
 
-  const openTableLayoutImages = useCallback((): ArtiToolResult => {
-    openLightbox(SCRUB_LIGHTBOX_IMAGES, 0);
-    return { ok: true };
-  }, [openLightbox]);
-
-  const lightboxNext = useCallback((): ArtiToolResult => {
-    if (!lightboxOpen) return { ok: false, reason: "no lightbox open" };
-    lightboxRef.current?.scrollNext();
-    return { ok: true };
-  }, [lightboxOpen]);
-
-  const lightboxPrev = useCallback((): ArtiToolResult => {
-    if (!lightboxOpen) return { ok: false, reason: "no lightbox open" };
-    lightboxRef.current?.scrollPrev();
-    return { ok: true };
-  }, [lightboxOpen]);
-
-  const lightboxZoomIn = useCallback((): ArtiToolResult => {
-    if (!lightboxOpen) return { ok: false, reason: "no lightbox open" };
-    lightboxRef.current?.zoomIn();
-    return { ok: true };
-  }, [lightboxOpen]);
-
-  const lightboxZoomOut = useCallback((): ArtiToolResult => {
-    if (!lightboxOpen) return { ok: false, reason: "no lightbox open" };
-    lightboxRef.current?.zoomOut();
-    return { ok: true };
-  }, [lightboxOpen]);
-
-  const closeLightbox = useCallback((): ArtiToolResult => {
-    setLightboxOpen(false);
-    return { ok: true };
-  }, []);
-
   /** Register dashboard tools with the route-level bridge. */
   const actions = useMemo<DashboardActions>(
     () => ({
@@ -330,18 +277,11 @@ export function AwakeDashboard({
       focusQuadPanel,
       closeQuadView,
       showPreferenceCard,
-      showPreferenceCardLayoutImages,
       switchRole,
       openPatientDetails,
       closePatientDetails,
       toggleOpeningChecklistItem,
       toggleMachineCheckItem,
-      openTableLayoutImages,
-      lightboxNext,
-      lightboxPrev,
-      lightboxZoomIn,
-      lightboxZoomOut,
-      closeLightbox,
     }),
     [
       toggleTimeOutItem,
@@ -351,18 +291,11 @@ export function AwakeDashboard({
       focusQuadPanel,
       closeQuadView,
       showPreferenceCard,
-      showPreferenceCardLayoutImages,
       switchRole,
       openPatientDetails,
       closePatientDetails,
       toggleOpeningChecklistItem,
       toggleMachineCheckItem,
-      openTableLayoutImages,
-      lightboxNext,
-      lightboxPrev,
-      lightboxZoomIn,
-      lightboxZoomOut,
-      closeLightbox,
     ],
   );
 
@@ -419,7 +352,7 @@ export function AwakeDashboard({
                     <TeamRoster />
                   </div>
                 </div>
-                <PreferenceCard onOpenLightbox={openLightbox} />
+                <PreferenceCard onOpenLightbox={onOpenLightbox} />
               </>
             )}
 
@@ -429,7 +362,7 @@ export function AwakeDashboard({
                 activeCase={activeCase}
                 counts={counts}
                 onAdjust={(id, delta) => adjustInstrumentCount(id as InstrumentId, delta)}
-                onOpenLightbox={openLightbox}
+                onOpenLightbox={onOpenLightbox}
                 openingChecklist={openingChecklist}
                 onToggleChecklistItem={toggleOpeningChecklistItem}
               />
@@ -437,7 +370,7 @@ export function AwakeDashboard({
 
             {/* ── Surgeon view ── */}
             {activeRole === "surgeon" && (
-              <SurgeonPanel activeCase={activeCase} onOpenLightbox={openLightbox} />
+              <SurgeonPanel activeCase={activeCase} onOpenLightbox={onOpenLightbox} />
             )}
 
             {/* ── Anesthesia view ── */}
@@ -469,15 +402,6 @@ export function AwakeDashboard({
         open={patientDetailsOpen}
         onClose={() => setPatientDetailsOpen(false)}
         activeCase={activeCase}
-      />
-
-      <ImageLightboxModal
-        ref={lightboxRef}
-        open={lightboxOpen}
-        onClose={() => setLightboxOpen(false)}
-        images={lightboxImages}
-        initialIndex={lightboxIndex}
-        title="Surgical Setup"
       />
 
       <QuadView

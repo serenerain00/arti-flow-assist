@@ -61,7 +61,13 @@ interface Props {
   onToggleChecklistItem: (index: number) => void;
 }
 
-function PanelLabel({ icon: Icon, children }: { icon: React.ElementType; children: React.ReactNode }) {
+function PanelLabel({
+  icon: Icon,
+  children,
+}: {
+  icon: import("lucide-react").LucideIcon;
+  children: React.ReactNode;
+}) {
   return (
     <div className="mb-4 flex items-center gap-2 text-[10px] font-semibold uppercase tracking-[0.22em] text-success/80">
       <Icon className="h-3.5 w-3.5" strokeWidth={1.8} />
