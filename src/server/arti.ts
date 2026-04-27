@@ -333,6 +333,27 @@ const TOOLS: Anthropic.Tool[] = [
     input_schema: { type: "object" as const, properties: {}, required: [] },
   },
   {
+    name: "greet_person",
+    description:
+      "Speak a warm personalized greeting to a person, group, or team when the user explicitly asks. " +
+      "Use for: 'say hello to Alex', 'greet Dr. Chen', 'welcome Jamie', 'say hi to the Arthrex team', 'tell Marcus good morning', 'welcome Dr. Patel back', 'introduce yourself to Sarah'. " +
+      "This is the ONLY way Arti speaks unprompted-feeling content (a name) — without this tool the agent's hard guardrails would refuse. ALWAYS call it when the user clearly asks for a greeting, even if they don't say the wake word. " +
+      "NARRATION REQUIRED: in the SAME turn as the tool call, return a warm 1-sentence greeting text that actually uses the person/group name. Vary wording naturally and use the time-of-day greeting from live context when it fits ('Good morning, Alex.'). " +
+      "Examples: 'Hey Alex, good to have you in the room.' / 'Welcome, Dr. Chen.' / 'Morning Jamie.' / 'Welcome to OR 326, Arthrex team.' / 'Good to see you back, Dr. Patel.' Keep under 12 words. " +
+      "If sterile cockpit mode is on (see live context), use neutral phrasing only — 'Hello, Dr. Chen.' / 'Welcome, Arthrex team.' — no banter.",
+    input_schema: {
+      type: "object" as const,
+      properties: {
+        name: {
+          type: "string",
+          description:
+            "Name of the person or group being greeted, as the user said it. Examples: 'Alex', 'Dr. Chen', 'the Arthrex team', 'Jamie and Sarah'.",
+        },
+      },
+      required: ["name"],
+    },
+  },
+  {
     name: "open_case",
     description:
       "Open a specific case by patient name, procedure keyword, or sequential reference. " +
