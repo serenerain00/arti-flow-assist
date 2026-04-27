@@ -255,30 +255,38 @@ export function findConsole(query?: string): ConsoleDevice | undefined {
 }
 
 /**
- * Plain-text summary of every console's state. Embedded in the route's
- * live context so Claude can answer telemetry questions ("is the fluid
- * pump connected?", "what's the pressure setpoint?", "how many lamp
- * hours on the light source?") from any screen.
+ * Plain-text summary of every console's state.
  *
- * For the FOCUSED console (or all consoles when none is focused) we emit
- * the full key/value telemetry block — that's what surgical staff
- * actually ask about. For non-focused consoles we keep the one-line
- * summary to control token usage.
+ * Two flavors:
+ *   • lean (default) — ONE line per console with status + statusDetail.
+ *     Sent on every voice request from screens where consoles aren't the
+ *     focus, so Claude can still answer "is the pump connected?" from
+ *     anywhere without paying for detailed telemetry every turn.
+ *   • detailed (verbose=true) — adds the full key/value telemetry block
+ *     for the focused console only. Used when the user is actually on
+ *     the consoles screen, so detail is justified.
+ *
+ * The lean form runs ~80 tokens; the detailed form ~250 tokens. Sending
+ * lean from non-consoles screens shaves measurable Claude turn-1
+ * latency — input tokens directly feed processing time even with
+ * prompt caching since live context isn't cached.
  */
-export function summarizeConsoles(focusedId?: ConsoleId | null): string {
+export function summarizeConsoles(
+  focusedId?: ConsoleId | null,
+  options: { verbose?: boolean } = {},
+): string {
+  const { verbose = false } = options;
   const lines = CONSOLES.flatMap((c) => {
     const focusMark = focusedId === c.id ? " [FOCUSED]" : "";
-    const attach = c.attachments.length ? ` · attachments: ${c.attachments.join(", ")}` : "";
-    const head = `  - ${c.shortName} (${c.manufacturer} ${c.model}): ${c.status.toUpperCase()} — ${c.statusDetail}${attach}${focusMark}`;
-    // Detailed telemetry for the focused console only. If nothing is
-    // focused, surface telemetry for every console (this is the screen
-    // landing state — staff are already looking at the tower).
-    const showDetail = focusedId == null || focusedId === c.id;
-    if (!showDetail) return [head];
+    const attach = c.attachments.length ? ` · ${c.attachments.join(", ")}` : "";
+    const head = `  - ${c.shortName}: ${c.status.toUpperCase()} — ${c.statusDetail}${attach}${focusMark}`;
+    // Detailed key/value telemetry only when verbose AND for the
+    // focused console. Other consoles stay one-line even in verbose.
+    if (!verbose || focusedId !== c.id) return [head];
     const tele = c.telemetry
       .map((t) => `      • ${t.label}: ${t.value}${t.detail ? ` (${t.detail})` : ""}`)
       .join("\n");
     return [head, tele];
   });
-  return ["OR tower consoles (live telemetry):", ...lines].join("\n");
+  return ["OR tower consoles:", ...lines].join("\n");
 }

@@ -75,6 +75,7 @@ export const Route = createFileRoute("/")({
 export interface DashboardActions {
   toggleTimeOutItem: (id: TimeOutId) => ArtiToolResult;
   adjustInstrumentCount: (item: InstrumentId, delta: number) => ArtiToolResult;
+  setInstrumentCount: (item: InstrumentId, value: number) => ArtiToolResult;
   dismissAlert: (index: number) => ArtiToolResult;
   openQuadView: () => ArtiToolResult;
   focusQuadPanel: (panel: QuadPanelId) => ArtiToolResult;
@@ -271,6 +272,8 @@ function ArtiWallRoot() {
         dashboardActionsRef.current?.toggleTimeOutItem(id) ?? notAvailable(),
       onAdjustInstrumentCount: (item, delta) =>
         dashboardActionsRef.current?.adjustInstrumentCount(item, delta) ?? notAvailable(),
+      onSetInstrumentCount: (item, value) =>
+        dashboardActionsRef.current?.setInstrumentCount(item, value) ?? notAvailable(),
       onDismissAlert: (index) => dashboardActionsRef.current?.dismissAlert(index) ?? notAvailable(),
       onOpenQuadView: () => dashboardActionsRef.current?.openQuadView() ?? notAvailable(),
       onFocusQuadPanel: (panel) =>
@@ -728,22 +731,20 @@ function ArtiWall({
       `Current time: ${timeStr} — use "${timeGreeting}" for any greeting`,
       `Today is ${formatLongDate(toDateKey(now))} (${toDateKey(now)})`,
       `Current screen: ${PHASE_LABEL[phase]}`,
-      // Emphasized so Haiku always anchors on the LATEST loaded case and
-      // doesn't drift back to a stale referent from earlier conversation
-      // history. When the user navigates with "next case" / "back to
-      // Marcus" etc., this line updates immediately — trust it over any
-      // older patient name in the message history.
-      `=== ACTIVE CASE (current — use this name in any patient reference) ===`,
-      `${activeCase.patientName} · ${activeCase.procedure}${activeCase.side ? ` · ${activeCase.side} side` : ""} · MRN ${activeCase.patientMrn} · ${activeCase.time} · OR ${activeCase.room} · status: ${activeCase.status}`,
-      `=== END ACTIVE CASE ===`,
+      // Emphasized active-case marker so Haiku anchors on the latest
+      // loaded case rather than drifting to a stale name from history.
+      `>>> ACTIVE CASE (use this name): ${activeCase.patientName} · ${activeCase.procedure}${activeCase.side ? ` (${activeCase.side})` : ""} · MRN ${activeCase.patientMrn} · ${activeCase.time} · OR ${activeCase.room} · ${activeCase.status}`,
       activeScheduleEntry
         ? `Active case team — Surgeon: ${activeScheduleEntry.surgeon} · Anesthesiologist: ${activeScheduleEntry.anesthesiologist} · Scrub Tech: ${activeScheduleEntry.scrubTech} · Circulator: ${activeScheduleEntry.circulator} · Anesthesia type: ${activeScheduleEntry.anesthesiaType} · ASA ${activeScheduleEntry.asaClass}`
         : `Active case team — Surgeon: ${activeCase.surgeon} (team not on schedule)`,
+      // Patient basics — full detail only on preop where the chart is
+      // visible and clinical questions are common; lean elsewhere.
       activeClinical
-        ? `Active case patient basics — Blood type: ${activeClinical.bloodType} · DOB: ${activeClinical.dob} · Sex: ${activeClinical.sex} · Height: ${activeClinical.height} · Weight: ${activeClinical.weight} · BMI: ${activeClinical.bmi} · NPO: ${activeClinical.npo} · Allergies: ${activeAllergiesLine}`
+        ? phase === "preop"
+          ? `Active case patient basics — Blood type: ${activeClinical.bloodType} · DOB: ${activeClinical.dob} · Sex: ${activeClinical.sex} · Height: ${activeClinical.height} · Weight: ${activeClinical.weight} · BMI: ${activeClinical.bmi} · NPO: ${activeClinical.npo} · Allergies: ${activeAllergiesLine}`
+          : `Active case patient basics — Blood type: ${activeClinical.bloodType} · NPO: ${activeClinical.npo} · Allergies: ${activeAllergiesLine}`
         : `Active case patient basics — chart not available`,
       `Today's board:\n${board}`,
-      `Navigation available: home dashboard, case list, schedule/calendar, pre-op dashboard, sleep`,
       pendingReminders.length
         ? `Pending reminders (${pendingReminders.length}):\n${pendingReminders
             .map((r) => {
@@ -762,25 +763,23 @@ function ArtiWall({
       personSchedule.open
         ? `Person schedule modal: OPEN — viewing ${personSchedule.role} ${personSchedule.name} (${personSchedule.view} view). "switch to [name]" → show_person_schedule. "show me her week/month/today" → set_person_schedule_view. "close" → close_person_schedule.`
         : `Person schedule modal: closed`,
-      // Topmost-overlay hint — when the user says generic "close" / "dismiss"
-      // / "close that" without naming a thing, Claude should call
-      // close_topmost_modal. This line tells it WHAT will close so the
-      // spoken confirmation is accurate ("video closed", "lightbox closed").
-      // Note: dashboard overlays (patient details / quad view) are tracked
-      // by the dashboard's own context block, not here — close_topmost_modal
-      // delegates to them when route-level overlays are all closed.
+      // One-line topmost-overlay hint for close_topmost_modal disambiguation.
       (() => {
-        if (firedReminders.length > 0)
-          return `TOPMOST OVERLAY: reminder toast (1 of route-level overlays). Generic 'close' → close_topmost_modal will close this.`;
-        if (personSchedule.open)
-          return `TOPMOST OVERLAY: person schedule modal. Generic 'close' → close_topmost_modal will close this.`;
-        if (howToOpen)
-          return `TOPMOST OVERLAY: how-to video modal. Generic 'close' → close_topmost_modal will close this.`;
-        if (lightboxOpen)
-          return `TOPMOST OVERLAY: image lightbox. Generic 'close' → close_topmost_modal will close this.`;
-        if (selectedScheduleDate && phase === "schedule")
-          return `TOPMOST OVERLAY: schedule day drawer. Generic 'close' → close_topmost_modal will close this.`;
-        return `TOPMOST OVERLAY: none (no route-level overlay). Dashboard overlays (patient details / quad view) checked separately — see dashboard block.`;
+        const which =
+          firedReminders.length > 0
+            ? "reminder toast"
+            : personSchedule.open
+              ? "person schedule modal"
+              : howToOpen
+                ? "how-to video modal"
+                : lightboxOpen
+                  ? "image lightbox"
+                  : selectedScheduleDate && phase === "schedule"
+                    ? "schedule day drawer"
+                    : null;
+        return which
+          ? `TOPMOST: ${which} — generic 'close' → close_topmost_modal.`
+          : `TOPMOST: none route-level (check dashboard block for patient details / quad view).`;
       })(),
       (() => {
         if (!howToOpen) return `How-to video modal: closed`;
@@ -812,8 +811,10 @@ function ArtiWall({
         : `Image lightbox: closed`,
       // OR equipment tower status — always included so Arti can answer
       // "is the fluid pump connected?" / "what's the camera console doing?"
-      // from any screen, not just when on the consoles view.
-      summarizeConsoles(focusedConsoleId),
+      // from any screen. Detailed telemetry only when the user is
+      // actually on the consoles screen — otherwise lean one-liners to
+      // keep the live context (and Claude turn-1 latency) tight.
+      summarizeConsoles(focusedConsoleId, { verbose: phase === "consoles" }),
       // Library filter state + the actual filtered result list. The result
       // list is the key piece — when the user says "open it" / "play that
       // one" / "open the video", Claude reads this block, sees there's a
@@ -902,36 +903,39 @@ function ArtiWall({
   }, []);
 
   /**
-   * Resolve a free-text case query.
+   * Resolve a free-text case query, matching how OR staff actually speak:
    *
-   * Sequential semantics — when the active case is known, "next" / "after"
-   * advance to the case immediately following in TODAY_CASES order, and
-   * "previous" / "last" / "before" walks backward. So from Marcus Chen
-   * (c-002) "show me the next case" lands on Priya Raman (c-003), not
-   * back on Marcus himself.
-   *
-   * Falls back to status="next" only when no active case context is
-   * available (e.g. fresh wake from home screen).
+   *   • "next" / "next case" / "next one" / "next up" / "what's next"
+   *     → the case with status="next" (the upcoming surgical case).
+   *     Surgeons mean "the next one in the room" — independent of which
+   *     case they're currently viewing on the wall.
+   *   • "after [name]" / "case after this" / "the one after that"
+   *     → SEQUENTIAL forward from the active case in TODAY_CASES order.
+   *   • "previous" / "prior" / "last" / "before"
+   *     → SEQUENTIAL backward from the active case.
+   *   • "first" / "first case" → first row in TODAY_CASES.
+   *   • Otherwise: patient name / procedure short fallback.
    */
   const findCase = useCallback((q: string, activeCaseId?: string): CaseItem | undefined => {
     const text = q.toLowerCase();
 
-    // Sequential nav relative to active case.
-    if (activeCaseId) {
+    // Sequential forward — explicit "after" keyword required so plain
+    // "next case" doesn't accidentally walk past the upcoming case.
+    if (activeCaseId && /\bafter\b/.test(text)) {
       const idx = TODAY_CASES.findIndex((c) => c.id === activeCaseId);
-      if (idx >= 0) {
-        if (/\b(?:next|after|following)\b/.test(text)) {
-          return TODAY_CASES[idx + 1] ?? undefined;
-        }
-        if (/\b(?:previous|prior|before|last)\b/.test(text)) {
-          return TODAY_CASES[idx - 1] ?? undefined;
-        }
-        if (/\b(?:first)\b/.test(text)) return TODAY_CASES[0];
-      }
+      if (idx >= 0 && idx < TODAY_CASES.length - 1) return TODAY_CASES[idx + 1];
     }
 
-    // No active case (or no sequential keyword) — "next" defaults to the
-    // upcoming-status case so a fresh "open the next case" still works.
+    // Sequential backward.
+    if (activeCaseId && /\b(?:previous|prior|last|before)\b/.test(text)) {
+      const idx = TODAY_CASES.findIndex((c) => c.id === activeCaseId);
+      if (idx > 0) return TODAY_CASES[idx - 1];
+    }
+
+    // First case in the schedule.
+    if (/\bfirst\b/.test(text)) return TODAY_CASES[0];
+
+    // "next" without "after" → upcoming-status case. Common-room phrasing.
     if (/\bnext\b/.test(text)) {
       return TODAY_CASES.find((c) => c.status === "next") ?? undefined;
     }

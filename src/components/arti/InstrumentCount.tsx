@@ -128,9 +128,15 @@ export function InstrumentCount({ counts: countsProp, onAdjust }: Props = {}) {
 
       {discrepancy.length > 0 && (
         <div className="mt-4 rounded-lg border border-warning/30 bg-warning/5 p-3 text-xs font-light text-warning animate-fade-in">
-          <strong className="font-medium">Heads up —</strong> Lap pad count is off by{" "}
-          {discrepancy[0].initial - discrepancy[0].returned}. Recommend visual sweep of the field
-          and trash before proceeding.
+          <strong className="font-medium">Heads up —</strong>{" "}
+          {discrepancy
+            .map((d) => {
+              const diff = d.returned - d.initial;
+              if (diff > 0) return `${d.label.toLowerCase()} over by ${diff}`;
+              return `${d.label.toLowerCase()} short by ${-diff}`;
+            })
+            .join(", ")}
+          . Recommend visual sweep of the field and trash before proceeding.
         </div>
       )}
     </section>

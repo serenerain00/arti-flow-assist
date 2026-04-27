@@ -186,6 +186,20 @@ export function AwakeDashboard({
   }, []);
 
   /**
+   * Set an instrument count to an absolute value. No upper-bound clamp —
+   * counts above the opening reference are valid (extras brought in
+   * mid-case) and the discrepancy banner picks up any mismatch
+   * automatically.
+   */
+  const setInstrumentCount = useCallback((item: InstrumentId, value: number): ArtiToolResult => {
+    if (!Number.isFinite(value) || value < 0) {
+      return { ok: false, reason: "count must be a non-negative number" };
+    }
+    setCounts((prev) => ({ ...prev, [item]: Math.floor(value) }));
+    return { ok: true };
+  }, []);
+
+  /**
    * Safety-critical alerts (tier === "Critical") can never be auto-dismissed
    * per the Arti spec. The return shape lets the agent respond naturally
    * (system prompt handles the wording) instead of silently failing.
@@ -291,6 +305,7 @@ export function AwakeDashboard({
     () => ({
       toggleTimeOutItem,
       adjustInstrumentCount,
+      setInstrumentCount,
       dismissAlert,
       openQuadView,
       focusQuadPanel,
@@ -306,6 +321,7 @@ export function AwakeDashboard({
     [
       toggleTimeOutItem,
       adjustInstrumentCount,
+      setInstrumentCount,
       dismissAlert,
       openQuadView,
       focusQuadPanel,

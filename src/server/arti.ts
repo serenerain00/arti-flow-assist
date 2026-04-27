@@ -335,19 +335,36 @@ const TOOLS: Anthropic.Tool[] = [
   {
     name: "greet_person",
     description:
-      "Speak a warm personalized greeting to a person, group, or team when the user explicitly asks. " +
-      "Use for: 'say hello to Alex', 'greet Dr. Chen', 'welcome Jamie', 'say hi to the Arthrex team', 'tell Marcus good morning', 'welcome Dr. Patel back', 'introduce yourself to Sarah'. " +
-      "This is the ONLY way Arti speaks unprompted-feeling content (a name) — without this tool the agent's hard guardrails would refuse. ALWAYS call it when the user clearly asks for a greeting, even if they don't say the wake word. " +
-      "NARRATION REQUIRED: in the SAME turn as the tool call, return a warm 1-sentence greeting text that actually uses the person/group name. Vary wording naturally and use the time-of-day greeting from live context when it fits ('Good morning, Alex.'). " +
-      "Examples: 'Hey Alex, good to have you in the room.' / 'Welcome, Dr. Chen.' / 'Morning Jamie.' / 'Welcome to OR 326, Arthrex team.' / 'Good to see you back, Dr. Patel.' Keep under 12 words. " +
-      "If sterile cockpit mode is on (see live context), use neutral phrasing only — 'Hello, Dr. Chen.' / 'Welcome, Arthrex team.' — no banter.",
+      "Speak a warm personalized greeting to ANY person, group, or audience the user explicitly asks you to greet. " +
+      "" +
+      "WHO YOU CAN GREET — anyone the user names. Do NOT restrict to people on the team roster or schedule; the roster is only for show_person_schedule lookups. For greetings, accept the name exactly as the user said it and produce a warm sentence around it. Valid targets include: " +
+      "  • OR staff (named or generic): 'Alex', 'Dr. Chen', 'Marcus', 'the scrub tech', 'whoever just walked in'. " +
+      "  • Vendors / reps: 'the Arthrex rep', 'the Stryker team', 'the device rep'. " +
+      "  • Visiting clinicians: 'Dr. Smith from cardiology', 'the resident', 'the fellow'. " +
+      "  • Family / friends: 'my mom', 'my husband Tom', 'my kids'. " +
+      "  • Groups / audiences: 'the room', 'everyone', 'the residents', 'the new nurses', 'the family in the waiting room'. " +
+      "  • Made-up / unfamiliar names: just use them as said — don't refuse because the name isn't recognized. " +
+      "" +
+      "TRIGGER PHRASES — fire whenever the user says a clear greeting request: " +
+      "  • 'say hello to X' / 'greet X' / 'welcome X' / 'say hi to X' " +
+      "  • 'tell X good morning' / 'wish X a good morning' / 'morning X' " +
+      "  • 'introduce yourself to X' / 'introduce yourself' " +
+      "  • 'welcome X back' / 'good to see X' / 'say X is welcome here' " +
+      "" +
+      "This is the ONLY way Arti speaks a name without the hard guardrails refusing. ALWAYS call this tool when the user requests a greeting — never refuse because the target isn't on a roster. " +
+      "" +
+      "NARRATION REQUIRED: in the SAME turn as the tool call, return a warm 1-sentence greeting text that uses the exact name/phrase the user gave you. Vary wording naturally; use the time-of-day greeting from live context when it fits ('Good morning, Alex.'). Keep under 12 words. " +
+      "" +
+      "Examples: 'Hey Alex, good to have you in the room.' / 'Welcome, Dr. Chen.' / 'Morning Jamie.' / 'Welcome to OR 326, Arthrex team.' / 'Good to see you back, Dr. Patel.' / 'Welcome, Stryker rep.' / 'Hi Tom, glad you're here.' / 'Morning everyone.' / 'Hello Dr. Smith from cardiology.' " +
+      "" +
+      "If sterile cockpit mode is on (see live context), use neutral phrasing only — 'Hello, Dr. Chen.' / 'Welcome, Stryker rep.' — no banter.",
     input_schema: {
       type: "object" as const,
       properties: {
         name: {
           type: "string",
           description:
-            "Name of the person or group being greeted, as the user said it. Examples: 'Alex', 'Dr. Chen', 'the Arthrex team', 'Jamie and Sarah'.",
+            "Whatever the user called the target — name, role, group description. Pass as-spoken; don't normalize or lookup. Examples: 'Alex', 'Dr. Chen', 'the Arthrex team', 'Jamie and Sarah', 'my mom', 'the Stryker rep', 'everyone'.",
         },
       },
       required: ["name"],
@@ -357,21 +374,37 @@ const TOOLS: Anthropic.Tool[] = [
     name: "open_case",
     description:
       "Open a specific case by patient name, procedure keyword, or sequential reference. " +
-      "SEQUENTIAL NAVIGATION (when a case is already loaded — see Active case in live context): " +
-      "  • 'next case' / 'next one' / 'show me the next case' / 'open the case after this' / 'next case after Marcus' / 'after that' → query='next' (advances one position in TODAY_CASES order). " +
-      "  • 'previous case' / 'last case' / 'go back to the previous one' / 'before this' → query='previous'. " +
-      "  • 'first case' / 'first one' / 'top of the list' → query='first'. " +
-      "DIRECT REFERENCE — pass patient name, procedure short, or a fragment: query='Marcus Chen', query='Helena', query='RCR', query='rotator cuff', query='Bankart'. " +
-      "From the home / cases / sleep screens with no active case loaded, query='next' falls back to the case with status='next' (the upcoming one). " +
-      "NARRATION REQUIRED: in the SAME turn as the tool call, ALSO return ONE short sentence text speaking the resolved patient name + procedure. This is the only audible signal the OR team gets that the case actually switched — without it Arti seems unaware of where it just navigated. Read the 'Today's board' block in live context to find the resolved case for sequential queries (you compute next/previous yourself by counting positions). " +
-      "Examples: 'Opening Priya Raman, SLAP repair.' / 'Next case — Jonas Albrecht, Bankart.' / 'Back to Marcus Chen, reverse total shoulder.' / 'Linnea Park, subacromial decompression.' Keep it under 8 words.",
+      "QUERY VOCABULARY (matches how OR staff actually speak): " +
+      "  • 'next' / 'next case' / 'next one' / 'next up' / 'what's next' → query='next'. ALWAYS resolves to the case with status='next' (the upcoming-room case), NOT a step forward from the active one. Surgeons mean 'the next case in the room', not 'the one after the screen I'm looking at'. " +
+      "  • 'case after Marcus' / 'after this' / 'the one after that' / 'next case after [name]' → query MUST contain the word 'after' for sequential. Pass query='after this' or query='case after Marcus' so the route walks one step forward from the active case. " +
+      "  • 'previous case' / 'last case' / 'go back' / 'before this' / 'prior case' → query='previous'. Steps backward from the active case. " +
+      "  • 'first case' / 'first one' → query='first'. " +
+      "  • DIRECT REFERENCE — pass patient name, procedure short, or fragment: query='Marcus Chen', query='Helena', query='RCR', query='rotator cuff', query='Bankart'. " +
+      "" +
+      "NARRATION (REQUIRED, OVERRIDES PERSONALITY DEFAULT): the personality says 'never narrate intent', BUT this tool is an exception. In the SAME turn as the tool call, you MUST return ONE short text sentence using the resolved case's PATIENT NAME and procedure. Never just say 'Opening next case' — always 'Opening Marcus Chen, reverse total shoulder.' " +
+      "" +
+      "TO COMPUTE THE RESOLVED CASE BEFORE NARRATING: read the live context's 'Today's board' block (lists every case in TODAY_CASES order with patient name, procedure short, status). " +
+      "  • For query='next' → find the case marked status='next'. " +
+      "  • For 'after [name]' / 'after this' → find the active case row, take the next row down. " +
+      "  • For 'previous' → take the row above the active case. " +
+      "  • For 'first' → take the top row. " +
+      "  • For direct names → match against the board. " +
+      "" +
+      "NARRATION TEMPLATES (pick the one that fits, swap in the actual name + procedure short, keep ≤ 8 words): " +
+      "  • 'Opening Marcus Chen, reverse total shoulder.' " +
+      "  • 'Opening Marcus Chen's case.' " +
+      "  • 'Next case — Marcus Chen, RTSA.' " +
+      "  • 'Back to Helena Voss, rotator cuff repair.' " +
+      "  • 'Priya Raman, SLAP repair.' " +
+      "  • 'Linnea Park's subacromial decompression.' " +
+      "Use the patient's actual name from the board EVERY TIME — never the word 'next' or 'previous' as a substitute for the name.",
     input_schema: {
       type: "object" as const,
       properties: {
         query: {
           type: "string",
           description:
-            "Patient name, procedure keyword, or sequential reference ('next' / 'previous' / 'first').",
+            "Patient name, procedure keyword, or one of: 'next' (upcoming case) / 'after [name]' or 'after this' (sequential forward) / 'previous' (sequential backward) / 'first'.",
         },
       },
       required: ["query"],
@@ -399,7 +432,11 @@ const TOOLS: Anthropic.Tool[] = [
   },
   {
     name: "adjust_instrument_count",
-    description: "Increase or decrease an instrument count by a signed delta.",
+    description:
+      "Increase or decrease an instrument count by a signed DELTA (relative change). " +
+      "Use for: 'add a raytec' → delta=+1 / 'remove two laps' → delta=-2 / 'one more needle' → delta=+1 / 'we used three blades' → delta=-3 / 'add a couple of clamps' → delta=+2. " +
+      "DO NOT use this when the user states an absolute count ('raytec is at 18', 'set lap to 9', 'we have 14 needles') — for those use set_instrument_count instead. " +
+      "Pluralize naturally — 'raytecs', 'rays', 'lap pads', 'laparotomy', 'needles', 'blades', 'clamps' all map to the right enum.",
     input_schema: {
       type: "object" as const,
       properties: {
@@ -409,10 +446,34 @@ const TOOLS: Anthropic.Tool[] = [
         },
         delta: {
           type: "number",
-          description: "Positive to add, negative to remove.",
+          description: "Signed change to apply. +1 / +2 to add, -1 / -2 to remove.",
         },
       },
       required: ["item", "delta"],
+    },
+  },
+  {
+    name: "set_instrument_count",
+    description:
+      "Set an instrument count to a specific ABSOLUTE value (replaces the current count). " +
+      "Use for: 'set raytec to 18' / 'update lap count to 9' / 'change the needle count to 14' / 'raytec is at 19' / 'we have 18 raytecs' / 'count raytec at 19' / 'raytecs are 18 now' / 'show 14 needles'. " +
+      "WORKS FROM ANY VALUE — including counts ABOVE the opening reference (e.g. set raytec to 22 when opening was 20 because extras were brought in mid-case) or BELOW (count discrepancy mid-closure). The UI shows the discrepancy banner automatically when current ≠ opening; do not refuse out-of-range values. " +
+      "Pluralize naturally — 'raytecs', 'rays', 'lap pads', 'laparotomy', 'needles', 'blades', 'clamps'. " +
+      "DO NOT use this for relative changes ('add one', 'remove two', 'one more') — use adjust_instrument_count instead.",
+    input_schema: {
+      type: "object" as const,
+      properties: {
+        item: {
+          type: "string",
+          enum: ["raytec", "lap", "needle", "blade", "clamps"],
+        },
+        value: {
+          type: "number",
+          description:
+            "Absolute count to set. Any non-negative integer; above- or below-opening values are valid (UI surfaces the discrepancy automatically).",
+        },
+      },
+      required: ["item", "value"],
     },
   },
   {
@@ -936,7 +997,7 @@ export const processVoiceCommand = createServerFn({ method: "POST" })
             },
             {
               type: "text",
-              text: `---\nLive context:\n${data.context}\n\nSpeak ONE short sentence confirming what just happened. No patient names. No case details. No elaboration.\nGreeting/wake examples: "Good morning." "Hey, good to have you in." "Ready when you are."\nNavigation examples: "Home screen." "Here's the case list." "Opening next case." "Quad view open."\nAction examples: "Done." "Counts updated." "Alert dismissed."`,
+              text: `---\nLive context:\n${data.context}\n\nSpeak ONE short sentence confirming what just happened. No patient names, no case details, no elaboration. (For tools that DO need patient names — like open_case — narration is supposed to happen in turn 1, before this fallback. If you're here on a case nav, it means turn 1 was empty; just say "Done." or "Opening." rather than guessing a name from possibly-stale context.)\nGreeting/wake examples: "Good morning." "Hey, good to have you in." "Ready when you are."\nNavigation examples: "Home screen." "Here's the case list." "Quad view open."\nAction examples: "Done." "Counts updated." "Alert dismissed."`,
             },
           ],
           messages: [

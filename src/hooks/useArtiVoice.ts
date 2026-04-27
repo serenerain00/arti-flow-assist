@@ -67,6 +67,8 @@ export interface ArtiVoiceCallbacks {
   onClosePersonSchedule?: () => void;
   onToggleTimeOutItem?: (id: TimeOutId) => ArtiToolResult;
   onAdjustInstrumentCount?: (item: InstrumentId, delta: number) => ArtiToolResult;
+  /** Set an instrument count to an absolute value (replaces the current count). */
+  onSetInstrumentCount?: (item: InstrumentId, value: number) => ArtiToolResult;
   onDismissAlert?: (index: number) => ArtiToolResult;
   onOpenQuadView?: () => ArtiToolResult;
   onFocusQuadPanel?: (panel: QuadPanelId) => ArtiToolResult;
@@ -230,6 +232,9 @@ function executeToolCall(call: ArtiToolCall, cb: ArtiVoiceCallbacks): void {
       break;
     case "adjust_instrument_count":
       cb.onAdjustInstrumentCount?.(inp.item as InstrumentId, Number(inp.delta));
+      break;
+    case "set_instrument_count":
+      cb.onSetInstrumentCount?.(inp.item as InstrumentId, Number(inp.value));
       break;
     case "dismiss_alert":
       cb.onDismissAlert?.(Number(inp.index));
