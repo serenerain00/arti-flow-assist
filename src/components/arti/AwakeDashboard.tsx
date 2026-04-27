@@ -241,6 +241,25 @@ export function AwakeDashboard({
     return { ok: true };
   }, []);
 
+  /**
+   * Close whichever dashboard-scoped overlay is currently topmost.
+   * Priority: patient details > quad view. Returns a label so the route
+   * can include it in the spoken confirmation, or null when nothing was
+   * open (route then falls through to other targets or no-ops).
+   */
+  const closeTopmostDashboardOverlay = useCallback((): string | null => {
+    if (patientDetailsOpen) {
+      setPatientDetailsOpen(false);
+      return "patient details";
+    }
+    if (quadOpen) {
+      setQuadOpen(false);
+      setQuadFocused(null);
+      return "quad view";
+    }
+    return null;
+  }, [patientDetailsOpen, quadOpen]);
+
   const toggleOpeningChecklistItem = useCallback((index: number): ArtiToolResult => {
     if (index < 0 || index >= OPENING_CHECKLIST_ITEMS.length) {
       return { ok: false, reason: "invalid checklist index" };
@@ -282,6 +301,7 @@ export function AwakeDashboard({
       closePatientDetails,
       toggleOpeningChecklistItem,
       toggleMachineCheckItem,
+      closeTopmostDashboardOverlay,
     }),
     [
       toggleTimeOutItem,
@@ -296,6 +316,7 @@ export function AwakeDashboard({
       closePatientDetails,
       toggleOpeningChecklistItem,
       toggleMachineCheckItem,
+      closeTopmostDashboardOverlay,
     ],
   );
 

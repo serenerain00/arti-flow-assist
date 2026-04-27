@@ -76,6 +76,15 @@ const TOOLS: Anthropic.Tool[] = [
     input_schema: { type: "object" as const, properties: {}, required: [] },
   },
   {
+    name: "close_topmost_modal",
+    description:
+      "Universal close — closes whatever modal/overlay is currently topmost on the screen. " +
+      "USE THIS WHENEVER the user says 'close' / 'close it' / 'close that' / 'dismiss' / 'close this' / 'go back' WITHOUT naming the specific thing. The tool reads its own priority order (reminder toast → person schedule → how-to video → image lightbox → patient details → quad view → schedule day drawer) and closes the topmost. " +
+      "PREFER this tool over the more-specific close_* tools (close_lightbox, close_how_to_video, close_quad_view, close_patient_details, close_person_schedule, close_schedule_day, dismiss_reminder_alert) when the user's command is generic. Only use a specific close_* tool when the user explicitly names what to close ('close the video', 'close the lightbox'). " +
+      "If nothing is open, this tool is a no-op and returns gracefully — never refuse a 'close' command.",
+    input_schema: { type: "object" as const, properties: {}, required: [] },
+  },
+  {
     name: "navigate_consoles",
     description:
       "Open the OR equipment-tower status screen — a stylized 3D view of the integrated arthroscopy stack (light source, 4K camera console, image management, fluid pump, shaver, RF console) with live connection status and per-device telemetry (pressure, flow, RPM, intensity, etc). Use for: 'show me the OR consoles', 'show the equipment tower', 'console status', 'tower status', 'show me the equipment', 'pull up the consoles', 'are the consoles ready', 'check the tower'. After this nav opens, the user can voice-focus an individual console with focus_console.",
@@ -325,10 +334,25 @@ const TOOLS: Anthropic.Tool[] = [
   },
   {
     name: "open_case",
-    description: "Open a specific case by patient name, procedure keyword, or 'next'.",
+    description:
+      "Open a specific case by patient name, procedure keyword, or sequential reference. " +
+      "SEQUENTIAL NAVIGATION (when a case is already loaded — see Active case in live context): " +
+      "  • 'next case' / 'next one' / 'show me the next case' / 'open the case after this' / 'next case after Marcus' / 'after that' → query='next' (advances one position in TODAY_CASES order). " +
+      "  • 'previous case' / 'last case' / 'go back to the previous one' / 'before this' → query='previous'. " +
+      "  • 'first case' / 'first one' / 'top of the list' → query='first'. " +
+      "DIRECT REFERENCE — pass patient name, procedure short, or a fragment: query='Marcus Chen', query='Helena', query='RCR', query='rotator cuff', query='Bankart'. " +
+      "From the home / cases / sleep screens with no active case loaded, query='next' falls back to the case with status='next' (the upcoming one). " +
+      "NARRATION REQUIRED: in the SAME turn as the tool call, ALSO return ONE short sentence text speaking the resolved patient name + procedure. This is the only audible signal the OR team gets that the case actually switched — without it Arti seems unaware of where it just navigated. Read the 'Today's board' block in live context to find the resolved case for sequential queries (you compute next/previous yourself by counting positions). " +
+      "Examples: 'Opening Priya Raman, SLAP repair.' / 'Next case — Jonas Albrecht, Bankart.' / 'Back to Marcus Chen, reverse total shoulder.' / 'Linnea Park, subacromial decompression.' Keep it under 8 words.",
     input_schema: {
       type: "object" as const,
-      properties: { query: { type: "string" } },
+      properties: {
+        query: {
+          type: "string",
+          description:
+            "Patient name, procedure keyword, or sequential reference ('next' / 'previous' / 'first').",
+        },
+      },
       required: ["query"],
     },
   },
@@ -800,6 +824,7 @@ export const processVoiceCommand = createServerFn({ method: "POST" })
       "navigate_patients",
       "navigate_consoles",
       "navigate_library",
+      "close_topmost_modal",
       "library_filter_category",
       "library_search",
       "library_set_animated_only",

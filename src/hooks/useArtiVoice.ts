@@ -29,6 +29,12 @@ export interface ArtiVoiceCallbacks {
   onFocusConsole?: (id: string) => void;
   /** Navigate to the curated surgical Video Library screen. */
   onShowLibrary?: () => void;
+  /**
+   * Close whichever overlay is currently topmost. Called when the user
+   * says generic "close" / "dismiss" / "close that" with no specific
+   * target — the route picks the right thing based on z-order priority.
+   */
+  onCloseTopmostModal?: () => void;
   /** Filter the Video Library by anatomic region (or "All" to clear). */
   onLibraryFilterCategory?: (category: string) => void;
   /** Set the Video Library search box (empty string clears). */
@@ -170,6 +176,9 @@ function executeToolCall(call: ArtiToolCall, cb: ArtiVoiceCallbacks): void {
       break;
     case "navigate_library":
       cb.onShowLibrary?.();
+      break;
+    case "close_topmost_modal":
+      cb.onCloseTopmostModal?.();
       break;
     case "library_filter_category":
       cb.onLibraryFilterCategory?.(String(inp.category ?? "All"));

@@ -85,6 +85,13 @@ export interface DashboardActions {
   closePatientDetails: () => ArtiToolResult;
   toggleOpeningChecklistItem: (index: number) => ArtiToolResult;
   toggleMachineCheckItem: (index: number) => ArtiToolResult;
+  /**
+   * Close whichever dashboard-scoped overlay is currently topmost
+   * (patient details > quad view). Returns the name of what was closed,
+   * or null if nothing was open. Called by the route's
+   * close_topmost_modal handler after route-level overlays are checked.
+   */
+  closeTopmostDashboardOverlay: () => string | null;
 }
 
 export type DashboardActionsRef = React.MutableRefObject<DashboardActions | null>;
@@ -111,6 +118,7 @@ function ArtiWallRoot() {
       | "onShowConsoles"
       | "onFocusConsole"
       | "onShowLibrary"
+      | "onCloseTopmostModal"
       | "onLibraryFilterCategory"
       | "onLibrarySearch"
       | "onLibrarySetAnimatedOnly"
@@ -160,6 +168,7 @@ function ArtiWallRoot() {
     onShowConsoles: () => {},
     onFocusConsole: () => {},
     onShowLibrary: () => {},
+    onCloseTopmostModal: () => {},
     onLibraryFilterCategory: () => {},
     onLibrarySearch: () => {},
     onLibrarySetAnimatedOnly: () => {},
@@ -240,6 +249,7 @@ function ArtiWallRoot() {
       onShowConsoles: () => navCallbacksRef.current.onShowConsoles?.(),
       onFocusConsole: (id) => navCallbacksRef.current.onFocusConsole?.(id),
       onShowLibrary: () => navCallbacksRef.current.onShowLibrary?.(),
+      onCloseTopmostModal: () => navCallbacksRef.current.onCloseTopmostModal?.(),
       onLibraryFilterCategory: (c) => navCallbacksRef.current.onLibraryFilterCategory?.(c),
       onLibrarySearch: (q) => navCallbacksRef.current.onLibrarySearch?.(q),
       onLibrarySetAnimatedOnly: (v) => navCallbacksRef.current.onLibrarySetAnimatedOnly?.(v),
@@ -373,6 +383,7 @@ interface ArtiWallProps {
       | "onShowConsoles"
       | "onFocusConsole"
       | "onShowLibrary"
+      | "onCloseTopmostModal"
       | "onLibraryFilterCategory"
       | "onLibrarySearch"
       | "onLibrarySetAnimatedOnly"
@@ -717,7 +728,14 @@ function ArtiWall({
       `Current time: ${timeStr} — use "${timeGreeting}" for any greeting`,
       `Today is ${formatLongDate(toDateKey(now))} (${toDateKey(now)})`,
       `Current screen: ${PHASE_LABEL[phase]}`,
-      `Active case: ${activeCase.patientName} · ${activeCase.procedure}${activeCase.side ? ` · ${activeCase.side} side` : ""} · ${activeCase.patientMrn} · Scheduled ${activeCase.time} · OR ${activeCase.room}`,
+      // Emphasized so Haiku always anchors on the LATEST loaded case and
+      // doesn't drift back to a stale referent from earlier conversation
+      // history. When the user navigates with "next case" / "back to
+      // Marcus" etc., this line updates immediately — trust it over any
+      // older patient name in the message history.
+      `=== ACTIVE CASE (current — use this name in any patient reference) ===`,
+      `${activeCase.patientName} · ${activeCase.procedure}${activeCase.side ? ` · ${activeCase.side} side` : ""} · MRN ${activeCase.patientMrn} · ${activeCase.time} · OR ${activeCase.room} · status: ${activeCase.status}`,
+      `=== END ACTIVE CASE ===`,
       activeScheduleEntry
         ? `Active case team — Surgeon: ${activeScheduleEntry.surgeon} · Anesthesiologist: ${activeScheduleEntry.anesthesiologist} · Scrub Tech: ${activeScheduleEntry.scrubTech} · Circulator: ${activeScheduleEntry.circulator} · Anesthesia type: ${activeScheduleEntry.anesthesiaType} · ASA ${activeScheduleEntry.asaClass}`
         : `Active case team — Surgeon: ${activeCase.surgeon} (team not on schedule)`,
@@ -744,6 +762,26 @@ function ArtiWall({
       personSchedule.open
         ? `Person schedule modal: OPEN — viewing ${personSchedule.role} ${personSchedule.name} (${personSchedule.view} view). "switch to [name]" → show_person_schedule. "show me her week/month/today" → set_person_schedule_view. "close" → close_person_schedule.`
         : `Person schedule modal: closed`,
+      // Topmost-overlay hint — when the user says generic "close" / "dismiss"
+      // / "close that" without naming a thing, Claude should call
+      // close_topmost_modal. This line tells it WHAT will close so the
+      // spoken confirmation is accurate ("video closed", "lightbox closed").
+      // Note: dashboard overlays (patient details / quad view) are tracked
+      // by the dashboard's own context block, not here — close_topmost_modal
+      // delegates to them when route-level overlays are all closed.
+      (() => {
+        if (firedReminders.length > 0)
+          return `TOPMOST OVERLAY: reminder toast (1 of route-level overlays). Generic 'close' → close_topmost_modal will close this.`;
+        if (personSchedule.open)
+          return `TOPMOST OVERLAY: person schedule modal. Generic 'close' → close_topmost_modal will close this.`;
+        if (howToOpen)
+          return `TOPMOST OVERLAY: how-to video modal. Generic 'close' → close_topmost_modal will close this.`;
+        if (lightboxOpen)
+          return `TOPMOST OVERLAY: image lightbox. Generic 'close' → close_topmost_modal will close this.`;
+        if (selectedScheduleDate && phase === "schedule")
+          return `TOPMOST OVERLAY: schedule day drawer. Generic 'close' → close_topmost_modal will close this.`;
+        return `TOPMOST OVERLAY: none (no route-level overlay). Dashboard overlays (patient details / quad view) checked separately — see dashboard block.`;
+      })(),
       (() => {
         if (!howToOpen) return `How-to video modal: closed`;
         const status = videoModalRef.current?.getStatus();
@@ -863,11 +901,42 @@ function ArtiWall({
     setPhase("sleep");
   }, []);
 
-  const findCase = useCallback((q: string): CaseItem | undefined => {
+  /**
+   * Resolve a free-text case query.
+   *
+   * Sequential semantics — when the active case is known, "next" / "after"
+   * advance to the case immediately following in TODAY_CASES order, and
+   * "previous" / "last" / "before" walks backward. So from Marcus Chen
+   * (c-002) "show me the next case" lands on Priya Raman (c-003), not
+   * back on Marcus himself.
+   *
+   * Falls back to status="next" only when no active case context is
+   * available (e.g. fresh wake from home screen).
+   */
+  const findCase = useCallback((q: string, activeCaseId?: string): CaseItem | undefined => {
     const text = q.toLowerCase();
+
+    // Sequential nav relative to active case.
+    if (activeCaseId) {
+      const idx = TODAY_CASES.findIndex((c) => c.id === activeCaseId);
+      if (idx >= 0) {
+        if (/\b(?:next|after|following)\b/.test(text)) {
+          return TODAY_CASES[idx + 1] ?? undefined;
+        }
+        if (/\b(?:previous|prior|before|last)\b/.test(text)) {
+          return TODAY_CASES[idx - 1] ?? undefined;
+        }
+        if (/\b(?:first)\b/.test(text)) return TODAY_CASES[0];
+      }
+    }
+
+    // No active case (or no sequential keyword) — "next" defaults to the
+    // upcoming-status case so a fresh "open the next case" still works.
     if (/\bnext\b/.test(text)) {
       return TODAY_CASES.find((c) => c.status === "next") ?? undefined;
     }
+
+    // Patient name / procedure short fallback.
     return TODAY_CASES.find(
       (c) =>
         text.includes(c.patientName.toLowerCase()) ||
@@ -1271,7 +1340,10 @@ function ArtiWall({
     },
     onOpenCase: (query: string) => {
       closeOverlays();
-      const match = findCase(query);
+      // Pass active case id so "next" / "previous" walk TODAY_CASES order
+      // relative to the loaded case rather than always returning the
+      // status="next" entry.
+      const match = findCase(query, activeCase.id);
       if (match) {
         setActiveCase(match);
         setPhase("preop");
@@ -1317,6 +1389,46 @@ function ArtiWall({
     onShowLibrary: () => {
       closeOverlays();
       setPhase("library");
+    },
+    /**
+     * Universal close — picks the topmost overlay and closes it. Priority
+     * order top→bottom (matches what the user perceives as "the thing in
+     * front"):
+     *   1. Reminder toast (highest z, smallest viewport footprint)
+     *   2. Person schedule modal (z-81)
+     *   3. How-to video modal (z-50)
+     *   4. Image lightbox (z-50)
+     *   5. Schedule day drawer (when on schedule screen)
+     *   6. Dashboard-scoped (patient details > quad view) — delegated
+     * No-op when nothing is open. Voice tool description tells Claude to
+     * prefer this over the specific close_* tools for generic "close".
+     */
+    onCloseTopmostModal: () => {
+      if (firedReminders.length > 0) {
+        setFiredReminders([]);
+        return;
+      }
+      if (personSchedule.open) {
+        setPersonSchedule((prev) => ({ ...prev, open: false }));
+        return;
+      }
+      if (howToOpen) {
+        setHowToOpen(false);
+        return;
+      }
+      if (lightboxOpen) {
+        setLightboxOpen(false);
+        return;
+      }
+      if (selectedScheduleDate && phase === "schedule") {
+        setSelectedScheduleDate(null);
+        return;
+      }
+      // Dashboard overlays last — patient details / quad view.
+      const closed = dashboardActionsRef.current?.closeTopmostDashboardOverlay();
+      if (closed) return;
+      // Nothing was open — silent no-op (the tool description tells
+      // Claude to never refuse a 'close' command, so just absorb it).
     },
     onLibraryFilterCategory: (c: string) => {
       // Coerce to a valid category, defaulting to "All" for unknown input.
