@@ -51,7 +51,24 @@ export interface ArtiVoiceCallbacks {
   onOpenQuadView?: () => ArtiToolResult;
   onFocusQuadPanel?: (panel: QuadPanelId) => ArtiToolResult;
   onCloseQuadView?: () => ArtiToolResult;
-  onOpenHowToVideo?: (title?: string) => ArtiToolResult;
+  onOpenHowToVideo?: (procedure?: string, title?: string) => ArtiToolResult;
+  /** Open the how-to viewer with the research-papers panel expanded. */
+  onOpenResearchPapers?: (procedure?: string, topic?: string) => ArtiToolResult;
+  /** Resume video playback. */
+  onVideoPlay?: () => ArtiToolResult;
+  /** Pause video playback. */
+  onVideoPause?: () => ArtiToolResult;
+  /** Seek the video by a signed offset (negative = back, positive = forward). */
+  onVideoSeek?: (direction: "forward" | "back", seconds: number) => ArtiToolResult;
+  onVideoNextChapter?: () => ArtiToolResult;
+  onVideoPrevChapter?: () => ArtiToolResult;
+  onVideoRestart?: () => ArtiToolResult;
+  onVideoSetSpeed?: (rate: number) => ArtiToolResult;
+  onVideoShowPapers?: () => ArtiToolResult;
+  onVideoHidePapers?: () => ArtiToolResult;
+  onVideoOpenPaper?: (q: { index?: number; keyword?: string }) => ArtiToolResult;
+  onVideoClosePaper?: () => ArtiToolResult;
+  onCloseHowToVideo?: () => ArtiToolResult;
   onShowPreferenceCard?: () => ArtiToolResult;
   onShowPreferenceCardLayoutImages?: () => ArtiToolResult;
   onSwitchRole?: (role: ActiveRole) => ArtiToolResult;
@@ -82,7 +99,9 @@ type SpeechRecognitionLike = {
   start: () => void;
   stop: () => void;
   abort: () => void;
-  onresult: ((ev: { resultIndex: number; results: ArrayLike<SpeechRecognitionResult> }) => void) | null;
+  onresult:
+    | ((ev: { resultIndex: number; results: ArrayLike<SpeechRecognitionResult> }) => void)
+    | null;
   onerror: ((ev: { error?: string }) => void) | null;
   onend: (() => void) | null;
 };
@@ -99,47 +118,184 @@ function getSpeechRecognitionCtor(): (new () => SpeechRecognitionLike) | null {
 function executeToolCall(call: ArtiToolCall, cb: ArtiVoiceCallbacks): void {
   const inp = call.input;
   switch (call.name) {
-    case "wake":                       cb.onWake?.(); break;
-    case "navigate_home":              cb.onGoHome(); break;
-    case "navigate_cases":             cb.onShowCases(); break;
-    case "open_case":                  cb.onOpenCase(String(inp.query ?? "")); break;
-    case "sleep":                      cb.onSleep(); break;
-    case "navigate_schedule":          cb.onShowSchedule?.(); break;
-    case "navigate_surgeons":          cb.onShowSurgeons?.(); break;
-    case "navigate_patients":          cb.onShowPatients?.(); break;
-    case "show_schedule_day":          cb.onShowScheduleDay?.(String(inp.date ?? "")); break;
-    case "close_schedule_day":         cb.onCloseScheduleDay?.(); break;
-    case "set_reminder":               cb.onSetReminder?.(String(inp.text ?? ""), Number(inp.minutes ?? 0)); break;
-    case "cancel_reminders":           cb.onCancelReminders?.(); break;
-    case "dismiss_reminder_alert":     cb.onDismissReminderAlert?.(); break;
-    case "schedule_set_service_lines": cb.onScheduleSetServiceLines?.(Array.isArray(inp.lines) ? inp.lines.map(String) : []); break;
-    case "schedule_set_surgeon":       cb.onScheduleSetSurgeon?.(String(inp.surgeon ?? "")); break;
-    case "schedule_clear_filters":     cb.onScheduleClearFilters?.(); break;
-    case "show_person_schedule":       cb.onShowPersonSchedule?.(String(inp.name ?? ""), String(inp.role ?? "")); break;
-    case "set_person_schedule_view":   cb.onSetPersonScheduleView?.(String(inp.view ?? "day")); break;
-    case "close_person_schedule":      cb.onClosePersonSchedule?.(); break;
-    case "toggle_timeout_item":        cb.onToggleTimeOutItem?.(inp.id as TimeOutId); break;
-    case "adjust_instrument_count":    cb.onAdjustInstrumentCount?.(inp.item as InstrumentId, Number(inp.delta)); break;
-    case "dismiss_alert":              cb.onDismissAlert?.(Number(inp.index)); break;
-    case "open_quad_view":             cb.onOpenQuadView?.(); break;
-    case "focus_quad_panel":           cb.onFocusQuadPanel?.(inp.panel as QuadPanelId); break;
-    case "close_quad_view":            cb.onCloseQuadView?.(); break;
-    case "open_how_to_video":          cb.onOpenHowToVideo?.(inp.title != null ? String(inp.title) : undefined); break;
-    case "show_preference_card":       cb.onShowPreferenceCard?.(); break;
-    case "show_preference_card_layout_images": cb.onShowPreferenceCardLayoutImages?.(); break;
-    case "switch_role":                cb.onSwitchRole?.(inp.role as ActiveRole); break;
-    case "open_patient_details":       cb.onOpenPatientDetails?.(); break;
-    case "close_patient_details":      cb.onClosePatientDetails?.(); break;
-    case "toggle_opening_checklist_item": cb.onToggleOpeningChecklistItem?.(Number(inp.index)); break;
-    case "toggle_machine_check_item":  cb.onToggleMachineCheckItem?.(Number(inp.index)); break;
-    case "open_table_layout_images":   cb.onOpenTableLayoutImages?.(); break;
-    case "lightbox_next":              cb.onLightboxNext?.(); break;
-    case "lightbox_prev":              cb.onLightboxPrev?.(); break;
-    case "lightbox_zoom_in":           cb.onLightboxZoomIn?.(); break;
-    case "lightbox_zoom_out":          cb.onLightboxZoomOut?.(); break;
-    case "close_lightbox":             cb.onCloseLightbox?.(); break;
-    case "scroll":                     cb.onScroll?.(String(inp.direction ?? "down"), String(inp.speed ?? "normal"), Boolean(inp.continuous ?? false)); break;
-    case "stop_scroll":                cb.onStopScroll?.(); break;
+    case "wake":
+      cb.onWake?.();
+      break;
+    case "navigate_home":
+      cb.onGoHome();
+      break;
+    case "navigate_cases":
+      cb.onShowCases();
+      break;
+    case "open_case":
+      cb.onOpenCase(String(inp.query ?? ""));
+      break;
+    case "sleep":
+      cb.onSleep();
+      break;
+    case "navigate_schedule":
+      cb.onShowSchedule?.();
+      break;
+    case "navigate_surgeons":
+      cb.onShowSurgeons?.();
+      break;
+    case "navigate_patients":
+      cb.onShowPatients?.();
+      break;
+    case "show_schedule_day":
+      cb.onShowScheduleDay?.(String(inp.date ?? ""));
+      break;
+    case "close_schedule_day":
+      cb.onCloseScheduleDay?.();
+      break;
+    case "set_reminder":
+      cb.onSetReminder?.(String(inp.text ?? ""), Number(inp.minutes ?? 0));
+      break;
+    case "cancel_reminders":
+      cb.onCancelReminders?.();
+      break;
+    case "dismiss_reminder_alert":
+      cb.onDismissReminderAlert?.();
+      break;
+    case "schedule_set_service_lines":
+      cb.onScheduleSetServiceLines?.(Array.isArray(inp.lines) ? inp.lines.map(String) : []);
+      break;
+    case "schedule_set_surgeon":
+      cb.onScheduleSetSurgeon?.(String(inp.surgeon ?? ""));
+      break;
+    case "schedule_clear_filters":
+      cb.onScheduleClearFilters?.();
+      break;
+    case "show_person_schedule":
+      cb.onShowPersonSchedule?.(String(inp.name ?? ""), String(inp.role ?? ""));
+      break;
+    case "set_person_schedule_view":
+      cb.onSetPersonScheduleView?.(String(inp.view ?? "day"));
+      break;
+    case "close_person_schedule":
+      cb.onClosePersonSchedule?.();
+      break;
+    case "toggle_timeout_item":
+      cb.onToggleTimeOutItem?.(inp.id as TimeOutId);
+      break;
+    case "adjust_instrument_count":
+      cb.onAdjustInstrumentCount?.(inp.item as InstrumentId, Number(inp.delta));
+      break;
+    case "dismiss_alert":
+      cb.onDismissAlert?.(Number(inp.index));
+      break;
+    case "open_quad_view":
+      cb.onOpenQuadView?.();
+      break;
+    case "focus_quad_panel":
+      cb.onFocusQuadPanel?.(inp.panel as QuadPanelId);
+      break;
+    case "close_quad_view":
+      cb.onCloseQuadView?.();
+      break;
+    case "open_how_to_video":
+      cb.onOpenHowToVideo?.(
+        inp.procedure != null ? String(inp.procedure) : undefined,
+        inp.title != null ? String(inp.title) : undefined,
+      );
+      break;
+    case "open_research_papers":
+      cb.onOpenResearchPapers?.(
+        inp.procedure != null ? String(inp.procedure) : undefined,
+        inp.topic != null ? String(inp.topic) : undefined,
+      );
+      break;
+    case "video_play":
+      cb.onVideoPlay?.();
+      break;
+    case "video_pause":
+      cb.onVideoPause?.();
+      break;
+    case "video_seek":
+      cb.onVideoSeek?.(
+        String(inp.direction ?? "back") === "forward" ? "forward" : "back",
+        Number(inp.seconds ?? 10),
+      );
+      break;
+    case "video_next_chapter":
+      cb.onVideoNextChapter?.();
+      break;
+    case "video_prev_chapter":
+      cb.onVideoPrevChapter?.();
+      break;
+    case "video_restart":
+      cb.onVideoRestart?.();
+      break;
+    case "video_set_speed":
+      cb.onVideoSetSpeed?.(Number(inp.rate ?? 1));
+      break;
+    case "video_show_papers":
+      cb.onVideoShowPapers?.();
+      break;
+    case "video_hide_papers":
+      cb.onVideoHidePapers?.();
+      break;
+    case "video_open_paper":
+      cb.onVideoOpenPaper?.({
+        index: inp.index != null ? Number(inp.index) : undefined,
+        keyword: inp.keyword != null ? String(inp.keyword) : undefined,
+      });
+      break;
+    case "video_close_paper":
+      cb.onVideoClosePaper?.();
+      break;
+    case "close_how_to_video":
+      cb.onCloseHowToVideo?.();
+      break;
+    case "show_preference_card":
+      cb.onShowPreferenceCard?.();
+      break;
+    case "show_preference_card_layout_images":
+      cb.onShowPreferenceCardLayoutImages?.();
+      break;
+    case "switch_role":
+      cb.onSwitchRole?.(inp.role as ActiveRole);
+      break;
+    case "open_patient_details":
+      cb.onOpenPatientDetails?.();
+      break;
+    case "close_patient_details":
+      cb.onClosePatientDetails?.();
+      break;
+    case "toggle_opening_checklist_item":
+      cb.onToggleOpeningChecklistItem?.(Number(inp.index));
+      break;
+    case "toggle_machine_check_item":
+      cb.onToggleMachineCheckItem?.(Number(inp.index));
+      break;
+    case "open_table_layout_images":
+      cb.onOpenTableLayoutImages?.();
+      break;
+    case "lightbox_next":
+      cb.onLightboxNext?.();
+      break;
+    case "lightbox_prev":
+      cb.onLightboxPrev?.();
+      break;
+    case "lightbox_zoom_in":
+      cb.onLightboxZoomIn?.();
+      break;
+    case "lightbox_zoom_out":
+      cb.onLightboxZoomOut?.();
+      break;
+    case "close_lightbox":
+      cb.onCloseLightbox?.();
+      break;
+    case "scroll":
+      cb.onScroll?.(
+        String(inp.direction ?? "down"),
+        String(inp.speed ?? "normal"),
+        Boolean(inp.continuous ?? false),
+      );
+      break;
+    case "stop_scroll":
+      cb.onStopScroll?.();
+      break;
   }
 }
 
@@ -197,52 +353,61 @@ export function useArtiVoice(callbacks: ArtiVoiceCallbacks) {
     restartRecognition();
   }, [restartRecognition]);
 
-  const speak = useCallback(async (text: string) => {
-    isSpeakingRef.current = true;
-    setIsSpeaking(true);
-    // Stop the recognizer before TTS so restartRecognition() after playback
-    // sees it in a known-stopped state. Without this, continuous recognition
-    // keeps running through TTS and rec.start() below throws "already started",
-    // which the catch used to treat as fatal — orphaning the live rec and
-    // leaving the mic unrecoverable after the first response.
-    try { recognitionRef.current?.abort(); } catch { /* ignore */ }
-    try {
-      const { audioBase64 } = await speakText({ data: { text } });
-      await new Promise<void>((resolve, reject) => {
-        speakResolveRef.current = resolve;
-        const audio = new Audio(`data:audio/mp3;base64,${audioBase64}`);
-        activeAudioRef.current = audio;
-        const cleanup = () => {
-          speakResolveRef.current = null;
-          if (activeAudioRef.current === audio) activeAudioRef.current = null;
-          isSpeakingRef.current = false;
-          setIsSpeaking(false);
-        };
-        audio.onended = () => {
-          cleanup();
-          postSpeechCooldownRef.current = true;
-          setTimeout(() => { postSpeechCooldownRef.current = false; }, 500);
-          restartRecognition();
-          resolve();
-        };
-        audio.onerror = () => {
-          cleanup();
-          restartRecognition();
-          reject(new Error("Audio playback failed"));
-        };
-        audio.play().catch(reject);
-      });
-    } catch (err) {
-      isSpeakingRef.current = false;
-      setIsSpeaking(false);
-      activeAudioRef.current = null;
-      speakResolveRef.current = null;
-      // We aborted the rec before TTS — if TTS fails, restart it so the
-      // mic doesn't stay dead on the next utterance.
-      restartRecognition();
-      console.error("[arti-voice] TTS error", err);
-    }
-  }, [restartRecognition]);
+  const speak = useCallback(
+    async (text: string) => {
+      isSpeakingRef.current = true;
+      setIsSpeaking(true);
+      // Stop the recognizer before TTS so restartRecognition() after playback
+      // sees it in a known-stopped state. Without this, continuous recognition
+      // keeps running through TTS and rec.start() below throws "already started",
+      // which the catch used to treat as fatal — orphaning the live rec and
+      // leaving the mic unrecoverable after the first response.
+      try {
+        recognitionRef.current?.abort();
+      } catch {
+        /* ignore */
+      }
+      try {
+        const { audioBase64 } = await speakText({ data: { text } });
+        await new Promise<void>((resolve, reject) => {
+          speakResolveRef.current = resolve;
+          const audio = new Audio(`data:audio/mp3;base64,${audioBase64}`);
+          activeAudioRef.current = audio;
+          const cleanup = () => {
+            speakResolveRef.current = null;
+            if (activeAudioRef.current === audio) activeAudioRef.current = null;
+            isSpeakingRef.current = false;
+            setIsSpeaking(false);
+          };
+          audio.onended = () => {
+            cleanup();
+            postSpeechCooldownRef.current = true;
+            setTimeout(() => {
+              postSpeechCooldownRef.current = false;
+            }, 500);
+            restartRecognition();
+            resolve();
+          };
+          audio.onerror = () => {
+            cleanup();
+            restartRecognition();
+            reject(new Error("Audio playback failed"));
+          };
+          audio.play().catch(reject);
+        });
+      } catch (err) {
+        isSpeakingRef.current = false;
+        setIsSpeaking(false);
+        activeAudioRef.current = null;
+        speakResolveRef.current = null;
+        // We aborted the rec before TTS — if TTS fails, restart it so the
+        // mic doesn't stay dead on the next utterance.
+        restartRecognition();
+        console.error("[arti-voice] TTS error", err);
+      }
+    },
+    [restartRecognition],
+  );
 
   // voiceInput=true  → must contain wake word OR be within the 10s follow-up window.
   // voiceInput=false → typed text; always processed (no wake word required).
@@ -283,7 +448,12 @@ export function useArtiVoice(callbacks: ArtiVoiceCallbacks) {
           });
           response = result.response;
           toolCalls = result.toolCalls;
-          console.log("[arti-voice] tools:", toolCalls.map(t => t.name), "response:", response);
+          console.log(
+            "[arti-voice] tools:",
+            toolCalls.map((t) => t.name),
+            "response:",
+            response,
+          );
         } catch (err) {
           console.error("[arti-voice] Claude error", err);
           response = "I don't have that.";
@@ -304,11 +474,13 @@ export function useArtiVoice(callbacks: ArtiVoiceCallbacks) {
           await speak(response);
         }
 
-        const isSleep = toolCalls.some(t => t.name === "sleep");
+        const isSleep = toolCalls.some((t) => t.name === "sleep");
         if (!isSleep && (response || toolCalls.length > 0)) {
           sessionActiveRef.current = true;
           if (sessionTimerRef.current) clearTimeout(sessionTimerRef.current);
-          sessionTimerRef.current = setTimeout(() => { sessionActiveRef.current = false; }, 30_000);
+          sessionTimerRef.current = setTimeout(() => {
+            sessionActiveRef.current = false;
+          }, 30_000);
         }
 
         if (isSleep) {
@@ -414,7 +586,9 @@ export function useArtiVoice(callbacks: ArtiVoiceCallbacks) {
     // ambient speech on the sleep/greeting screen never fires unintended commands.
     if (sessionActiveRef.current) {
       if (sessionTimerRef.current) clearTimeout(sessionTimerRef.current);
-      sessionTimerRef.current = setTimeout(() => { sessionActiveRef.current = false; }, 30_000);
+      sessionTimerRef.current = setTimeout(() => {
+        sessionActiveRef.current = false;
+      }, 30_000);
     }
     startListening();
   }, [startListening]);
@@ -434,7 +608,9 @@ export function useArtiVoice(callbacks: ArtiVoiceCallbacks) {
   const activateSession = useCallback(() => {
     sessionActiveRef.current = true;
     if (sessionTimerRef.current) clearTimeout(sessionTimerRef.current);
-    sessionTimerRef.current = setTimeout(() => { sessionActiveRef.current = false; }, 180_000);
+    sessionTimerRef.current = setTimeout(() => {
+      sessionActiveRef.current = false;
+    }, 180_000);
   }, []);
 
   useEffect(() => () => stopListening(), [stopListening]);

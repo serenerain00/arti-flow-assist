@@ -10,6 +10,7 @@ import { SurgeonsScreen } from "@/components/arti/SurgeonsScreen";
 import { PatientsScreen } from "@/components/arti/PatientsScreen";
 import { ReminderToast, type FiredReminder } from "@/components/arti/ReminderToast";
 import { PersonScheduleModal } from "@/components/arti/PersonScheduleModal";
+import { HowToVideoModal, type HowToVideoHandle } from "@/components/arti/HowToVideoModal";
 import type { PersonRole, PersonScheduleView } from "@/components/arti/schedule";
 import { TODAY_CASES, PATIENT_CLINICAL, type CaseItem } from "@/components/arti/cases";
 import {
@@ -58,7 +59,6 @@ export interface DashboardActions {
   openQuadView: () => ArtiToolResult;
   focusQuadPanel: (panel: QuadPanelId) => ArtiToolResult;
   closeQuadView: () => ArtiToolResult;
-  openHowToVideo: (title?: string) => ArtiToolResult;
   showPreferenceCard: () => ArtiToolResult;
   showPreferenceCardLayoutImages: () => ArtiToolResult;
   switchRole: (role: ActiveRole) => ArtiToolResult;
@@ -106,6 +106,20 @@ function ArtiWallRoot() {
       | "onShowPersonSchedule"
       | "onSetPersonScheduleView"
       | "onClosePersonSchedule"
+      | "onOpenHowToVideo"
+      | "onOpenResearchPapers"
+      | "onVideoPlay"
+      | "onVideoPause"
+      | "onVideoSeek"
+      | "onVideoNextChapter"
+      | "onVideoPrevChapter"
+      | "onVideoRestart"
+      | "onVideoSetSpeed"
+      | "onVideoShowPapers"
+      | "onVideoHidePapers"
+      | "onVideoOpenPaper"
+      | "onVideoClosePaper"
+      | "onCloseHowToVideo"
     >
   >({
     onWake: () => {},
@@ -127,6 +141,20 @@ function ArtiWallRoot() {
     onShowPersonSchedule: () => {},
     onSetPersonScheduleView: () => {},
     onClosePersonSchedule: () => {},
+    onOpenHowToVideo: () => notAvailable(),
+    onOpenResearchPapers: () => notAvailable(),
+    onVideoPlay: () => notAvailable(),
+    onVideoPause: () => notAvailable(),
+    onVideoSeek: () => notAvailable(),
+    onVideoNextChapter: () => notAvailable(),
+    onVideoPrevChapter: () => notAvailable(),
+    onVideoRestart: () => notAvailable(),
+    onVideoSetSpeed: () => notAvailable(),
+    onVideoShowPapers: () => notAvailable(),
+    onVideoHidePapers: () => notAvailable(),
+    onVideoOpenPaper: () => notAvailable(),
+    onVideoClosePaper: () => notAvailable(),
+    onCloseHowToVideo: () => notAvailable(),
   });
 
   // Dashboard-only tool bridge. `null` when no dashboard is mounted.
@@ -190,8 +218,23 @@ function ArtiWallRoot() {
       onFocusQuadPanel: (panel) =>
         dashboardActionsRef.current?.focusQuadPanel(panel) ?? notAvailable(),
       onCloseQuadView: () => dashboardActionsRef.current?.closeQuadView() ?? notAvailable(),
-      onOpenHowToVideo: (title) =>
-        dashboardActionsRef.current?.openHowToVideo(title) ?? notAvailable(),
+      onOpenHowToVideo: (procedure, title) =>
+        navCallbacksRef.current.onOpenHowToVideo?.(procedure, title) ?? notAvailable(),
+      onOpenResearchPapers: (procedure, topic) =>
+        navCallbacksRef.current.onOpenResearchPapers?.(procedure, topic) ?? notAvailable(),
+      onVideoPlay: () => navCallbacksRef.current.onVideoPlay?.() ?? notAvailable(),
+      onVideoPause: () => navCallbacksRef.current.onVideoPause?.() ?? notAvailable(),
+      onVideoSeek: (direction, seconds) =>
+        navCallbacksRef.current.onVideoSeek?.(direction, seconds) ?? notAvailable(),
+      onVideoNextChapter: () => navCallbacksRef.current.onVideoNextChapter?.() ?? notAvailable(),
+      onVideoPrevChapter: () => navCallbacksRef.current.onVideoPrevChapter?.() ?? notAvailable(),
+      onVideoRestart: () => navCallbacksRef.current.onVideoRestart?.() ?? notAvailable(),
+      onVideoSetSpeed: (rate) => navCallbacksRef.current.onVideoSetSpeed?.(rate) ?? notAvailable(),
+      onVideoShowPapers: () => navCallbacksRef.current.onVideoShowPapers?.() ?? notAvailable(),
+      onVideoHidePapers: () => navCallbacksRef.current.onVideoHidePapers?.() ?? notAvailable(),
+      onVideoOpenPaper: (q) => navCallbacksRef.current.onVideoOpenPaper?.(q) ?? notAvailable(),
+      onVideoClosePaper: () => navCallbacksRef.current.onVideoClosePaper?.() ?? notAvailable(),
+      onCloseHowToVideo: () => navCallbacksRef.current.onCloseHowToVideo?.() ?? notAvailable(),
       onShowPreferenceCard: () =>
         dashboardActionsRef.current?.showPreferenceCard() ?? notAvailable(),
       onShowPreferenceCardLayoutImages: () =>
@@ -287,6 +330,20 @@ interface ArtiWallProps {
       | "onShowPersonSchedule"
       | "onSetPersonScheduleView"
       | "onClosePersonSchedule"
+      | "onOpenHowToVideo"
+      | "onOpenResearchPapers"
+      | "onVideoPlay"
+      | "onVideoPause"
+      | "onVideoSeek"
+      | "onVideoNextChapter"
+      | "onVideoPrevChapter"
+      | "onVideoRestart"
+      | "onVideoSetSpeed"
+      | "onVideoShowPapers"
+      | "onVideoHidePapers"
+      | "onVideoOpenPaper"
+      | "onVideoClosePaper"
+      | "onCloseHowToVideo"
     >
   >;
   dashboardActionsRef: DashboardActionsRef;
@@ -417,6 +474,18 @@ function ArtiWall({
     view: "day",
   });
 
+  // ── How-to video modal ───────────────────────────────────────────────────
+  // Lifted to the route level so videos and research are reachable from any
+  // screen (home, cases, preop, schedule, surgeons, patients) — not just
+  // preop. Imperative ref drives all voice transport (play/pause/seek/etc.).
+  const [howToOpen, setHowToOpen] = useState(false);
+  const [howToProcedure, setHowToProcedure] = useState<string | undefined>(undefined);
+  const [howToInitialPapersOpen, setHowToInitialPapersOpen] = useState(false);
+  const [howToInitialPaperQuery, setHowToInitialPaperQuery] = useState<string | undefined>(
+    undefined,
+  );
+  const videoModalRef = useRef<HowToVideoHandle>(null);
+
   // ── Reminders ────────────────────────────────────────────────────────────
   // Pending reminders are scheduled one-shot via setTimeout. When a reminder
   // fires we (1) move it to firedReminders so the toast component renders
@@ -537,9 +606,7 @@ function ArtiWall({
     const activeClinical = PATIENT_CLINICAL[activeCase.id];
     const activeAllergiesLine = activeClinical
       ? activeClinical.allergies.length
-        ? activeClinical.allergies
-            .map((a) => `${a.agent} (${a.severity})`)
-            .join(", ")
+        ? activeClinical.allergies.map((a) => `${a.agent} (${a.severity})`).join(", ")
         : "NKDA"
       : "unknown";
 
@@ -568,11 +635,38 @@ function ArtiWall({
       firedReminders.length
         ? `Reminder alert showing (${firedReminders.length}): ${firedReminders
             .map((r) => `"${r.text}"`)
-            .join(", ")} — "close alert" / "dismiss" / "got it" → dismiss_reminder_alert (highest close precedence)`
+            .join(
+              ", ",
+            )} — "close alert" / "dismiss" / "got it" → dismiss_reminder_alert (highest close precedence)`
         : `Reminder alerts: none visible`,
       personSchedule.open
         ? `Person schedule modal: OPEN — viewing ${personSchedule.role} ${personSchedule.name} (${personSchedule.view} view). "switch to [name]" → show_person_schedule. "show me her week/month/today" → set_person_schedule_view. "close" → close_person_schedule.`
         : `Person schedule modal: closed`,
+      (() => {
+        if (!howToOpen) return `How-to video modal: closed`;
+        const status = videoModalRef.current?.getStatus();
+        if (!status) return `How-to video modal: OPEN`;
+        const fmt = (s: number) => {
+          const m = Math.floor(s / 60);
+          const sec = Math.floor(s % 60);
+          return `${m}:${sec.toString().padStart(2, "0")}`;
+        };
+        const chapterLine =
+          status.currentChapterIndex !== null
+            ? `chapter ${status.currentChapterIndex + 1}/${status.chapters.length} "${status.chapters[status.currentChapterIndex].title}"`
+            : "no active chapter";
+        const papersList = status.papers
+          .map((p, i) => `${i + 1}=${p.title.slice(0, 60)} (${p.journal} ${p.year})`)
+          .join("; ");
+        return [
+          `How-to video modal: OPEN — "${status.videoTitle}" (${status.procedure}, ${status.surgeon}, ${status.publishedYear})`,
+          `  Playback: ${status.playing ? "playing" : "paused"} at ${fmt(status.currentSec)}/${fmt(status.durationSec)} · ${chapterLine} · ${status.speed}× speed`,
+          `  Chapters: ${status.chapters.map((c, i) => `${i + 1}=${c.title}`).join(" · ")}`,
+          `  Research panel: ${status.papersPanelOpen ? "OPEN" : "closed"}${status.activePaper ? ` · viewing paper "${status.activePaper.title}"` : ""}`,
+          `  Available papers: ${papersList || "none"}`,
+          `  Voice tools: video_play, video_pause, video_seek, video_next_chapter, video_prev_chapter, video_restart, video_set_speed, video_show_papers, video_hide_papers, video_open_paper, video_close_paper, close_how_to_video`,
+        ].join("\n");
+      })(),
     ];
 
     // Schedule filter state — always included so Arti knows the current
@@ -659,16 +753,7 @@ function ArtiWall({
 
   // Shared sidebar click handler — used by every screen that renders <Sidebar>.
   const handleSidebarNavigate = useCallback(
-    (
-      key:
-        | "home"
-        | "case"
-        | "schedule"
-        | "surgeons"
-        | "patients"
-        | "library"
-        | "preferences",
-    ) => {
+    (key: "home" | "case" | "schedule" | "surgeons" | "patients" | "library" | "preferences") => {
       armIdleTimer();
       switch (key) {
         case "home":
@@ -806,6 +891,99 @@ function ArtiWall({
     [findCase],
   );
 
+  // ── How-to video voice handlers ──────────────────────────────────────────
+  // Defined inline (no useCallback needed — the navCallbacksRef rebinds every
+  // render, which is the same pattern used by the schedule / reminder
+  // handlers above).
+  const handleOpenHowToVideo = (procedure?: string, title?: string): ArtiToolResult => {
+    setHowToProcedure(procedure ?? title);
+    setHowToInitialPapersOpen(false);
+    setHowToInitialPaperQuery(undefined);
+    setHowToOpen(true);
+    return { ok: true };
+  };
+  const handleOpenResearchPapers = (procedure?: string, topic?: string): ArtiToolResult => {
+    setHowToProcedure(procedure);
+    setHowToInitialPapersOpen(true);
+    setHowToInitialPaperQuery(topic);
+    setHowToOpen(true);
+    return { ok: true };
+  };
+  const requireVideoOpen = (): ArtiToolResult | null =>
+    howToOpen ? null : { ok: false, reason: "video modal not open" };
+  const handleVideoPlay = (): ArtiToolResult => {
+    const guard = requireVideoOpen();
+    if (guard) return guard;
+    videoModalRef.current?.play();
+    return { ok: true };
+  };
+  const handleVideoPause = (): ArtiToolResult => {
+    const guard = requireVideoOpen();
+    if (guard) return guard;
+    videoModalRef.current?.pause();
+    return { ok: true };
+  };
+  const handleVideoSeek = (direction: "forward" | "back", seconds: number): ArtiToolResult => {
+    const guard = requireVideoOpen();
+    if (guard) return guard;
+    const sec = Number.isFinite(seconds) && seconds > 0 ? seconds : 10;
+    videoModalRef.current?.seekRelative(direction === "back" ? -sec : sec);
+    return { ok: true };
+  };
+  const handleVideoNextChapter = (): ArtiToolResult => {
+    const guard = requireVideoOpen();
+    if (guard) return guard;
+    videoModalRef.current?.nextChapter();
+    return { ok: true };
+  };
+  const handleVideoPrevChapter = (): ArtiToolResult => {
+    const guard = requireVideoOpen();
+    if (guard) return guard;
+    videoModalRef.current?.prevChapter();
+    return { ok: true };
+  };
+  const handleVideoRestart = (): ArtiToolResult => {
+    const guard = requireVideoOpen();
+    if (guard) return guard;
+    videoModalRef.current?.restart();
+    return { ok: true };
+  };
+  const handleVideoSetSpeed = (rate: number): ArtiToolResult => {
+    const guard = requireVideoOpen();
+    if (guard) return guard;
+    if (!Number.isFinite(rate) || rate <= 0) return { ok: false, reason: "invalid speed" };
+    videoModalRef.current?.setSpeed(rate);
+    return { ok: true };
+  };
+  const handleVideoShowPapers = (): ArtiToolResult => {
+    const guard = requireVideoOpen();
+    if (guard) return guard;
+    videoModalRef.current?.showPapers();
+    return { ok: true };
+  };
+  const handleVideoHidePapers = (): ArtiToolResult => {
+    const guard = requireVideoOpen();
+    if (guard) return guard;
+    videoModalRef.current?.hidePapers();
+    return { ok: true };
+  };
+  const handleVideoOpenPaper = (q: { index?: number; keyword?: string }): ArtiToolResult => {
+    const guard = requireVideoOpen();
+    if (guard) return guard;
+    const ok = videoModalRef.current?.openPaper(q) ?? false;
+    return ok ? { ok: true } : { ok: false, reason: "paper not found" };
+  };
+  const handleVideoClosePaper = (): ArtiToolResult => {
+    const guard = requireVideoOpen();
+    if (guard) return guard;
+    videoModalRef.current?.closePaper();
+    return { ok: true };
+  };
+  const handleCloseHowToVideo = (): ArtiToolResult => {
+    setHowToOpen(false);
+    return { ok: true };
+  };
+
   /**
    * Voice nav callbacks. Dashboard-only tools are registered in the bridge
    * by AwakeDashboard itself — those don't need to live here.
@@ -853,6 +1031,20 @@ function ArtiWall({
     onShowPersonSchedule: handleShowPersonSchedule,
     onSetPersonScheduleView: handleSetPersonScheduleView,
     onClosePersonSchedule: handleClosePersonSchedule,
+    onOpenHowToVideo: handleOpenHowToVideo,
+    onOpenResearchPapers: handleOpenResearchPapers,
+    onVideoPlay: handleVideoPlay,
+    onVideoPause: handleVideoPause,
+    onVideoSeek: handleVideoSeek,
+    onVideoNextChapter: handleVideoNextChapter,
+    onVideoPrevChapter: handleVideoPrevChapter,
+    onVideoRestart: handleVideoRestart,
+    onVideoSetSpeed: handleVideoSetSpeed,
+    onVideoShowPapers: handleVideoShowPapers,
+    onVideoHidePapers: handleVideoHidePapers,
+    onVideoOpenPaper: handleVideoOpenPaper,
+    onVideoClosePaper: handleVideoClosePaper,
+    onCloseHowToVideo: handleCloseHowToVideo,
   };
 
   /**
@@ -995,6 +1187,14 @@ function ArtiWall({
         onClose={handleClosePersonSchedule}
         onChangeView={handleSetPersonScheduleView}
         onOpenCase={handleOpenCaseFromSchedule}
+      />
+      <HowToVideoModal
+        ref={videoModalRef}
+        open={howToOpen}
+        onClose={() => setHowToOpen(false)}
+        procedure={howToProcedure}
+        initialPapersOpen={howToInitialPapersOpen}
+        initialPaperQuery={howToInitialPaperQuery}
       />
     </div>
   );

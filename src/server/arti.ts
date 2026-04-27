@@ -9,13 +9,11 @@ import {
   SCRUB_TECHS,
   SURGEONS,
 } from "../components/arti/schedule";
+import { LIBRARY_OVERVIEW } from "../components/arti/videoLibrary";
 
 const client = new Anthropic({ apiKey: process.env.ANTHROPIC_API_KEY });
 
-const SYSTEM_PROMPT = readFileSync(
-  resolve(process.cwd(), "skills/personality.md"),
-  "utf-8",
-);
+const SYSTEM_PROMPT = readFileSync(resolve(process.cwd(), "skills/personality.md"), "utf-8");
 
 // Static schedule reference — built once at module load, never changes per
 // request. Combined with the system prompt into a single cached block so
@@ -40,12 +38,13 @@ const TEAM_ROSTER = [
   ...CIRCULATORS.map((n) => `  - ${n}`),
 ].join("\n");
 
-const CACHED_SYSTEM = `${SYSTEM_PROMPT}\n\n---\nFull OR schedule (stable reference — use this to answer patient / surgeon / date / count questions):\n${STATIC_SCHEDULE_OVERVIEW}\n\n---\nTeam roster (use these canonical names for show_person_schedule and team-lookup queries):\n${TEAM_ROSTER}`;
+const CACHED_SYSTEM = `${SYSTEM_PROMPT}\n\n---\nFull OR schedule (stable reference — use this to answer patient / surgeon / date / count questions):\n${STATIC_SCHEDULE_OVERVIEW}\n\n---\nTeam roster (use these canonical names for show_person_schedule and team-lookup queries):\n${TEAM_ROSTER}\n\n---\nReference library (use these exact titles / authors / years when narrating which video or paper you opened):\n${LIBRARY_OVERVIEW}`;
 
 const TOOLS: Anthropic.Tool[] = [
   {
     name: "wake",
-    description: "Wake Arti from sleep/standby. Use when the user greets Arti or asks it to wake up.",
+    description:
+      "Wake Arti from sleep/standby. Use when the user greets Arti or asks it to wake up.",
     input_schema: { type: "object" as const, properties: {}, required: [] },
   },
   {
@@ -85,8 +84,7 @@ const TOOLS: Anthropic.Tool[] = [
       properties: {
         date: {
           type: "string",
-          description:
-            "Target date in ISO format YYYY-MM-DD (e.g., '2026-05-20' for 'May 20th').",
+          description: "Target date in ISO format YYYY-MM-DD (e.g., '2026-05-20' for 'May 20th').",
         },
       },
       required: ["date"],
@@ -159,8 +157,7 @@ const TOOLS: Anthropic.Tool[] = [
       properties: {
         surgeon: {
           type: "string",
-          description:
-            "Full surgeon name as it appears in the schedule, or empty string to clear.",
+          description: "Full surgeon name as it appears in the schedule, or empty string to clear.",
         },
       },
       required: ["surgeon"],
@@ -297,12 +294,161 @@ const TOOLS: Anthropic.Tool[] = [
   },
   {
     name: "open_how_to_video",
-    description: "Open a surgical how-to video by title or keyword.",
+    description:
+      "Open the in-OR surgical how-to viewer with the latest video matching a procedure or keyword. Use for: 'show me the how-to video for X', 'show me how-to videos for this procedure', 'show me a video for this case's procedure', 'pull up the latest reverse shoulder video', 'play the SLAP repair walkthrough'. " +
+      "PRONOUN RESOLUTION: When the user says 'this procedure', 'this case', 'this case's procedure', or refers to the procedure without naming it, look at the Active case line in live context and use that procedure name as the argument. Same applies when a case is highlighted in a list (use that case's procedure). " +
+      "NARRATION REQUIRED: When you call this tool, in the SAME turn ALSO return ONE short sentence text quoting the matched video's title (or procedure), the surgeon/channel, and the published year — followed by 1–2 voice command suggestions. Use the Reference library section in the system prompt to look up the exact title/surgeon/year. Example: 'Reverse Total Shoulder Replacement, Arthrex, 2017. Try saying play, next chapter, or show research.'",
     input_schema: {
       type: "object" as const,
-      properties: { title: { type: "string" } },
+      properties: {
+        procedure: {
+          type: "string",
+          description:
+            "Procedure name, implant name, or technique keyword. Examples: 'reverse total shoulder', 'rotator cuff', 'Bankart', 'SLAP', 'subacromial decompression', 'glenoid baseplate', 'biceps tenodesis'.",
+        },
+        title: {
+          type: "string",
+          description:
+            "Legacy free-text fallback. Prefer `procedure`. Either argument is sufficient.",
+        },
+      },
       required: [],
     },
+  },
+  {
+    name: "open_research_papers",
+    description:
+      "Open the how-to viewer with the research-papers panel expanded — surfaces real peer-reviewed PubMed papers for a procedure. Use for: 'show me the latest research on X', 'what are the latest research findings around this type of procedure', 'show me the papers for this case', 'pull up the literature on rotator cuff repair', 'what does the literature say about lateralization', 'show me research on knotless Bankart anchors'. The viewer opens to the research panel; if the user describes a specific paper topic, that paper opens directly. " +
+      "PRONOUN RESOLUTION: When the user says 'this procedure', 'this type of procedure', 'this case', or refers to it without naming, look at the Active case line in live context and use that procedure name as the argument. " +
+      "NARRATION REQUIRED: When you call this tool, in the SAME turn ALSO return ONE short sentence text quoting the matched paper's first author, journal, and year — followed by 1–2 voice command suggestions. Use the Reference library section in the system prompt to look up the exact authors/journal/year. Example: 'Pearce et al, Arthroscopy 2023, on knotless all-suture Bankart. Try saying open paper one or hide research.'",
+    input_schema: {
+      type: "object" as const,
+      properties: {
+        procedure: {
+          type: "string",
+          description:
+            "Procedure or topic keyword used to pick the underlying video and its associated research panel. Examples: 'reverse shoulder', 'rotator cuff', 'Bankart', 'SLAP'.",
+        },
+        topic: {
+          type: "string",
+          description:
+            "Optional sub-topic or paper-specific keyword to open directly (e.g. 'lateralization', 'knotless anchors', 'double row', 'Cochrane'). When omitted, the panel shows the full list.",
+        },
+      },
+      required: [],
+    },
+  },
+  {
+    name: "video_play",
+    description:
+      "Resume playback of the open how-to video. Use for: 'play', 'play it', 'resume', 'continue playing', 'play the video'. Only valid when the video modal is open (live context will say 'Video modal: OPEN').",
+    input_schema: { type: "object" as const, properties: {}, required: [] },
+  },
+  {
+    name: "video_pause",
+    description:
+      "Pause playback of the open how-to video. Use for: 'pause', 'stop the video', 'pause it', 'pause the video', 'hold on'. Only valid when the video modal is open. Note: 'stop' alone may also mean 'stop_scroll' — disambiguate from live context.",
+    input_schema: { type: "object" as const, properties: {}, required: [] },
+  },
+  {
+    name: "video_seek",
+    description:
+      "Skip the open how-to video forward or back by a number of seconds. Use for: 'rewind 10 seconds', 'go back 30 seconds', 'forward 15', 'skip ahead a minute' (60 s), 'rewind' (default 10 s back), 'jump back', 'fast forward 20'. Always specify direction. Default to seconds=10 if the user doesn't say a number. Use minutes only by converting to seconds.",
+    input_schema: {
+      type: "object" as const,
+      properties: {
+        direction: {
+          type: "string",
+          enum: ["forward", "back"],
+          description: "Direction to seek.",
+        },
+        seconds: {
+          type: "number",
+          description:
+            "How many seconds to seek. Must be > 0. Convert minutes by multiplying by 60. Default 10.",
+        },
+      },
+      required: ["direction"],
+    },
+  },
+  {
+    name: "video_next_chapter",
+    description:
+      "Jump to the next chapter / step in the open how-to video. Use for: 'next chapter', 'next step', 'skip to the next part', 'next section', 'move on to the next step'.",
+    input_schema: { type: "object" as const, properties: {}, required: [] },
+  },
+  {
+    name: "video_prev_chapter",
+    description:
+      "Jump to the previous chapter / step in the open how-to video. Use for: 'previous chapter', 'last chapter', 'go back a step', 'previous step', 'back one chapter'.",
+    input_schema: { type: "object" as const, properties: {}, required: [] },
+  },
+  {
+    name: "video_restart",
+    description:
+      "Restart the open how-to video from the beginning. Use for: 'start over', 'restart the video', 'go to the beginning', 'play from the start', 'rewind to start'.",
+    input_schema: { type: "object" as const, properties: {}, required: [] },
+  },
+  {
+    name: "video_set_speed",
+    description:
+      "Change playback speed of the open how-to video. Use for: 'play at half speed' (0.5), 'slow it down' (0.75), 'normal speed' (1), 'speed it up' (1.5), 'play at double speed' (2), 'play at 1.25'. Allowed values: 0.5, 0.75, 1, 1.25, 1.5, 2.",
+    input_schema: {
+      type: "object" as const,
+      properties: {
+        rate: {
+          type: "number",
+          enum: [0.5, 0.75, 1, 1.25, 1.5, 2],
+          description: "Playback rate multiplier.",
+        },
+      },
+      required: ["rate"],
+    },
+  },
+  {
+    name: "video_show_papers",
+    description:
+      "Open the related-research panel inside the how-to viewer. Use for: 'show me the research', 'show me the papers', 'open the research panel', 'show related research', 'what does the literature say'. Only valid when the video modal is open.",
+    input_schema: { type: "object" as const, properties: {}, required: [] },
+  },
+  {
+    name: "video_hide_papers",
+    description:
+      "Close the related-research panel inside the how-to viewer (video stays open). Use for: 'hide the research', 'close the papers', 'hide the panel', 'close research'.",
+    input_schema: { type: "object" as const, properties: {}, required: [] },
+  },
+  {
+    name: "video_open_paper",
+    description:
+      "Open a specific research paper inside the how-to viewer's research panel. Use for: 'open paper one', 'show me paper 2', 'open the lateralization paper', 'show the Cochrane paper', 'open the knotless anchor paper'. Live context lists available papers as 'Papers: 1=...; 2=...' — pass index when the user says a number, otherwise pass keyword.",
+    input_schema: {
+      type: "object" as const,
+      properties: {
+        index: {
+          type: "number",
+          description:
+            "1-based index from the live-context paper list (e.g. 1 for the first paper).",
+        },
+        keyword: {
+          type: "string",
+          description:
+            "Free-text keyword to match against paper titles / tags. Use when the user names the paper by topic.",
+        },
+      },
+      required: [],
+    },
+  },
+  {
+    name: "video_close_paper",
+    description:
+      "Close the currently expanded research paper and return to the paper list (panel stays open). Use for: 'close the paper', 'back to papers', 'go back to the list', 'show all papers'.",
+    input_schema: { type: "object" as const, properties: {}, required: [] },
+  },
+  {
+    name: "close_how_to_video",
+    description:
+      "Close the how-to video viewer entirely. Use for: 'close the video', 'close the how-to', 'dismiss the video', 'stop the video and close it', 'close that' (when video modal is open and is the topmost modal).",
+    input_schema: { type: "object" as const, properties: {}, required: [] },
   },
   {
     name: "show_preference_card",
@@ -316,7 +462,8 @@ const TOOLS: Anthropic.Tool[] = [
   },
   {
     name: "switch_role",
-    description: "Switch the dashboard view to a specific team member's perspective (nurse, scrub tech, surgeon, or anesthesia).",
+    description:
+      "Switch the dashboard view to a specific team member's perspective (nurse, scrub tech, surgeon, or anesthesia).",
     input_schema: {
       type: "object" as const,
       properties: {
@@ -331,12 +478,14 @@ const TOOLS: Anthropic.Tool[] = [
   },
   {
     name: "open_patient_details",
-    description: "Open the patient details modal showing full demographics, allergies, medications, labs, and consents.",
+    description:
+      "Open the patient details modal showing full demographics, allergies, medications, labs, and consents.",
     input_schema: { type: "object" as const, properties: {}, required: [] },
   },
   {
     name: "close_patient_details",
-    description: "Close the patient details modal. Use when user says 'close', 'close that', 'close the modal', 'go back', or 'dismiss' while the patient details modal is open.",
+    description:
+      "Close the patient details modal. Use when user says 'close', 'close that', 'close the modal', 'go back', or 'dismiss' while the patient details modal is open.",
     input_schema: { type: "object" as const, properties: {}, required: [] },
   },
   {
@@ -371,7 +520,8 @@ const TOOLS: Anthropic.Tool[] = [
   },
   {
     name: "open_table_layout_images",
-    description: "Open the scrub tech table layout images lightbox (back table and Mayo stand photos).",
+    description:
+      "Open the scrub tech table layout images lightbox (back table and Mayo stand photos).",
     input_schema: { type: "object" as const, properties: {}, required: [] },
   },
   {
@@ -403,7 +553,8 @@ const TOOLS: Anthropic.Tool[] = [
   },
   {
     name: "scroll",
-    description: "Scroll the current screen. Use for 'scroll down', 'scroll up', 'go to top', 'scroll slowly', 'keep scrolling', etc. Set continuous=true only when the user wants ongoing auto-scroll (e.g. 'keep scrolling', 'scroll slowly'). For a discrete nudge (e.g. 'scroll down a bit') use continuous=false.",
+    description:
+      "Scroll the current screen. Use for 'scroll down', 'scroll up', 'go to top', 'scroll slowly', 'keep scrolling', etc. Set continuous=true only when the user wants ongoing auto-scroll (e.g. 'keep scrolling', 'scroll slowly'). For a discrete nudge (e.g. 'scroll down a bit') use continuous=false.",
     input_schema: {
       type: "object" as const,
       properties: {
@@ -427,7 +578,8 @@ const TOOLS: Anthropic.Tool[] = [
   },
   {
     name: "stop_scroll",
-    description: "Stop any ongoing continuous scroll. Use when user says 'stop', 'stop scrolling', 'that's enough', etc.",
+    description:
+      "Stop any ongoing continuous scroll. Use when user says 'stop', 'stop scrolling', 'that's enough', etc.",
     input_schema: { type: "object" as const, properties: {}, required: [] },
   },
 ];
@@ -438,11 +590,14 @@ export interface ArtiToolCall {
 }
 
 export const processVoiceCommand = createServerFn({ method: "POST" })
-  .inputValidator((input: unknown) => input as {
-    transcript: string;
-    context: string;
-    history: Array<{ role: "user" | "assistant"; content: string }>;
-  })
+  .inputValidator(
+    (input: unknown) =>
+      input as {
+        transcript: string;
+        context: string;
+        history: Array<{ role: "user" | "assistant"; content: string }>;
+      },
+  )
   .handler(async ({ data }) => {
     const messages: Anthropic.MessageParam[] = [
       ...data.history.map((h) => ({ role: h.role, content: h.content })),
@@ -521,8 +676,22 @@ export const processVoiceCommand = createServerFn({ method: "POST" })
       "show_preference_card",
       "show_preference_card_layout_images",
       "open_table_layout_images",
-      // Media
-      "open_how_to_video",
+      // Media — open_how_to_video and open_research_papers are intentionally
+      // NOT silent. The agent narrates the matched video/paper title, author,
+      // and year in the same turn so the OR team knows what was loaded
+      // without looking at the screen.
+      "video_play",
+      "video_pause",
+      "video_seek",
+      "video_next_chapter",
+      "video_prev_chapter",
+      "video_restart",
+      "video_set_speed",
+      "video_show_papers",
+      "video_hide_papers",
+      "video_open_paper",
+      "video_close_paper",
+      "close_how_to_video",
       // Role view switch — the panel visibly changes, audio is redundant.
       "switch_role",
       // Schedule filters — the chips and case grid visibly update.
@@ -539,11 +708,13 @@ export const processVoiceCommand = createServerFn({ method: "POST" })
     const isSilent = toolCalls.length > 0 && toolCalls.every((tc) => SILENT_TOOLS.has(tc.name));
 
     // Use whatever text Claude returned in the first turn (greetings, answers, etc.).
-    let response = isSilent ? "" : first.content
-      .filter((b): b is Anthropic.TextBlock => b.type === "text")
-      .map((b) => b.text)
-      .join("")
-      .trim();
+    let response = isSilent
+      ? ""
+      : first.content
+          .filter((b): b is Anthropic.TextBlock => b.type === "text")
+          .map((b) => b.text)
+          .join("")
+          .trim();
 
     // When a tool was called but produced no first-turn text, do a short second
     // turn to get a spoken confirmation (navigation, view changes, action tools).

@@ -6,7 +6,6 @@ import { TimeOutPanel } from "./TimeOutPanel";
 import { InstrumentCount } from "./InstrumentCount";
 import { TeamRoster } from "./TeamRoster";
 import { AlertStack, ALERTS as ALERT_DEFS } from "./AlertStack";
-import { HowToVideoModal } from "./HowToVideoModal";
 import { QuadView, type QuadPanelId } from "./QuadView";
 import { PreferenceCard, PREF_CARD_IMAGES } from "./PreferenceCard";
 import { PatientDetailsModal } from "./PatientDetailsModal";
@@ -18,7 +17,12 @@ import {
   MACHINE_CHECK_ITEMS,
   MACHINE_CHECK_INITIAL_DONE,
 } from "./AnesthesiaPanel";
-import { ScrubTechPanel, SCRUB_LIGHTBOX_IMAGES, OPENING_CHECKLIST_ITEMS, OPENING_CHECKLIST_INITIAL_DONE } from "./ScrubTechPanel";
+import {
+  ScrubTechPanel,
+  SCRUB_LIGHTBOX_IMAGES,
+  OPENING_CHECKLIST_ITEMS,
+  OPENING_CHECKLIST_INITIAL_DONE,
+} from "./ScrubTechPanel";
 import { SurgeonPanel } from "./SurgeonPanel";
 import { ArrowLeft, LayoutGrid } from "lucide-react";
 import type { CaseItem } from "./cases";
@@ -43,23 +47,6 @@ interface Props {
 export type TimeOutId = "patient" | "site" | "procedure" | "allergies";
 export type InstrumentId = "raytec" | "lap" | "needle" | "blade" | "clamps";
 
-const VIDEO_TITLES: Record<string, string> = {
-  rotator: "Rotator cuff repair — Suture anchor technique",
-  glenoid: "Univers Revers™ — Glenoid baseplate placement",
-  reverse: "Reverse Total Shoulder Arthroplasty — Step-by-step",
-  default: "Univers Revers™ — Glenoid baseplate placement",
-};
-
-/** Map a free-form title string to one of the canned video titles. */
-function resolveVideoTitle(title?: string): string {
-  if (!title) return VIDEO_TITLES.default;
-  const t = title.toLowerCase();
-  if (t.includes("rotator") || t.includes("cuff")) return VIDEO_TITLES.rotator;
-  if (t.includes("glenoid") || t.includes("baseplate")) return VIDEO_TITLES.glenoid;
-  if (t.includes("reverse") || t.includes("rsa")) return VIDEO_TITLES.reverse;
-  return VIDEO_TITLES.default;
-}
-
 /** Suggestions shown in the ArtiInvoker on the preop dashboard. */
 const DEFAULT_SUGGESTIONS = ["Show team", "Read time-out", "Back to cases"];
 
@@ -75,8 +62,6 @@ export function AwakeDashboard({
   dashboardContextRef,
   onSidebarNavigate,
 }: Props) {
-  const [howToOpen, setHowToOpen] = useState(false);
-  const [howToTitle, setHowToTitle] = useState(VIDEO_TITLES.default);
   const [timeOutChecked, setTimeOutChecked] = useState<Set<TimeOutId>>(new Set());
   const [counts, setCounts] = useState<Record<InstrumentId, number>>({
     raytec: 20,
@@ -94,8 +79,12 @@ export function AwakeDashboard({
   const [lightboxImages, setLightboxImages] = useState<LightboxImage[]>([]);
   const [lightboxIndex, setLightboxIndex] = useState(0);
   const lightboxRef = useRef<LightboxHandle>(null);
-  const [openingChecklist, setOpeningChecklist] = useState<Set<number>>(() => new Set(OPENING_CHECKLIST_INITIAL_DONE));
-  const [machineCheck, setMachineCheck] = useState<Set<number>>(() => new Set(MACHINE_CHECK_INITIAL_DONE));
+  const [openingChecklist, setOpeningChecklist] = useState<Set<number>>(
+    () => new Set(OPENING_CHECKLIST_INITIAL_DONE),
+  );
+  const [machineCheck, setMachineCheck] = useState<Set<number>>(
+    () => new Set(MACHINE_CHECK_INITIAL_DONE),
+  );
 
   const openLightbox = useCallback((images: LightboxImage[], index = 0) => {
     setLightboxImages(images);
@@ -113,8 +102,10 @@ export function AwakeDashboard({
       anesthesia: "Anesthesiologist",
     };
     const TO_LABELS: Record<string, string> = {
-      patient: "Patient identity", site: "Surgical site marked",
-      procedure: "Procedure agreed", allergies: "Allergies/antibiotics",
+      patient: "Patient identity",
+      site: "Surgical site marked",
+      procedure: "Procedure agreed",
+      allergies: "Allergies/antibiotics",
     };
     const checkedItems = [...timeOutChecked].map((id) => TO_LABELS[id] ?? id);
     const pendingItems = (["patient", "site", "procedure", "allergies"] as const)
@@ -122,52 +113,60 @@ export function AwakeDashboard({
       .map((id) => TO_LABELS[id]);
 
     const clinical = activeCase ? PATIENT_CLINICAL[activeCase.id] : undefined;
-    const flaggedLabs = clinical?.labs.filter((l) => l.flag).map((l) => `${l.label} ${l.value}`) ?? [];
+    const flaggedLabs =
+      clinical?.labs.filter((l) => l.flag).map((l) => `${l.label} ${l.value}`) ?? [];
     const allLabs = clinical?.labs.map((l) => `${l.label} ${l.value}${l.flag ? " ⚠" : ""}`) ?? [];
-    dashboardContextRef.current = () => [
-      `Active dashboard view: ${ROLE_LABEL[activeRole]}`,
-      `Available role views: Circulating Nurse, Scrub Tech, Surgeon, Anesthesiologist`,
-      `Time-out checklist: ${timeOutChecked.size}/4 confirmed`,
-      checkedItems.length ? `  Confirmed: ${checkedItems.join(", ")}` : "  None confirmed yet",
-      pendingItems.length ? `  Pending: ${pendingItems.join(", ")}` : "  All items confirmed",
-      `Instrument counts (current / opening):`,
-      `  Raytec ${counts.raytec}/20 · Lap ${counts.lap}/9 · Needle ${counts.needle}/14 · Blade ${counts.blade}/3 · Clamps ${counts.clamps}/12`,
-      counts.raytec !== 20 || counts.lap !== 9 || counts.needle !== 14 || counts.blade !== 3 || counts.clamps !== 12
-        ? "  ⚠ COUNT DISCREPANCY — investigate before closure"
-        : "  All counts nominal",
-      `Dismissed alerts: ${dismissedAlerts.size}`,
-      `Opening checklist (scrub tech): ${openingChecklist.size}/${OPENING_CHECKLIST_ITEMS.length} done. Items by index: ${OPENING_CHECKLIST_ITEMS.map((label, i) => `${i}=${label}${openingChecklist.has(i) ? " ✓" : ""}`).join(" · ")}`,
-      `Machine check (anesthesia): ${machineCheck.size}/${MACHINE_CHECK_ITEMS.length} done. Items by index: ${MACHINE_CHECK_ITEMS.map((label, i) => `${i}=${label}${machineCheck.has(i) ? " ✓" : ""}`).join(" · ")}`,
-      lightboxOpen
-        ? `Image lightbox: OPEN (${lightboxIndex + 1} of ${lightboxImages.length}) — "next image"/"previous image"/"close" are valid commands`
-        : `Image lightbox: closed`,
-      patientDetailsOpen
-        ? `Patient details modal: OPEN — "close" / "close modal" / "close patient info" → close_patient_details`
-        : `Patient details modal: closed`,
-      quadOpen
-        ? `Quad view: OPEN${quadFocused ? ` (focused on ${quadFocused})` : ""} — "close" / "close quad view" → close_quad_view`
-        : `Quad view: closed`,
-      clinical
-        ? [
-            `── Active-case patient chart ──`,
-            `DOB: ${clinical.dob} · Sex: ${clinical.sex} · Height: ${clinical.height} · Weight: ${clinical.weight} · BMI: ${clinical.bmi}`,
-            `Blood type: ${clinical.bloodType}`,
-            `NPO: ${clinical.npo}`,
-            `Allergies: ${clinical.allergies.length ? clinical.allergies.map((a) => `${a.agent} (${a.reaction}, ${a.severity})`).join(", ") : "NKDA — no known drug allergies"}`,
-            `Medications: ${clinical.medications.length ? clinical.medications.join("; ") : "None on file"}`,
-            `Conditions: ${clinical.conditions.join(", ")}`,
-            `Labs (all): ${allLabs.join(", ")}`,
-            flaggedLabs.length ? `  ⚠ Flagged: ${flaggedLabs.join(", ")}` : "  All labs within range",
-            `Consents: ${clinical.consents.join("; ")}`,
-            `Airway: Mallampati ${clinical.airway.mallampati}${clinical.airway.difficult ? " — DIFFICULT AIRWAY" : ""}`,
-            `Anesthesia plan: ${clinical.anesthesiaPlan}`,
-            `Surgeon notes: ${clinical.notes.join(" | ")}`,
-            `Procedure steps: ${clinical.procedureSteps.map((s) => `${s.step}. ${s.title}`).join(" → ")}`,
-            `Implants: ${clinical.implantPlan.map((i) => `${i.component} ${i.spec}${i.confirmed ? "" : " [UNCONFIRMED]"}`).join(", ")}`,
-          ].join("\n")
-        : "",
-      `Actions available from this screen: toggle time-out items, adjust instrument counts, dismiss advisory alerts, open quad view, show preference card, show table layout images, open scrub tech table layout images, toggle opening checklist items, toggle machine check items, switch role view, open patient details, open how-to video`,
-    ].join("\n");
+    dashboardContextRef.current = () =>
+      [
+        `Active dashboard view: ${ROLE_LABEL[activeRole]}`,
+        `Available role views: Circulating Nurse, Scrub Tech, Surgeon, Anesthesiologist`,
+        `Time-out checklist: ${timeOutChecked.size}/4 confirmed`,
+        checkedItems.length ? `  Confirmed: ${checkedItems.join(", ")}` : "  None confirmed yet",
+        pendingItems.length ? `  Pending: ${pendingItems.join(", ")}` : "  All items confirmed",
+        `Instrument counts (current / opening):`,
+        `  Raytec ${counts.raytec}/20 · Lap ${counts.lap}/9 · Needle ${counts.needle}/14 · Blade ${counts.blade}/3 · Clamps ${counts.clamps}/12`,
+        counts.raytec !== 20 ||
+        counts.lap !== 9 ||
+        counts.needle !== 14 ||
+        counts.blade !== 3 ||
+        counts.clamps !== 12
+          ? "  ⚠ COUNT DISCREPANCY — investigate before closure"
+          : "  All counts nominal",
+        `Dismissed alerts: ${dismissedAlerts.size}`,
+        `Opening checklist (scrub tech): ${openingChecklist.size}/${OPENING_CHECKLIST_ITEMS.length} done. Items by index: ${OPENING_CHECKLIST_ITEMS.map((label, i) => `${i}=${label}${openingChecklist.has(i) ? " ✓" : ""}`).join(" · ")}`,
+        `Machine check (anesthesia): ${machineCheck.size}/${MACHINE_CHECK_ITEMS.length} done. Items by index: ${MACHINE_CHECK_ITEMS.map((label, i) => `${i}=${label}${machineCheck.has(i) ? " ✓" : ""}`).join(" · ")}`,
+        lightboxOpen
+          ? `Image lightbox: OPEN (${lightboxIndex + 1} of ${lightboxImages.length}) — "next image"/"previous image"/"close" are valid commands`
+          : `Image lightbox: closed`,
+        patientDetailsOpen
+          ? `Patient details modal: OPEN — "close" / "close modal" / "close patient info" → close_patient_details`
+          : `Patient details modal: closed`,
+        quadOpen
+          ? `Quad view: OPEN${quadFocused ? ` (focused on ${quadFocused})` : ""} — "close" / "close quad view" → close_quad_view`
+          : `Quad view: closed`,
+        clinical
+          ? [
+              `── Active-case patient chart ──`,
+              `DOB: ${clinical.dob} · Sex: ${clinical.sex} · Height: ${clinical.height} · Weight: ${clinical.weight} · BMI: ${clinical.bmi}`,
+              `Blood type: ${clinical.bloodType}`,
+              `NPO: ${clinical.npo}`,
+              `Allergies: ${clinical.allergies.length ? clinical.allergies.map((a) => `${a.agent} (${a.reaction}, ${a.severity})`).join(", ") : "NKDA — no known drug allergies"}`,
+              `Medications: ${clinical.medications.length ? clinical.medications.join("; ") : "None on file"}`,
+              `Conditions: ${clinical.conditions.join(", ")}`,
+              `Labs (all): ${allLabs.join(", ")}`,
+              flaggedLabs.length
+                ? `  ⚠ Flagged: ${flaggedLabs.join(", ")}`
+                : "  All labs within range",
+              `Consents: ${clinical.consents.join("; ")}`,
+              `Airway: Mallampati ${clinical.airway.mallampati}${clinical.airway.difficult ? " — DIFFICULT AIRWAY" : ""}`,
+              `Anesthesia plan: ${clinical.anesthesiaPlan}`,
+              `Surgeon notes: ${clinical.notes.join(" | ")}`,
+              `Procedure steps: ${clinical.procedureSteps.map((s) => `${s.step}. ${s.title}`).join(" → ")}`,
+              `Implants: ${clinical.implantPlan.map((i) => `${i.component} ${i.spec}${i.confirmed ? "" : " [UNCONFIRMED]"}`).join(", ")}`,
+            ].join("\n")
+          : "",
+        `Actions available from this screen: toggle time-out items, adjust instrument counts, dismiss advisory alerts, open quad view, show preference card, show table layout images, open scrub tech table layout images, toggle opening checklist items, toggle machine check items, switch role view, open patient details, open how-to video`,
+      ].join("\n");
   }, [
     activeRole,
     timeOutChecked,
@@ -230,12 +229,6 @@ export function AwakeDashboard({
   const closeQuadView = useCallback((): ArtiToolResult => {
     setQuadOpen(false);
     setQuadFocused(null);
-    return { ok: true };
-  }, []);
-
-  const openHowToVideo = useCallback((title?: string): ArtiToolResult => {
-    setHowToTitle(resolveVideoTitle(title));
-    setHowToOpen(true);
     return { ok: true };
   }, []);
 
@@ -336,7 +329,6 @@ export function AwakeDashboard({
       openQuadView,
       focusQuadPanel,
       closeQuadView,
-      openHowToVideo,
       showPreferenceCard,
       showPreferenceCardLayoutImages,
       switchRole,
@@ -358,7 +350,6 @@ export function AwakeDashboard({
       openQuadView,
       focusQuadPanel,
       closeQuadView,
-      openHowToVideo,
       showPreferenceCard,
       showPreferenceCardLayoutImages,
       switchRole,
@@ -474,8 +465,11 @@ export function AwakeDashboard({
         )}
       </div>
 
-      <HowToVideoModal open={howToOpen} onClose={() => setHowToOpen(false)} title={howToTitle} />
-      <PatientDetailsModal open={patientDetailsOpen} onClose={() => setPatientDetailsOpen(false)} activeCase={activeCase} />
+      <PatientDetailsModal
+        open={patientDetailsOpen}
+        onClose={() => setPatientDetailsOpen(false)}
+        activeCase={activeCase}
+      />
 
       <ImageLightboxModal
         ref={lightboxRef}
