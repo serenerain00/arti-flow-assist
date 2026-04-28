@@ -43,6 +43,13 @@ export interface ArtiVoiceCallbacks {
   onLibrarySetAnimatedOnly?: (enabled: boolean) => void;
   /** Reset every Video Library filter to defaults. */
   onLibraryClearFilters?: () => void;
+  // ── Journey walkthrough ────────────────────────────────────────────
+  onStartJourney?: () => void;
+  onExitJourney?: () => void;
+  onJourneyPause?: () => void;
+  onJourneyResume?: () => void;
+  onJourneyNext?: () => void;
+  onJourneyPrevious?: () => void;
   /** Open the day detail on the Schedule. `date` is an ISO key YYYY-MM-DD. */
   onShowScheduleDay?: (date: string) => void;
   /** Close the Schedule day-detail drawer without leaving the Schedule screen. */
@@ -193,6 +200,24 @@ function executeToolCall(call: ArtiToolCall, cb: ArtiVoiceCallbacks): void {
       break;
     case "library_clear_filters":
       cb.onLibraryClearFilters?.();
+      break;
+    case "start_journey":
+      cb.onStartJourney?.();
+      break;
+    case "exit_journey":
+      cb.onExitJourney?.();
+      break;
+    case "journey_pause":
+      cb.onJourneyPause?.();
+      break;
+    case "journey_resume":
+      cb.onJourneyResume?.();
+      break;
+    case "journey_next":
+      cb.onJourneyNext?.();
+      break;
+    case "journey_previous":
+      cb.onJourneyPrevious?.();
       break;
     case "show_schedule_day":
       cb.onShowScheduleDay?.(String(inp.date ?? ""));
@@ -374,6 +399,11 @@ export function useArtiVoice(callbacks: ArtiVoiceCallbacks) {
   const isSpeakingRef = useRef(false);
   // Ref to the active Audio element so stopSpeaking() can cut TTS mid-sentence.
   const activeAudioRef = useRef<HTMLAudioElement | null>(null);
+  // 0–1 progress of the active TTS playback. Polled by callers (e.g. the
+  // journey screen's progress bars) via getAudioProgress() — kept as a ref
+  // (not state) so timeupdate-driven updates don't force re-renders at
+  // 30+ Hz throughout the app.
+  const audioProgressRef = useRef(0);
   // Stored resolve for the current speak() Promise — lets stopSpeaking() settle
   // it immediately so processingRef is always released even on interrupt.
   const speakResolveRef = useRef<(() => void) | null>(null);
@@ -417,8 +447,26 @@ export function useArtiVoice(callbacks: ArtiVoiceCallbacks) {
   // time tools finish their state updates, the MP3 bytes are usually ready.
   const playAudio = useCallback(
     async (audioBase64: string) => {
+      // Cancel any audio still playing from a prior speak() call. Without
+      // this, concurrent speak() invocations (React strict-mode double-
+      // invoke, rapid back-to-back stage transitions, leftover speech from
+      // a previous turn) leak overlapping audio streams — both Audio
+      // elements stay live because we only overwrite the ref. We pause +
+      // clear the previous element AND resolve its pending promise so its
+      // caller can clean up too.
+      if (activeAudioRef.current) {
+        activeAudioRef.current.pause();
+        activeAudioRef.current.src = "";
+        activeAudioRef.current = null;
+      }
+      if (speakResolveRef.current) {
+        speakResolveRef.current();
+        speakResolveRef.current = null;
+      }
+
       isSpeakingRef.current = true;
       setIsSpeaking(true);
+      audioProgressRef.current = 0;
       // Stop the recognizer before audio plays so restartRecognition() after
       // playback sees it in a known-stopped state. Without this, continuous
       // recognition keeps running through TTS and rec.start() below throws
@@ -441,7 +489,13 @@ export function useArtiVoice(callbacks: ArtiVoiceCallbacks) {
             isSpeakingRef.current = false;
             setIsSpeaking(false);
           };
+          audio.ontimeupdate = () => {
+            if (audio.duration && !isNaN(audio.duration)) {
+              audioProgressRef.current = audio.currentTime / audio.duration;
+            }
+          };
           audio.onended = () => {
+            audioProgressRef.current = 1;
             cleanup();
             // 250 ms cooldown is enough to clear speaker reverb at typical
             // OR-display volume; the previous 500 ms felt sluggish in
@@ -472,8 +526,34 @@ export function useArtiVoice(callbacks: ArtiVoiceCallbacks) {
     [restartRecognition],
   );
 
+  /**
+   * Announce that speech is imminent — sets isSpeakingRef + aborts the
+   * recognizer NOW, before any network fetch starts.
+   *
+   * Why: the speakText fetch takes ~300-500 ms. Without this, SR stays
+   * active during that window. When the audio finally plays, the speaker
+   * output echoes into the mic, SR transcribes a fragment of Arti's
+   * own narration ("...pause, fast, and quiet"), Claude interprets it
+   * as a command, and fires spurious tools (e.g. journey_pause mid-
+   * narration). Setting the flag synchronously closes that window.
+   */
+  const prepareToSpeak = useCallback(() => {
+    isSpeakingRef.current = true;
+    setIsSpeaking(true);
+    // Reset progress so the previous stage's "ended at 1" value doesn't
+    // leak into the gap before the new stage's audio begins playing.
+    audioProgressRef.current = 0;
+    try {
+      recognitionRef.current?.abort();
+    } catch {
+      /* ignore */
+    }
+  }, []);
+
   const speak = useCallback(
     async (text: string) => {
+      // Block SR before the fetch — see prepareToSpeak comment.
+      prepareToSpeak();
       try {
         const { audioBase64 } = await speakText({ data: { text } });
         await playAudio(audioBase64);
@@ -488,7 +568,7 @@ export function useArtiVoice(callbacks: ArtiVoiceCallbacks) {
         console.error("[arti-voice] TTS error", err);
       }
     },
-    [playAudio, restartRecognition],
+    [playAudio, prepareToSpeak, restartRecognition],
   );
 
   // voiceInput=true  → must contain wake word OR be within the 10s follow-up window.
@@ -720,6 +800,18 @@ export function useArtiVoice(callbacks: ArtiVoiceCallbacks) {
     isSpeaking,
     error,
     speak,
+    /** Play pre-fetched MP3 base64 audio. Used by callers that want to
+     * pre-warm TTS (e.g. journey screen pre-fetches stage 0 narration
+     * before the screen mounts). */
+    playAudio,
+    /** Synchronously block SR + mark speaking before a TTS fetch starts.
+     * Prevents the mic from transcribing Arti's own audio echo during the
+     * fetch window (which would otherwise self-trigger commands). */
+    prepareToSpeak,
+    /** 0–1 playback position of the active TTS audio. Returns 0 while
+     * preparing or between stages, 1 the instant the audio ends. Read in
+     * an animation frame loop — does not trigger re-renders. */
+    getAudioProgress: () => audioProgressRef.current,
     stopSpeaking,
     sendCommand: handleTranscript,
     startListening: startListeningWrapped,

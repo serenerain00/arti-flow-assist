@@ -10,6 +10,9 @@ import { SurgeonsScreen } from "@/components/arti/SurgeonsScreen";
 import { PatientsScreen } from "@/components/arti/PatientsScreen";
 import { ConsolesScreen } from "@/components/arti/ConsolesScreen";
 import { VideoLibraryScreen } from "@/components/arti/VideoLibraryScreen";
+import { JourneyScreen } from "@/components/arti/JourneyScreen";
+import { JOURNEY } from "@/components/arti/journey/script";
+import { speakText } from "@/server/elevenlabs";
 import {
   CONSOLES,
   findConsole,
@@ -124,6 +127,12 @@ function ArtiWallRoot() {
       | "onLibrarySearch"
       | "onLibrarySetAnimatedOnly"
       | "onLibraryClearFilters"
+      | "onStartJourney"
+      | "onExitJourney"
+      | "onJourneyPause"
+      | "onJourneyResume"
+      | "onJourneyNext"
+      | "onJourneyPrevious"
       | "onShowScheduleDay"
       | "onCloseScheduleDay"
       | "onSetReminder"
@@ -174,6 +183,12 @@ function ArtiWallRoot() {
     onLibrarySearch: () => {},
     onLibrarySetAnimatedOnly: () => {},
     onLibraryClearFilters: () => {},
+    onStartJourney: () => {},
+    onExitJourney: () => {},
+    onJourneyPause: () => {},
+    onJourneyResume: () => {},
+    onJourneyNext: () => {},
+    onJourneyPrevious: () => {},
     onShowScheduleDay: () => {},
     onCloseScheduleDay: () => {},
     onSetReminder: () => {},
@@ -255,6 +270,12 @@ function ArtiWallRoot() {
       onLibrarySearch: (q) => navCallbacksRef.current.onLibrarySearch?.(q),
       onLibrarySetAnimatedOnly: (v) => navCallbacksRef.current.onLibrarySetAnimatedOnly?.(v),
       onLibraryClearFilters: () => navCallbacksRef.current.onLibraryClearFilters?.(),
+      onStartJourney: () => navCallbacksRef.current.onStartJourney?.(),
+      onExitJourney: () => navCallbacksRef.current.onExitJourney?.(),
+      onJourneyPause: () => navCallbacksRef.current.onJourneyPause?.(),
+      onJourneyResume: () => navCallbacksRef.current.onJourneyResume?.(),
+      onJourneyNext: () => navCallbacksRef.current.onJourneyNext?.(),
+      onJourneyPrevious: () => navCallbacksRef.current.onJourneyPrevious?.(),
       onShowScheduleDay: (date) => navCallbacksRef.current.onShowScheduleDay?.(date),
       onCloseScheduleDay: () => navCallbacksRef.current.onCloseScheduleDay?.(),
       onSetReminder: (text, minutes) => navCallbacksRef.current.onSetReminder?.(text, minutes),
@@ -369,7 +390,8 @@ type ArtiPhase =
   | "surgeons"
   | "patients"
   | "consoles"
-  | "library";
+  | "library"
+  | "journey";
 
 interface ArtiWallProps {
   navCallbacksRef: React.MutableRefObject<
@@ -391,6 +413,12 @@ interface ArtiWallProps {
       | "onLibrarySearch"
       | "onLibrarySetAnimatedOnly"
       | "onLibraryClearFilters"
+      | "onStartJourney"
+      | "onExitJourney"
+      | "onJourneyPause"
+      | "onJourneyResume"
+      | "onJourneyNext"
+      | "onJourneyPrevious"
       | "onShowScheduleDay"
       | "onCloseScheduleDay"
       | "onSetReminder"
@@ -552,6 +580,35 @@ function ArtiWall({
   const [libraryCategory, setLibraryCategory] = useState<VideoCategory | "All">("All");
   const [libraryAnimatedOnly, setLibraryAnimatedOnly] = useState(false);
 
+  // Journey walkthrough state. `journeyPaused` toggled by voice / button.
+  // `journeyStageDelta` is a monotonically-increasing counter the voice
+  // tools bump for next/previous; the screen reads the delta and applies
+  // a single stage change. `journeyStartKey` resets to a new value each
+  // time start_journey fires so the screen knows to restart from stage 0.
+  const [journeyPaused, setJourneyPaused] = useState(false);
+  const [journeyStageDelta, setJourneyStageDelta] = useState(0);
+  const [journeyStartKey, setJourneyStartKey] = useState(0);
+  // Stage-0 narration audio pre-fetched at start_journey time so the
+  // screen can play it immediately on mount instead of waiting for a
+  // fresh ElevenLabs round-trip (~400-500 ms saved).
+  const [journeyPrimer, setJourneyPrimer] = useState<Promise<{
+    audioBase64: string;
+  }> | null>(null);
+
+  /**
+   * Stable journey-exit handler. Critical that this is useCallback —
+   * passing an inline arrow function as JourneyScreen's `onExit` makes
+   * the prop unstable, which re-triggers the screen's narration useEffect
+   * on every parent re-render and stacks overlapping TTS streams. Refs
+   * + setState dispatchers in the body are themselves stable across
+   * renders, so the empty-deps array is correct.
+   */
+  const handleExitJourney = useCallback(() => {
+    vForSleepRef.current?.stopSpeaking();
+    setJourneyPaused(false);
+    setPhase("sleep");
+  }, []);
+
   // Person Schedule modal — overlay that shows one person's cases.
   interface PersonScheduleState {
     open: boolean;
@@ -663,18 +720,34 @@ function ArtiWall({
 
   const vForSleepRef = useRef(v);
   vForSleepRef.current = v;
-  // Stop mic on initial sleep phase (app startup).
+  // Stop mic ONLY on the initial sleep phase (app startup, before the user
+  // has interacted). On subsequent returns to sleep — e.g. journey auto-exit,
+  // idle timeout, manual "go to sleep" — leave the mic live so the user can
+  // wake Arti by voice without having to walk up and tap the orb. This is
+  // an OR wall-display, not a phone: the user's hands are usually busy.
+  const userHasEngagedRef = useRef(false);
   useEffect(() => {
-    if (phase === "sleep") vForSleepRef.current?.stopListening();
+    if (phase === "sleep" && !userHasEngagedRef.current) {
+      vForSleepRef.current?.stopListening();
+    }
+    if (phase !== "sleep") userHasEngagedRef.current = true;
   }, [phase]);
   // Auto-start mic and open session window whenever navigating to an active screen,
   // AND recover if the mic dies mid-session (e.g. SpeechRecognition restart error).
   // startListening() is idempotent — safe to call when already running.
+  // Once the user has engaged once, also keep the mic live on sleep so they
+  // can wake Arti by voice.
   const isListening = v?.listening ?? false;
   useEffect(() => {
-    if (phase === "sleep" || phase === "waking" || artiNapping) return;
+    if (phase === "waking" || artiNapping) return;
+    if (phase === "sleep" && !userHasEngagedRef.current) return;
+    // JourneyScreen owns the mic during phase === "journey": it must be
+    // OFF during narration (Arti's own audio bleeds back through the mic
+    // and self-triggers commands) and ON during pause. Skipping here
+    // prevents this auto-start fight with the journey screen.
+    if (phase === "journey") return;
     vForSleepRef.current?.startListening();
-    vForSleepRef.current?.activateSession();
+    if (phase !== "sleep") vForSleepRef.current?.activateSession();
   }, [phase, artiNapping, isListening]);
   // Stop mic when Arti naps mid-session (stays on current screen).
   useEffect(() => {
@@ -694,6 +767,7 @@ function ArtiWall({
     patients: "patients today",
     consoles: "OR equipment tower / consoles",
     library: "video library",
+    journey: "how-it-was-built journey",
   };
 
   // Keep contextRef current so Claude always gets a fresh state snapshot.
@@ -781,6 +855,11 @@ function ArtiWall({
           ? `TOPMOST: ${which} — generic 'close' → close_topmost_modal.`
           : `TOPMOST: none route-level (check dashboard block for patient details / quad view).`;
       })(),
+      // Journey-mode hint — when on the journey screen, pause/next/exit
+      // route to journey_* tools, NOT video_pause / open_case / etc.
+      phase === "journey"
+        ? `JOURNEY MODE — narration walkthrough is active${journeyPaused ? " (PAUSED)" : ""}. Voice routing on this screen: 'pause'/'stop'/'arti pause' → journey_pause · 'resume'/'continue'/'play' → journey_resume · 'next'/'skip' → journey_next · 'previous'/'back' → journey_previous · 'exit'/'I'm done'/'back to sleep' → exit_journey. Do NOT call video_pause / open_case / library_* on this screen — those don't apply to the journey.`
+        : "",
       (() => {
         if (!howToOpen) return `How-to video modal: closed`;
         const status = videoModalRef.current?.getStatus();
@@ -1465,6 +1544,38 @@ function ArtiWall({
       setLibraryCategory("All");
       setLibraryAnimatedOnly(false);
     },
+    // ── Journey walkthrough ──────────────────────────────────────────
+    onStartJourney: () => {
+      // Cancel any audio still playing from prior turns so it can't bleed
+      // into the journey's first stage.
+      vForSleepRef.current?.stopSpeaking();
+      // Block SR + mark speaking BEFORE the fetch starts. Without this, the
+      // ~400-500ms primer-fetch window leaves the mic open; speakers' echo
+      // of stage-0 narration gets transcribed and Claude fires journey_pause
+      // mid-sentence. See useArtiVoice.prepareToSpeak.
+      vForSleepRef.current?.prepareToSpeak?.();
+      closeOverlays();
+      setJourneyPaused(false);
+      setJourneyStartKey((k) => k + 1); // tells screen to reset to stage 0
+      setJourneyStageDelta(0);
+      // Pre-fetch the stage-0 narration audio NOW (before phase change /
+      // screen mount). By the time JourneyScreen mounts and reads the
+      // primer prop, the ElevenLabs round-trip is mostly complete — the
+      // first audible word lands inside the 1-second target.
+      setJourneyPrimer(speakText({ data: { text: JOURNEY[0].narration } }));
+      setPhase("journey");
+    },
+    onExitJourney: () => {
+      // Stop any narration and return to sleep — feels like the user is
+      // walking away from a presentation.
+      vForSleepRef.current?.stopSpeaking();
+      setJourneyPaused(false);
+      setPhase("sleep");
+    },
+    onJourneyPause: () => setJourneyPaused(true),
+    onJourneyResume: () => setJourneyPaused(false),
+    onJourneyNext: () => setJourneyStageDelta((d) => d + 1),
+    onJourneyPrevious: () => setJourneyStageDelta((d) => d - 1),
     onShowScheduleDay: (date: string) => {
       if (!date) return;
       closeOverlays();
@@ -1576,6 +1687,18 @@ function ArtiWall({
         onSidebarNavigate={handleSidebarNavigate}
         focusedId={focusedConsoleId}
         onFocusChange={setFocusedConsoleId}
+      />
+    );
+  } else if (phase === "journey") {
+    screen = (
+      <JourneyScreen
+        paused={journeyPaused}
+        onPausedChange={setJourneyPaused}
+        externalStageDelta={journeyStageDelta}
+        startKey={journeyStartKey}
+        primer={journeyPrimer}
+        onPrompt={handlePrompt}
+        onExit={handleExitJourney}
       />
     );
   } else if (phase === "library") {

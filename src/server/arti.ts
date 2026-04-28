@@ -85,6 +85,43 @@ const TOOLS: Anthropic.Tool[] = [
     input_schema: { type: "object" as const, properties: {}, required: [] },
   },
   {
+    name: "start_journey",
+    description:
+      "Launch the cinematic 'how Arti was built' walkthrough — a narrated, animated 7-stage story covering the vision, tech stack, voice integration, and content sources. Use for: 'show me how this was created', 'show me how it was built', 'how did you make this', 'tell me how Arti works', 'walk me through this app', 'show me the build story', 'show me the demo'. Works from ANY screen — closes any open overlay and full-bleeds the journey screen. Once started, narration auto-plays through all stages; the user can voice-pause / voice-skip / voice-exit.",
+    input_schema: { type: "object" as const, properties: {}, required: [] },
+  },
+  {
+    name: "exit_journey",
+    description:
+      "Exit the journey walkthrough and return to sleep. Use ONLY when the user is currently on the journey screen (live context will say 'Current screen: how-it-was-built journey'). Trigger phrases: 'exit', 'exit journey', 'I'm done', 'back to sleep', 'stop the demo', 'go to sleep', 'close it'. If on any other screen, do NOT use this tool — use the appropriate close_topmost_modal or navigation tool instead.",
+    input_schema: { type: "object" as const, properties: {}, required: [] },
+  },
+  {
+    name: "journey_pause",
+    description:
+      "Pause the journey narration on the current stage. Use ONLY on the journey screen. Trigger phrases: 'pause', 'arti pause', 'stop', 'hold on', 'wait', 'stop talking'. While the journey is paused, all narration stops; the visual freezes its current state. The user can resume with 'resume' / 'continue' / 'play'. " +
+      "DISAMBIGUATION: when NOT on the journey screen, 'pause'/'stop' should route to other tools — video_pause for the how-to viewer, stop_scroll for active scroll, etc. The live context's 'Current screen' field tells you whether journey_pause applies.",
+    input_schema: { type: "object" as const, properties: {}, required: [] },
+  },
+  {
+    name: "journey_resume",
+    description:
+      "Resume the journey narration after a pause. Use ONLY on the journey screen when paused. Trigger phrases: 'resume', 'continue', 'play', 'keep going', 'go on', 'unpause'. Replays the current stage's narration from the beginning (sub-second resume isn't tracked).",
+    input_schema: { type: "object" as const, properties: {}, required: [] },
+  },
+  {
+    name: "journey_next",
+    description:
+      "Advance to the next stage of the journey. Use ONLY on the journey screen. Trigger phrases: 'next', 'next stage', 'skip', 'skip ahead', 'next chapter', 'move on'. If already on the final stage, this exits the journey.",
+    input_schema: { type: "object" as const, properties: {}, required: [] },
+  },
+  {
+    name: "journey_previous",
+    description:
+      "Go back one stage in the journey. Use ONLY on the journey screen. Trigger phrases: 'previous', 'go back', 'previous stage', 'back', 'last one'. No-op if already on the first stage.",
+    input_schema: { type: "object" as const, properties: {}, required: [] },
+  },
+  {
     name: "navigate_consoles",
     description:
       "Open the OR equipment-tower status screen — a stylized 3D view of the integrated arthroscopy stack (light source, 4K camera console, image management, fluid pump, shaver, RF console) with live connection status and per-device telemetry (pressure, flow, RPM, intensity, etc). Use for: 'show me the OR consoles', 'show the equipment tower', 'console status', 'tower status', 'show me the equipment', 'pull up the consoles', 'are the consoles ready', 'check the tower'. After this nav opens, the user can voice-focus an individual console with focus_console.",
@@ -907,6 +944,14 @@ export const processVoiceCommand = createServerFn({ method: "POST" })
       "navigate_consoles",
       "navigate_library",
       "close_topmost_modal",
+      // Journey walkthrough — all silent so Arti's narration owns the
+      // audio channel without conflicting confirmations.
+      "start_journey",
+      "exit_journey",
+      "journey_pause",
+      "journey_resume",
+      "journey_next",
+      "journey_previous",
       "library_filter_category",
       "library_search",
       "library_set_animated_only",
