@@ -9,6 +9,12 @@ import { AlertStack, ALERTS as ALERT_DEFS } from "./AlertStack";
 import { QuadView, type QuadPanelId } from "./QuadView";
 import { PreferenceCard } from "./PreferenceCard";
 import { PatientDetailsModal } from "./PatientDetailsModal";
+import {
+  PatientVideoModal,
+  type PatientVideoHandle,
+  type PatientVideoSession,
+} from "./PatientVideoModal";
+import { PatientXraysModal, type PatientXraysHandle } from "./PatientXraysModal";
 import { ArtiInvoker } from "./ArtiInvoker";
 import { type LightboxImage } from "./ImageLightboxModal";
 import { RoleSwitcherBar, type ActiveRole } from "./RoleSwitcherBar";
@@ -64,6 +70,8 @@ export function AwakeDashboard({
   onSidebarNavigate,
   onOpenLightbox,
 }: Props) {
+  const patientVideoModalRef = useRef<PatientVideoHandle | null>(null);
+  const xraysModalRef = useRef<PatientXraysHandle | null>(null);
   const [timeOutChecked, setTimeOutChecked] = useState<Set<TimeOutId>>(new Set());
   const [counts, setCounts] = useState<Record<InstrumentId, number>>({
     raytec: 20,
@@ -76,6 +84,61 @@ export function AwakeDashboard({
   const [quadOpen, setQuadOpen] = useState(false);
   const [quadFocused, setQuadFocused] = useState<QuadPanelId | null>(null);
   const [patientDetailsOpen, setPatientDetailsOpen] = useState(false);
+  const [patientVideoOpen, setPatientVideoOpen] = useState(false);
+  const [xraysOpen, setXraysOpen] = useState(false);
+  /**
+   * Per-case viewing log for patient pre-op videos. Keyed by case id so the
+   * log survives role-switches and case navigation. Each entry holds the
+   * latest session — open time, peak watched seconds, completion flag.
+   *
+   * Seeded with realistic prior-viewing entries for the day's cases so the
+   * surgeon panel demonstrates the populated post-view state on first
+   * render. c-005 is intentionally left empty to also show the
+   * "Not yet viewed by team" state. Real plays overwrite seeded entries.
+   */
+  const [patientVideoSessions, setPatientVideoSessions] = useState<
+    Record<string, PatientVideoSession>
+  >(() => {
+    const todayAt = (h: number, m: number): string => {
+      const d = new Date();
+      d.setHours(h, m, 0, 0);
+      return d.toISOString();
+    };
+    return {
+      "c-001": {
+        openedAtIso: todayAt(6, 42),
+        closedAtIso: todayAt(6, 43),
+        peakWatchedSec: 84,
+        openDurationSec: 95,
+        completed: true,
+        openedBy: "Sarah Lin, RN",
+      },
+      "c-002": {
+        openedAtIso: todayAt(7, 14),
+        closedAtIso: todayAt(7, 15),
+        peakWatchedSec: 75,
+        openDurationSec: 88,
+        completed: false,
+        openedBy: "Voice · Arti",
+      },
+      "c-003": {
+        openedAtIso: todayAt(7, 51),
+        closedAtIso: todayAt(7, 52),
+        peakWatchedSec: 78,
+        openDurationSec: 82,
+        completed: true,
+        openedBy: "Dr. Anika Patel",
+      },
+      "c-004": {
+        openedAtIso: todayAt(8, 22),
+        closedAtIso: todayAt(8, 23),
+        peakWatchedSec: 33,
+        openDurationSec: 40,
+        completed: false,
+        openedBy: "Marcus Reyes, CST",
+      },
+    };
+  });
   const [activeRole, setActiveRole] = useState<ActiveRole>("nurse");
   const [openingChecklist, setOpeningChecklist] = useState<Set<number>>(
     () => new Set(OPENING_CHECKLIST_INITIAL_DONE),
@@ -130,6 +193,27 @@ export function AwakeDashboard({
         patientDetailsOpen
           ? `Patient details modal: OPEN — "close" / "close modal" / "close patient info" → close_patient_details`
           : `Patient details modal: closed`,
+        patientVideoOpen
+          ? `Patient video modal: OPEN — transport tools available: play_patient_video, pause_patient_video, restart_patient_video, toggle_patient_video_captions, mute_patient_video, unmute_patient_video, close_patient_video. Generic "play"/"pause"/"restart"/"show captions"/"unmute"/"mute"/"close" all map to these (NOT to the how-to-video tools). The video DEFAULTS TO MUTED — staff routinely say "unmute" right after open to enable audio.`
+          : `Patient video modal: closed`,
+        xraysOpen
+          ? (() => {
+              const study = activeCase ? PATIENT_CLINICAL[activeCase.id].imaging : undefined;
+              const viewLabels = study?.views.map((v) => `"${v.label}" (${v.modality})`).join(", ");
+              return `Patient X-rays modal: OPEN — study ${study?.protocol ?? ""}, ${study?.views.length ?? 0} views: ${viewLabels}. Tools: xrays_next_view, xrays_prev_view, xrays_show_view (with view name as query — e.g. "AP", "axillary", "MRI", "Y view"), xrays_zoom_in, xrays_zoom_out, xrays_reset_zoom, close_xrays.`;
+            })()
+          : `Patient X-rays modal: closed`,
+        activeCase
+          ? (() => {
+              const session = patientVideoSessions[activeCase.id];
+              if (!session) return `Patient video viewing log (active case): never opened`;
+              const opened = new Date(session.openedAtIso).toLocaleTimeString([], {
+                hour: "2-digit",
+                minute: "2-digit",
+              });
+              return `Patient video viewing log (active case): opened ${opened}, watched ${Math.round(session.peakWatchedSec)}s, ${session.completed ? "FULL play" : "partial"}, by ${session.openedBy}`;
+            })()
+          : "",
         quadOpen
           ? `Quad view: OPEN${quadFocused ? ` (focused on ${quadFocused})` : ""} — "close" / "close quad view" → close_quad_view`
           : `Quad view: closed`,
@@ -154,7 +238,7 @@ export function AwakeDashboard({
               `Implants: ${clinical.implantPlan.map((i) => `${i.component} ${i.spec}${i.confirmed ? "" : " [UNCONFIRMED]"}`).join(", ")}`,
             ].join("\n")
           : "",
-        `Actions available from this screen: toggle time-out items, adjust instrument counts, dismiss advisory alerts, open quad view, show preference card, show table layout images, open scrub tech table layout images, toggle opening checklist items, toggle machine check items, switch role view, open patient details, open how-to video`,
+        `Actions available from this screen: toggle time-out items, adjust instrument counts, dismiss advisory alerts, open quad view, show preference card, show table layout images, open scrub tech table layout images, toggle opening checklist items, toggle machine check items, switch role view, open patient details, open patient video, open patient X-rays, open how-to video`,
       ].join("\n");
   }, [
     activeRole,
@@ -164,6 +248,9 @@ export function AwakeDashboard({
     openingChecklist,
     machineCheck,
     patientDetailsOpen,
+    patientVideoOpen,
+    patientVideoSessions,
+    xraysOpen,
     quadOpen,
     quadFocused,
     activeCase,
@@ -255,6 +342,120 @@ export function AwakeDashboard({
     return { ok: true };
   }, []);
 
+  const openPatientVideo = useCallback((): ArtiToolResult => {
+    if (!activeCase) {
+      return { ok: false, reason: "no active case" };
+    }
+    // Switch to the surgeon panel so the staff sees the video card and the
+    // AI insights tile after the modal closes — keeps the experience
+    // coherent for voice-only operation.
+    setActiveRole("surgeon");
+    setPatientVideoOpen(true);
+    return { ok: true };
+  }, [activeCase]);
+
+  const closePatientVideo = useCallback((): ArtiToolResult => {
+    setPatientVideoOpen(false);
+    return { ok: true };
+  }, []);
+
+  const playPatientVideo = useCallback((): ArtiToolResult => {
+    if (!patientVideoOpen) return { ok: false, reason: "patient video not open" };
+    patientVideoModalRef.current?.play();
+    return { ok: true };
+  }, [patientVideoOpen]);
+
+  const pausePatientVideo = useCallback((): ArtiToolResult => {
+    if (!patientVideoOpen) return { ok: false, reason: "patient video not open" };
+    patientVideoModalRef.current?.pause();
+    return { ok: true };
+  }, [patientVideoOpen]);
+
+  const restartPatientVideo = useCallback((): ArtiToolResult => {
+    if (!patientVideoOpen) return { ok: false, reason: "patient video not open" };
+    patientVideoModalRef.current?.restart();
+    return { ok: true };
+  }, [patientVideoOpen]);
+
+  const togglePatientVideoCaptions = useCallback((): ArtiToolResult => {
+    if (!patientVideoOpen) return { ok: false, reason: "patient video not open" };
+    patientVideoModalRef.current?.toggleCaptions();
+    return { ok: true };
+  }, [patientVideoOpen]);
+
+  const mutePatientVideo = useCallback((): ArtiToolResult => {
+    if (!patientVideoOpen) return { ok: false, reason: "patient video not open" };
+    patientVideoModalRef.current?.mute();
+    return { ok: true };
+  }, [patientVideoOpen]);
+
+  const unmutePatientVideo = useCallback((): ArtiToolResult => {
+    if (!patientVideoOpen) return { ok: false, reason: "patient video not open" };
+    patientVideoModalRef.current?.unmute();
+    return { ok: true };
+  }, [patientVideoOpen]);
+
+  // ── X-ray viewer ───────────────────────────────────────────────────
+  const openXrays = useCallback((): ArtiToolResult => {
+    if (!activeCase) return { ok: false, reason: "no active case" };
+    setActiveRole("surgeon");
+    setXraysOpen(true);
+    return { ok: true };
+  }, [activeCase]);
+
+  const closeXrays = useCallback((): ArtiToolResult => {
+    setXraysOpen(false);
+    return { ok: true };
+  }, []);
+
+  const xraysNextView = useCallback((): ArtiToolResult => {
+    if (!xraysOpen) return { ok: false, reason: "x-rays not open" };
+    xraysModalRef.current?.nextView();
+    return { ok: true };
+  }, [xraysOpen]);
+
+  const xraysPrevView = useCallback((): ArtiToolResult => {
+    if (!xraysOpen) return { ok: false, reason: "x-rays not open" };
+    xraysModalRef.current?.prevView();
+    return { ok: true };
+  }, [xraysOpen]);
+
+  const xraysShowView = useCallback(
+    (query: string): ArtiToolResult => {
+      if (!xraysOpen) return { ok: false, reason: "x-rays not open" };
+      const ok = xraysModalRef.current?.showView(query) ?? false;
+      return ok ? { ok: true } : { ok: false, reason: `no view matched '${query}'` };
+    },
+    [xraysOpen],
+  );
+
+  const xraysZoomIn = useCallback((): ArtiToolResult => {
+    if (!xraysOpen) return { ok: false, reason: "x-rays not open" };
+    xraysModalRef.current?.zoomIn();
+    return { ok: true };
+  }, [xraysOpen]);
+
+  const xraysZoomOut = useCallback((): ArtiToolResult => {
+    if (!xraysOpen) return { ok: false, reason: "x-rays not open" };
+    xraysModalRef.current?.zoomOut();
+    return { ok: true };
+  }, [xraysOpen]);
+
+  const xraysResetZoom = useCallback((): ArtiToolResult => {
+    if (!xraysOpen) return { ok: false, reason: "x-rays not open" };
+    xraysModalRef.current?.resetZoom();
+    return { ok: true };
+  }, [xraysOpen]);
+
+  /** Persist (or update) the latest viewing session for the active case. */
+  const handleVideoSession = useCallback(
+    (session: PatientVideoSession) => {
+      if (!activeCase) return;
+      setPatientVideoSessions((prev) => ({ ...prev, [activeCase.id]: session }));
+    },
+    [activeCase],
+  );
+
   /**
    * Close whichever dashboard-scoped overlay is currently topmost.
    * Priority: patient details > quad view. Returns a label so the route
@@ -262,6 +463,14 @@ export function AwakeDashboard({
    * open (route then falls through to other targets or no-ops).
    */
   const closeTopmostDashboardOverlay = useCallback((): string | null => {
+    if (xraysOpen) {
+      setXraysOpen(false);
+      return "x-rays";
+    }
+    if (patientVideoOpen) {
+      setPatientVideoOpen(false);
+      return "patient video";
+    }
     if (patientDetailsOpen) {
       setPatientDetailsOpen(false);
       return "patient details";
@@ -272,7 +481,7 @@ export function AwakeDashboard({
       return "quad view";
     }
     return null;
-  }, [patientDetailsOpen, quadOpen]);
+  }, [xraysOpen, patientVideoOpen, patientDetailsOpen, quadOpen]);
 
   const toggleOpeningChecklistItem = useCallback((index: number): ArtiToolResult => {
     if (index < 0 || index >= OPENING_CHECKLIST_ITEMS.length) {
@@ -314,6 +523,22 @@ export function AwakeDashboard({
       switchRole,
       openPatientDetails,
       closePatientDetails,
+      openPatientVideo,
+      closePatientVideo,
+      playPatientVideo,
+      pausePatientVideo,
+      restartPatientVideo,
+      togglePatientVideoCaptions,
+      mutePatientVideo,
+      unmutePatientVideo,
+      openXrays,
+      closeXrays,
+      xraysNextView,
+      xraysPrevView,
+      xraysShowView,
+      xraysZoomIn,
+      xraysZoomOut,
+      xraysResetZoom,
       toggleOpeningChecklistItem,
       toggleMachineCheckItem,
       closeTopmostDashboardOverlay,
@@ -330,6 +555,22 @@ export function AwakeDashboard({
       switchRole,
       openPatientDetails,
       closePatientDetails,
+      openPatientVideo,
+      closePatientVideo,
+      playPatientVideo,
+      pausePatientVideo,
+      restartPatientVideo,
+      togglePatientVideoCaptions,
+      mutePatientVideo,
+      unmutePatientVideo,
+      openXrays,
+      closeXrays,
+      xraysNextView,
+      xraysPrevView,
+      xraysShowView,
+      xraysZoomIn,
+      xraysZoomOut,
+      xraysResetZoom,
       toggleOpeningChecklistItem,
       toggleMachineCheckItem,
       closeTopmostDashboardOverlay,
@@ -407,7 +648,15 @@ export function AwakeDashboard({
 
             {/* ── Surgeon view ── */}
             {activeRole === "surgeon" && (
-              <SurgeonPanel activeCase={activeCase} onOpenLightbox={onOpenLightbox} />
+              <SurgeonPanel
+                activeCase={activeCase}
+                onOpenLightbox={onOpenLightbox}
+                videoSession={
+                  activeCase ? patientVideoSessions[activeCase.id] : undefined
+                }
+                onOpenPatientVideo={() => openPatientVideo()}
+                onOpenXrays={() => openXrays()}
+              />
             )}
 
             {/* ── Anesthesia view ── */}
@@ -440,6 +689,27 @@ export function AwakeDashboard({
         onClose={() => setPatientDetailsOpen(false)}
         activeCase={activeCase}
       />
+
+      {activeCase && (
+        <PatientVideoModal
+          ref={patientVideoModalRef}
+          open={patientVideoOpen}
+          onClose={() => setPatientVideoOpen(false)}
+          video={PATIENT_CLINICAL[activeCase.id].patientVideo}
+          patientName={activeCase.patientName}
+          onSession={handleVideoSession}
+        />
+      )}
+
+      {activeCase && (
+        <PatientXraysModal
+          ref={xraysModalRef}
+          open={xraysOpen}
+          onClose={() => setXraysOpen(false)}
+          study={PATIENT_CLINICAL[activeCase.id].imaging}
+          activeCase={activeCase}
+        />
+      )}
 
       <QuadView
         open={quadOpen}

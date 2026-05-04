@@ -109,6 +109,25 @@ export interface ArtiVoiceCallbacks {
   onSwitchRole?: (role: ActiveRole) => ArtiToolResult;
   onOpenPatientDetails?: () => ArtiToolResult;
   onClosePatientDetails?: () => ArtiToolResult;
+  /** Open the pre-op patient video modal on the surgeon panel. */
+  onOpenPatientVideo?: () => ArtiToolResult;
+  onClosePatientVideo?: () => ArtiToolResult;
+  onPlayPatientVideo?: () => ArtiToolResult;
+  onPausePatientVideo?: () => ArtiToolResult;
+  onRestartPatientVideo?: () => ArtiToolResult;
+  onTogglePatientVideoCaptions?: () => ArtiToolResult;
+  onMutePatientVideo?: () => ArtiToolResult;
+  onUnmutePatientVideo?: () => ArtiToolResult;
+  /** Open the PACS-style imaging viewer (patient X-rays / MRI / CT). */
+  onOpenXrays?: () => ArtiToolResult;
+  onCloseXrays?: () => ArtiToolResult;
+  onXraysNextView?: () => ArtiToolResult;
+  onXraysPrevView?: () => ArtiToolResult;
+  /** Jump to a view by free-text label ("AP", "axillary", "MRI"). */
+  onXraysShowView?: (query: string) => ArtiToolResult;
+  onXraysZoomIn?: () => ArtiToolResult;
+  onXraysZoomOut?: () => ArtiToolResult;
+  onXraysResetZoom?: () => ArtiToolResult;
   onToggleOpeningChecklistItem?: (index: number) => ArtiToolResult;
   onToggleMachineCheckItem?: (index: number) => ArtiToolResult;
   onOpenTableLayoutImages?: () => ArtiToolResult;
@@ -339,6 +358,54 @@ function executeToolCall(call: ArtiToolCall, cb: ArtiVoiceCallbacks): void {
       break;
     case "switch_role":
       cb.onSwitchRole?.(inp.role as ActiveRole);
+      break;
+    case "open_patient_video":
+      cb.onOpenPatientVideo?.();
+      break;
+    case "close_patient_video":
+      cb.onClosePatientVideo?.();
+      break;
+    case "play_patient_video":
+      cb.onPlayPatientVideo?.();
+      break;
+    case "pause_patient_video":
+      cb.onPausePatientVideo?.();
+      break;
+    case "restart_patient_video":
+      cb.onRestartPatientVideo?.();
+      break;
+    case "toggle_patient_video_captions":
+      cb.onTogglePatientVideoCaptions?.();
+      break;
+    case "mute_patient_video":
+      cb.onMutePatientVideo?.();
+      break;
+    case "unmute_patient_video":
+      cb.onUnmutePatientVideo?.();
+      break;
+    case "open_xrays":
+      cb.onOpenXrays?.();
+      break;
+    case "close_xrays":
+      cb.onCloseXrays?.();
+      break;
+    case "xrays_next_view":
+      cb.onXraysNextView?.();
+      break;
+    case "xrays_prev_view":
+      cb.onXraysPrevView?.();
+      break;
+    case "xrays_show_view":
+      cb.onXraysShowView?.(String(inp.query ?? ""));
+      break;
+    case "xrays_zoom_in":
+      cb.onXraysZoomIn?.();
+      break;
+    case "xrays_zoom_out":
+      cb.onXraysZoomOut?.();
+      break;
+    case "xrays_reset_zoom":
+      cb.onXraysResetZoom?.();
       break;
     case "open_patient_details":
       cb.onOpenPatientDetails?.();

@@ -79,8 +79,8 @@ const TOOLS: Anthropic.Tool[] = [
     name: "close_topmost_modal",
     description:
       "Universal close — closes whatever modal/overlay is currently topmost on the screen. " +
-      "USE THIS WHENEVER the user says 'close' / 'close it' / 'close that' / 'dismiss' / 'close this' / 'go back' WITHOUT naming the specific thing. The tool reads its own priority order (reminder toast → person schedule → how-to video → image lightbox → patient details → quad view → schedule day drawer) and closes the topmost. " +
-      "PREFER this tool over the more-specific close_* tools (close_lightbox, close_how_to_video, close_quad_view, close_patient_details, close_person_schedule, close_schedule_day, dismiss_reminder_alert) when the user's command is generic. Only use a specific close_* tool when the user explicitly names what to close ('close the video', 'close the lightbox'). " +
+      "USE THIS WHENEVER the user says 'close' / 'close it' / 'close that' / 'dismiss' / 'close this' / 'go back' WITHOUT naming the specific thing. The tool reads its own priority order (reminder toast → person schedule → how-to video → image lightbox → x-rays → patient video → patient details → quad view → schedule day drawer) and closes the topmost. " +
+      "PREFER this tool over the more-specific close_* tools (close_lightbox, close_how_to_video, close_quad_view, close_xrays, close_patient_video, close_patient_details, close_person_schedule, close_schedule_day, dismiss_reminder_alert) when the user's command is generic. Only use a specific close_* tool when the user explicitly names what to close ('close the video', 'close the lightbox', 'close the patient video', 'close the X-rays'). " +
       "If nothing is open, this tool is a no-op and returns gracefully — never refuse a 'close' command.",
     input_schema: { type: "object" as const, properties: {}, required: [] },
   },
@@ -771,6 +771,112 @@ const TOOLS: Anthropic.Tool[] = [
     input_schema: { type: "object" as const, properties: {}, required: [] },
   },
   {
+    name: "open_patient_video",
+    description:
+      "Open the patient's pre-op video message on the surgeon panel. The patient records this short clip before surgery; the modal shows the video with closed captions, a synced transcript, and AI-extracted insights so the team can scan it quickly. Trigger phrases: 'open patient video', 'show me the patient video', 'play the patient video', 'pull up the patient's pre-op video', 'show me what the patient said', 'open the patient message', 'show the pre-op video'. Auto-switches to the surgeon role view if the user is on a different panel. Requires an active case.",
+    input_schema: { type: "object" as const, properties: {}, required: [] },
+  },
+  {
+    name: "close_patient_video",
+    description:
+      "Close the patient pre-op video modal. Use when user says 'close', 'close that', 'close the video', 'close patient video', 'stop the video', or 'dismiss' while the patient video modal is open. Prefer the more-generic close_topmost_modal when the user just says 'close' without naming the target.",
+    input_schema: { type: "object" as const, properties: {}, required: [] },
+  },
+  {
+    name: "play_patient_video",
+    description:
+      "Resume playback on the patient pre-op video modal. PREFER this over video_play whenever the patient video modal is OPEN — generic 'play', 'play it', 'play video', 'play the video', 'play patient video', 'resume', 'continue', 'go ahead', 'keep playing' all map here when the live context shows 'Patient video modal: OPEN'. Only fall back to video_play when the how-to video viewer is the open one. If NEITHER is open and the user says 'play patient video' / 'play the patient video', call open_patient_video instead — it autoplays.",
+    input_schema: { type: "object" as const, properties: {}, required: [] },
+  },
+  {
+    name: "pause_patient_video",
+    description:
+      "Pause playback on the patient pre-op video modal. PREFER this over video_pause whenever the patient video modal is OPEN — generic 'pause', 'pause it', 'pause video', 'hold on', 'wait', 'stop' (when not asking to close), 'pause the video' all map here when the live context shows 'Patient video modal: OPEN'.",
+    input_schema: { type: "object" as const, properties: {}, required: [] },
+  },
+  {
+    name: "restart_patient_video",
+    description:
+      "Restart the patient pre-op video from the beginning and play. Trigger phrases (only when the patient video modal is OPEN): 'restart', 'play it again', 'start over', 'from the beginning', 'rewind to the start', 'replay'. Distinct from video_restart (how-to viewer).",
+    input_schema: { type: "object" as const, properties: {}, required: [] },
+  },
+  {
+    name: "toggle_patient_video_captions",
+    description:
+      "Toggle closed captions on the patient pre-op video modal. Trigger phrases (only when the patient video modal is OPEN): 'show captions', 'hide captions', 'turn on CC', 'turn off CC', 'turn on subtitles', 'turn off subtitles', 'closed captions on', 'closed captions off', 'toggle captions'.",
+    input_schema: { type: "object" as const, properties: {}, required: [] },
+  },
+  {
+    name: "mute_patient_video",
+    description:
+      "Mute audio on the patient pre-op video. The video defaults to MUTED on open (browser autoplay policy) — use this when user explicitly wants to silence it after unmuting. Trigger phrases (only when patient video modal is OPEN): 'mute', 'mute it', 'mute the video', 'silence', 'silence it', 'turn off the audio', 'turn off the sound'.",
+    input_schema: { type: "object" as const, properties: {}, required: [] },
+  },
+  {
+    name: "unmute_patient_video",
+    description:
+      "Unmute audio on the patient pre-op video. The video starts MUTED on open due to browser autoplay restrictions — staff use this to enable the patient's voice. Trigger phrases (only when patient video modal is OPEN): 'unmute', 'unmute it', 'unmute the video', 'turn on the audio', 'turn on the sound', 'let me hear it', 'let me hear them', 'turn audio on', 'enable sound', 'sound on'.",
+    input_schema: { type: "object" as const, properties: {}, required: [] },
+  },
+  {
+    name: "open_xrays",
+    description:
+      "Open the PACS-style imaging viewer for the active patient — pre-op X-rays, MRI, CT views with DICOM-style overlays, laterality marker, and radiology read panel. Trigger phrases: 'show me the X-rays', 'pull up the X-rays', 'open the imaging', 'show the films', 'show me the films', 'show the imaging', 'show the patient's X-rays', 'open the PACS', 'pull up imaging', 'show me the MRI', 'show the CT'. Even when the user names a single modality (MRI/CT), open this viewer — the modality-specific view becomes selectable inside. Auto-switches to the surgeon role view if the user is on a different panel. Requires an active case.",
+    input_schema: { type: "object" as const, properties: {}, required: [] },
+  },
+  {
+    name: "close_xrays",
+    description:
+      "Close the patient imaging viewer. Trigger phrases (only when the X-rays modal is OPEN): 'close X-rays', 'close the films', 'close the imaging', 'close PACS', 'close the MRI', 'close that'. Prefer close_topmost_modal when the user just says 'close'.",
+    input_schema: { type: "object" as const, properties: {}, required: [] },
+  },
+  {
+    name: "xrays_next_view",
+    description:
+      "Advance to the next view in the imaging study (e.g. AP → Axillary → Y → MRI). Trigger phrases (only when X-rays modal is OPEN): 'next', 'next view', 'next image', 'next slice', 'forward', 'go forward'.",
+    input_schema: { type: "object" as const, properties: {}, required: [] },
+  },
+  {
+    name: "xrays_prev_view",
+    description:
+      "Go back to the previous view in the imaging study. Trigger phrases (only when X-rays modal is OPEN): 'previous', 'previous view', 'back', 'go back', 'last image', 'previous image'.",
+    input_schema: { type: "object" as const, properties: {}, required: [] },
+  },
+  {
+    name: "xrays_show_view",
+    description:
+      "Jump to a specific view in the imaging study by name. Use when the user asks for a named projection or modality (e.g. 'show the AP', 'pull up the axillary', 'show the MRI', 'go to the Y view', 'show me the CT', 'show the lateral', 'show the West Point view'). Pass the user's view label verbatim as `query` — the viewer fuzzy-matches it against view labels (AP, Axillary Lateral, Scapular Y, Grashey, MRI variants, CT, Outlet, Stryker Notch, West Point). Only available when the X-rays modal is OPEN; the live context lists the exact labels available for the active study.",
+    input_schema: {
+      type: "object" as const,
+      properties: {
+        query: {
+          type: "string",
+          description:
+            "Free-text view label spoken by the user (e.g. 'AP', 'axillary lateral', 'MRI', 'Y view', 'Grashey', 'CT 3D').",
+        },
+      },
+      required: ["query"],
+    },
+  },
+  {
+    name: "xrays_zoom_in",
+    description:
+      "Zoom in on the active imaging view (steps of 0.5×, max 4×). Trigger phrases (only when X-rays modal is OPEN): 'zoom in', 'closer', 'magnify', 'enlarge', 'get a closer look'.",
+    input_schema: { type: "object" as const, properties: {}, required: [] },
+  },
+  {
+    name: "xrays_zoom_out",
+    description:
+      "Zoom out on the active imaging view (steps of 0.5×, min 1×). Trigger phrases (only when X-rays modal is OPEN): 'zoom out', 'pull back', 'further out'.",
+    input_schema: { type: "object" as const, properties: {}, required: [] },
+  },
+  {
+    name: "xrays_reset_zoom",
+    description:
+      "Reset the active imaging view to 1× and re-center. Trigger phrases (only when X-rays modal is OPEN): 'reset', 'reset view', 'reset zoom', 'fit to screen', 'recenter', 'normal view'.",
+    input_schema: { type: "object" as const, properties: {}, required: [] },
+  },
+  {
     name: "toggle_opening_checklist_item",
     description:
       "Check or uncheck an opening checklist item on the scrub tech view by its zero-based index (0–6). Items: 0=Instrument trays, 1=Back table draped, 2=Mayo stand, 3=Implants logged, 4=Suture loaded, 5=Irrigation primed, 6=Drain ready. The Opening checklist (scrub tech) section in live context shows current state. Phrase mapping: 'instrument trays' → 0; 'back table draped' / 'back table is draped' → 1; 'Mayo stand' → 2; 'implants logged' / 'implants are logged' → 3; 'suture loaded' / 'sutures loaded' → 4; 'irrigation primed' / 'irrigation is ready' → 5; 'drain ready' / 'drain is ready' / 'drain set' → 6. Always call this tool when the user mentions any of these items being done — never skip just because the phrase is short or terminal in the list.",
@@ -964,6 +1070,22 @@ export const processVoiceCommand = createServerFn({ method: "POST" })
       // Modals & overlays
       "open_patient_details",
       "close_patient_details",
+      "open_patient_video",
+      "close_patient_video",
+      "play_patient_video",
+      "pause_patient_video",
+      "restart_patient_video",
+      "toggle_patient_video_captions",
+      "mute_patient_video",
+      "unmute_patient_video",
+      "open_xrays",
+      "close_xrays",
+      "xrays_next_view",
+      "xrays_prev_view",
+      "xrays_show_view",
+      "xrays_zoom_in",
+      "xrays_zoom_out",
+      "xrays_reset_zoom",
       "open_quad_view",
       "focus_quad_panel",
       "close_quad_view",

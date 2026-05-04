@@ -1,5 +1,28 @@
 // Shared mock case data for the day. Used by CaseList and PreOp.
 
+// Public sample MP4 — used as a placeholder until real patient-recorded
+// uploads land. Big Buck Bunny is the canonical Apple HLS test asset and
+// lets the prototype demonstrate the player + transcript pipeline without
+// shipping any real PHI footage.
+const PLACEHOLDER_VIDEO_SRC =
+  "https://commondatastorage.googleapis.com/gtv-videos-bucket/sample/BigBuckBunny.mp4";
+const PLACEHOLDER_VIDEO_POSTER =
+  "https://commondatastorage.googleapis.com/gtv-videos-bucket/sample/images/BigBuckBunny.jpg";
+
+/**
+ * Build a placeholder X-ray-like image URL. placehold.co lets us render a
+ * dark viewport with a centered view label without shipping binary assets
+ * — the PACS-style overlay rendered on top of the modal carries the rest
+ * of the realism.
+ */
+function imgPlaceholder(label: string, modality: "XR" | "CT" | "MRI" = "XR"): string {
+  // CT/MRI get a slightly cooler tone so the modality is visually distinct.
+  const bg = modality === "MRI" ? "0a0e1a" : modality === "CT" ? "0e0e10" : "0a0a0a";
+  const fg = "6b7280";
+  const text = encodeURIComponent(label);
+  return `https://placehold.co/1400x1400/${bg}/${fg}?text=${text}&font=mono`;
+}
+
 export type CaseStatus = "in-progress" | "next" | "scheduled" | "completed" | "delayed" | "cancelled";
 
 export interface CaseItem {
@@ -108,6 +131,65 @@ export interface PatientClinical {
   anesthesiaPlan: string;
   procedureSteps: Array<{ step: number; title: string; detail: string }>;
   implantPlan: Array<{ component: string; spec: string; confirmed: boolean }>;
+  /**
+   * Pre-op video the patient recorded for the surgeon. AI-extracted
+   * insights surface as bullet "video notes" on the surgeon panel; the
+   * raw transcript powers the closed-caption rail in the modal player.
+   */
+  patientVideo: PatientVideo;
+  /**
+   * Pre-op imaging study (XR/CT/MRI) for the surgeon-panel PACS viewer.
+   * Each study can hold several views (AP, axillary, MRI cuts, etc).
+   */
+  imaging: PatientImagingStudy;
+}
+
+export type ImagingModality = "XR" | "CT" | "MRI";
+
+export interface ImagingView {
+  /** Stable id used for voice tool dispatch ("xrays_show_view"). */
+  id: string;
+  /** Short label shown in DICOM corner overlay and thumbnail strip ("AP", "Axillary Lateral"). */
+  label: string;
+  modality: ImagingModality;
+  src: string;
+  /** Optional one-liner describing the projection / sequence. */
+  description?: string;
+  /** Brief radiologist-style read displayed inline. */
+  findings?: string;
+}
+
+export interface PatientImagingStudy {
+  studyDate: string;
+  accession: string;
+  bodyRegion: string;
+  laterality: "L" | "R";
+  /** Plain-language protocol description shown in the study header. */
+  protocol: string;
+  views: ImagingView[];
+}
+
+export interface PatientVideoCaption {
+  /** Caption start time in seconds. */
+  startSec: number;
+  /** Spoken text rendered as a closed-caption line. */
+  text: string;
+}
+
+export interface PatientVideo {
+  /** Stable id for telemetry and tool dispatch. */
+  id: string;
+  /** Placeholder MP4 (poster image used until staff hits play). */
+  src: string;
+  poster: string;
+  durationSec: number;
+  /** Patient-recorded date in display form (e.g. "May 1, 2026 · 4:42 PM"). */
+  recordedAt: string;
+  /** Short blurb shown on the surgeon-panel video card. */
+  summary: string;
+  transcript: PatientVideoCaption[];
+  /** AI-extracted bullet insights surfaced on the surgeon panel. */
+  aiInsights: string[];
 }
 
 export const PATIENT_CLINICAL: Record<string, PatientClinical> = {
@@ -144,6 +226,75 @@ export const PATIENT_CLINICAL: Record<string, PatientClinical> = {
       { component: "Knotless Anchors (lateral row)", spec: "4.75 mm × 2", confirmed: true },
       { component: "FiberWire Suture", spec: "#2 × 6 strands", confirmed: true },
     ],
+    patientVideo: {
+      id: "pv-001",
+      src: PLACEHOLDER_VIDEO_SRC,
+      poster: PLACEHOLDER_VIDEO_POSTER,
+      durationSec: 84,
+      recordedAt: "April 30, 2026 · 6:12 PM",
+      summary: "Helena recorded a short pre-op note about her left shoulder pain and home support.",
+      transcript: [
+        { startSec: 0, text: "Hi Dr. Patel — this is Helena Voss." },
+        { startSec: 4, text: "I wanted to send a quick note before tomorrow." },
+        { startSec: 8, text: "The pain in my left shoulder has gotten worse this week." },
+        { startSec: 14, text: "Lifting anything overhead — even a coffee mug — wakes me up at night." },
+        { startSec: 22, text: "I've been taking Tylenol only, no NSAIDs, like we discussed." },
+        { startSec: 30, text: "I'm a little worried about the bone density, since the DEXA was low." },
+        { startSec: 38, text: "My daughter is staying with me for the first week post-op." },
+        { startSec: 46, text: "She'll help with the sling and the ice machine." },
+        { startSec: 54, text: "I haven't had any new falls or injuries since our last visit." },
+        { startSec: 62, text: "And I confirmed — no latex bandages anywhere in the house." },
+        { startSec: 70, text: "Thank you again. See you in the morning." },
+      ],
+      aiInsights: [
+        "Pain has progressed in the past week — disrupting sleep with overhead motion.",
+        "Adhering to no-NSAID guidance; using Tylenol only.",
+        "Daughter on-site for week 1 — sling + cryocompression support confirmed.",
+        "No new falls or injuries since last clinic visit.",
+        "Patient-confirmed: no latex products in the home environment.",
+      ],
+    },
+    imaging: {
+      studyDate: "Apr 22, 2026",
+      accession: "ACC-26-0422-1184",
+      bodyRegion: "Left Shoulder",
+      laterality: "L",
+      protocol: "Pre-op shoulder series + MRI rotator cuff (3 T)",
+      views: [
+        {
+          id: "v1-ap",
+          label: "AP",
+          modality: "XR",
+          src: imgPlaceholder("AP · Left Shoulder", "XR"),
+          description: "Anteroposterior, neutral rotation",
+          findings: "Acromiohumeral distance 7 mm — mild superior migration. Type II acromion. No fracture.",
+        },
+        {
+          id: "v1-axil",
+          label: "Axillary Lateral",
+          modality: "XR",
+          src: imgPlaceholder("AXIL · Left Shoulder", "XR"),
+          description: "Axillary lateral projection",
+          findings: "Glenohumeral relationship preserved. No dislocation. Mild AC arthrosis.",
+        },
+        {
+          id: "v1-y",
+          label: "Scapular Y",
+          modality: "XR",
+          src: imgPlaceholder("Y · Left Shoulder", "XR"),
+          description: "Scapular Y / outlet",
+          findings: "Type II curved acromion with subtle anterior downsloping.",
+        },
+        {
+          id: "v1-mri",
+          label: "MRI T2 Coronal",
+          modality: "MRI",
+          src: imgPlaceholder("MRI T2 Coronal", "MRI"),
+          description: "T2 fat-sat coronal, 3 T",
+          findings: "Full-thickness supraspinatus tear, ~3 cm in AP dimension. Tendon retraction to glenoid rim. Mild fatty infiltration (Goutallier 2).",
+        },
+      ],
+    },
   },
   "c-002": {
     dob: "04/11/1963", sex: "Male", height: "5′10″ (178 cm)", weight: "192 lbs (87 kg)",
@@ -181,6 +332,79 @@ export const PATIENT_CLINICAL: Record<string, PatientClinical> = {
       { component: "Humeral Stem", spec: "Press-fit · Size 8", confirmed: false },
       { component: "Poly Insert", spec: "Standard offset", confirmed: true },
     ],
+    patientVideo: {
+      id: "pv-002",
+      src: PLACEHOLDER_VIDEO_SRC,
+      poster: PLACEHOLDER_VIDEO_POSTER,
+      durationSec: 96,
+      recordedAt: "May 1, 2026 · 4:42 PM",
+      summary: "Marcus recorded a pre-op video focused on pain, glucose control, and post-op narcotic concerns.",
+      transcript: [
+        { startSec: 0, text: "Good evening, Dr. Patel — Marcus Chen here." },
+        { startSec: 5, text: "I wanted to record a quick note before tomorrow's case." },
+        { startSec: 10, text: "The right shoulder pain is steady — about a six on ten at rest." },
+        { startSec: 18, text: "Sharper, maybe an eight, when I try to reach behind my back." },
+        { startSec: 26, text: "I held my Lisinopril and Metformin this morning, as instructed." },
+        { startSec: 34, text: "Last finger-stick this evening was one-forty-eight." },
+        { startSec: 41, text: "I stopped the daily aspirin a week ago — no bleeding issues since." },
+        { startSec: 49, text: "I'd really like to keep narcotics to a minimum after surgery." },
+        { startSec: 57, text: "Last time, opioids made me very nauseated for two days." },
+        { startSec: 65, text: "I'm comfortable with the interscalene block — please use it if you can." },
+        { startSec: 73, text: "Also, please do not use Betadine — it gives me a contact rash." },
+        { startSec: 81, text: "ChloraPrep is fine. Penicillin is anaphylaxis, so please double-check antibiotics." },
+        { startSec: 90, text: "Thanks again. See you in the morning." },
+      ],
+      aiInsights: [
+        "Pain 6/10 at rest, 8/10 with internal rotation — consistent with chronic RTC progression.",
+        "Held Lisinopril and Metformin morning of surgery per instructions.",
+        "Evening glucose 148 — confirms flagged morning lab; recheck pre-induction.",
+        "Aspirin held 7 days; no bleeding events since.",
+        "Patient strongly prefers minimal narcotics — prior opioid-related nausea × 2 days.",
+        "Patient confirms interscalene block consent.",
+        "RECONFIRM: NO Betadine (contact dermatitis), NO penicillins (anaphylaxis) — ChloraPrep + cefazolin alternative required.",
+      ],
+    },
+    imaging: {
+      studyDate: "Apr 18, 2026",
+      accession: "ACC-26-0418-2247",
+      bodyRegion: "Right Shoulder",
+      laterality: "R",
+      protocol: "Pre-op RSA planning · CT 3D reconstruction",
+      views: [
+        {
+          id: "v2-grashey",
+          label: "Grashey",
+          modality: "XR",
+          src: imgPlaceholder("GRASHEY · Right Shoulder", "XR"),
+          description: "True AP of glenohumeral joint",
+          findings: "End-stage glenohumeral OA with bone-on-bone contact. Superior humeral migration. Walch B2 glenoid.",
+        },
+        {
+          id: "v2-axil",
+          label: "Axillary Lateral",
+          modality: "XR",
+          src: imgPlaceholder("AXIL · Right Shoulder", "XR"),
+          description: "Axillary lateral",
+          findings: "Posterior glenoid wear and humeral subluxation — confirms B2 morphology.",
+        },
+        {
+          id: "v2-y",
+          label: "Scapular Y",
+          modality: "XR",
+          src: imgPlaceholder("Y · Right Shoulder", "XR"),
+          description: "Scapular Y projection",
+          findings: "Acromiohumeral distance reduced; rotator cuff insufficiency pattern.",
+        },
+        {
+          id: "v2-ct",
+          label: "CT 3D Recon",
+          modality: "CT",
+          src: imgPlaceholder("CT 3D RECON · Glenoid", "CT"),
+          description: "Volume-rendered glenoid · pre-op planning",
+          findings: "Glenoid retroversion 22° (Friedman). Posterior bone loss ~6 mm. Adequate stock for 25 mm baseplate with 4-screw fixation.",
+        },
+      ],
+    },
   },
   "c-003": {
     dob: "07/03/1981", sex: "Female", height: "5′4″ (163 cm)", weight: "128 lbs (58 kg)",
@@ -215,6 +439,75 @@ export const PATIENT_CLINICAL: Record<string, PatientClinical> = {
       { component: "Tenodesis Interference Screw", spec: "8 mm × 12 mm", confirmed: true },
       { component: "FiberWire Suture", spec: "#2 — no opioid analogue needed", confirmed: true },
     ],
+    patientVideo: {
+      id: "pv-003",
+      src: PLACEHOLDER_VIDEO_SRC,
+      poster: PLACEHOLDER_VIDEO_POSTER,
+      durationSec: 78,
+      recordedAt: "May 2, 2026 · 8:18 AM",
+      summary: "Priya flagged opioid intolerance, anxiety, and a desire for a calm pre-op environment.",
+      transcript: [
+        { startSec: 0, text: "Hi Dr. Patel, this is Priya Raman." },
+        { startSec: 4, text: "I'm a little anxious about tomorrow, so I wanted to send this." },
+        { startSec: 11, text: "Codeine and morphine both make me throw up for hours." },
+        { startSec: 18, text: "Last time I had Toradol and a nerve block, I did really well." },
+        { startSec: 26, text: "If we can stick with multimodal — Tylenol, ketorolac, the block — I'd be grateful." },
+        { startSec: 36, text: "I took my sertraline this morning with a sip of water." },
+        { startSec: 43, text: "I also took my iron yesterday, but skipped today since I'm NPO." },
+        { startSec: 52, text: "If anyone has a moment in pre-op, even a brief check-in would help my anxiety." },
+        { startSec: 62, text: "My partner is dropping me off and will be in the waiting room all day." },
+        { startSec: 71, text: "Thank you. I trust you all completely." },
+      ],
+      aiInsights: [
+        "Avoid opioids — codeine and morphine both cause severe nausea/vomiting.",
+        "Patient responded well previously to multimodal (Toradol + block + Tylenol).",
+        "Sertraline taken AM with sip of water — within NPO guidance.",
+        "Iron skipped today (NPO) — note for hematology trending.",
+        "Pre-op anxiety high — consider brief anxiolytic and a check-in from team lead.",
+        "Support contact in waiting room throughout the case.",
+      ],
+    },
+    imaging: {
+      studyDate: "Apr 25, 2026",
+      accession: "ACC-26-0425-3902",
+      bodyRegion: "Right Shoulder",
+      laterality: "R",
+      protocol: "Pre-op shoulder series + MR arthrogram",
+      views: [
+        {
+          id: "v3-ap",
+          label: "AP",
+          modality: "XR",
+          src: imgPlaceholder("AP · Right Shoulder", "XR"),
+          description: "Anteroposterior, neutral rotation",
+          findings: "Bony anatomy unremarkable. No fracture, no dislocation, joint space preserved.",
+        },
+        {
+          id: "v3-axil",
+          label: "Axillary Lateral",
+          modality: "XR",
+          src: imgPlaceholder("AXIL · Right Shoulder", "XR"),
+          description: "Axillary lateral",
+          findings: "Concentric glenohumeral relationship.",
+        },
+        {
+          id: "v3-mri-coronal",
+          label: "MR Arthrogram · Coronal",
+          modality: "MRI",
+          src: imgPlaceholder("MR Arthro · Coronal", "MRI"),
+          description: "T1 fat-sat coronal post-arthrogram",
+          findings: "Type II SLAP tear with contrast tracking under superior labrum. Biceps anchor unstable.",
+        },
+        {
+          id: "v3-mri-sag",
+          label: "MR Arthrogram · Sagittal",
+          modality: "MRI",
+          src: imgPlaceholder("MR Arthro · Sagittal", "MRI"),
+          description: "T1 fat-sat sagittal post-arthrogram",
+          findings: "Biceps tendinopathy at the bicipital groove. Rotator cuff intact.",
+        },
+      ],
+    },
   },
   "c-004": {
     dob: "11/18/1987", sex: "Male", height: "6′1″ (185 cm)", weight: "198 lbs (90 kg)",
@@ -247,6 +540,74 @@ export const PATIENT_CLINICAL: Record<string, PatientClinical> = {
       { component: "Knotless Suture Anchors", spec: "3.0 mm × 3", confirmed: true },
       { component: "FiberTape Suture", spec: "#2 × 3 strands", confirmed: true },
     ],
+    patientVideo: {
+      id: "pv-004",
+      src: PLACEHOLDER_VIDEO_SRC,
+      poster: PLACEHOLDER_VIDEO_POSTER,
+      durationSec: 72,
+      recordedAt: "May 1, 2026 · 11:05 AM",
+      summary: "Jonas described a recent near-dislocation event and his goals for return to BMX.",
+      transcript: [
+        { startSec: 0, text: "Hey Doc — Jonas Albrecht, here." },
+        { startSec: 4, text: "Three days ago I almost dislocated again reaching into the back seat of my car." },
+        { startSec: 12, text: "Felt the shift, caught it before it popped — but it scared me." },
+        { startSec: 20, text: "No actual dislocation since the last clinic visit, just that one near-miss." },
+        { startSec: 28, text: "I held my Lisinopril this morning per instructions." },
+        { startSec: 35, text: "BP at home was one-twenty-eight over eighty-two." },
+        { startSec: 42, text: "Penicillin gives me hives — not anaphylaxis, but worth flagging." },
+        { startSec: 50, text: "My main goal is getting back on the BMX bike for the fall season." },
+        { startSec: 58, text: "I'm willing to be slow with rehab if it means a stable shoulder long-term." },
+        { startSec: 66, text: "See you tomorrow. Thanks." },
+      ],
+      aiInsights: [
+        "Near-dislocation event 3 days pre-op — stability still tenuous.",
+        "No frank dislocation since last clinic visit.",
+        "Lisinopril held morning of surgery; home BP 128/82.",
+        "Penicillin → urticaria (mild) — confirm cefazolin use.",
+        "Patient goal: fall BMX season return — willing to extend rehab for durable repair.",
+      ],
+    },
+    imaging: {
+      studyDate: "Apr 19, 2026",
+      accession: "ACC-26-0419-4716",
+      bodyRegion: "Left Shoulder",
+      laterality: "L",
+      protocol: "Pre-op instability series + MRI",
+      views: [
+        {
+          id: "v4-ap",
+          label: "AP",
+          modality: "XR",
+          src: imgPlaceholder("AP · Left Shoulder", "XR"),
+          description: "Anteroposterior, neutral rotation",
+          findings: "Concentric joint with no acute fracture. Subtle Hill-Sachs notch on humeral head.",
+        },
+        {
+          id: "v4-westpoint",
+          label: "West Point Axillary",
+          modality: "XR",
+          src: imgPlaceholder("WEST POINT · Left", "XR"),
+          description: "Modified axillary for anterior glenoid",
+          findings: "Anterior-inferior glenoid bone loss ~12% — within reach of Bankart repair without bone block.",
+        },
+        {
+          id: "v4-stryker",
+          label: "Stryker Notch",
+          modality: "XR",
+          src: imgPlaceholder("STRYKER NOTCH · Left", "XR"),
+          description: "Posterolateral humeral head profile",
+          findings: "Hill-Sachs lesion measured at 18 × 6 mm — engaging in functional position.",
+        },
+        {
+          id: "v4-mri",
+          label: "MRI · Bankart",
+          modality: "MRI",
+          src: imgPlaceholder("MRI · Bankart Lesion", "MRI"),
+          description: "T2 axial — anterior labrum",
+          findings: "Anterior labral tear from 3 to 6 o'clock. Capsular redundancy. No bony Bankart.",
+        },
+      ],
+    },
   },
   "c-005": {
     dob: "02/28/1974", sex: "Female", height: "5′6″ (168 cm)", weight: "161 lbs (73 kg)",
@@ -279,6 +640,68 @@ export const PATIENT_CLINICAL: Record<string, PatientClinical> = {
     implantPlan: [
       { component: "No Implants Required", spec: "Soft tissue / bony decompression only", confirmed: true },
     ],
+    patientVideo: {
+      id: "pv-005",
+      src: PLACEHOLDER_VIDEO_SRC,
+      poster: PLACEHOLDER_VIDEO_POSTER,
+      durationSec: 81,
+      recordedAt: "May 2, 2026 · 7:50 AM",
+      summary: "Linnea reviewed her GI bleed history and clarified post-op activity expectations.",
+      transcript: [
+        { startSec: 0, text: "Hello Dr. Patel, this is Linnea Park." },
+        { startSec: 5, text: "Quick reminder: no aspirin and no NSAIDs for me, ever." },
+        { startSec: 12, text: "I had a GI bleed two years ago and I do not want to repeat that." },
+        { startSec: 20, text: "Tylenol and the nerve block plan you described sound perfect." },
+        { startSec: 28, text: "Levothyroxine taken this morning with a small sip of water." },
+        { startSec: 35, text: "Omeprazole as well, since the GERD is acting up at night." },
+        { startSec: 43, text: "I'm a stained-glass artist — I really need overhead reach back." },
+        { startSec: 52, text: "Realistic timeline for full overhead use is what I care about most." },
+        { startSec: 60, text: "I have arranged help at home for the first two weeks." },
+        { startSec: 68, text: "Long NPO since midnight — I'm a bit lightheaded but okay." },
+        { startSec: 76, text: "Thanks for everything. See you soon." },
+      ],
+      aiInsights: [
+        "ABSOLUTE: no aspirin / NSAIDs — prior GI bleed history.",
+        "Tylenol + suprascapular block analgesia plan accepted by patient.",
+        "Levothyroxine and omeprazole taken AM with sip of water (NPO-compliant).",
+        "Patient goal: full overhead reach for stained-glass work — counsel on realistic timeline.",
+        "Home support secured for 2 weeks post-op.",
+        "Long NPO interval — patient reports mild lightheadedness; check glucose pre-induction.",
+      ],
+    },
+    imaging: {
+      studyDate: "Apr 24, 2026",
+      accession: "ACC-26-0424-5530",
+      bodyRegion: "Right Shoulder",
+      laterality: "R",
+      protocol: "Pre-op subacromial impingement series",
+      views: [
+        {
+          id: "v5-ap",
+          label: "AP",
+          modality: "XR",
+          src: imgPlaceholder("AP · Right Shoulder", "XR"),
+          description: "Anteroposterior, neutral rotation",
+          findings: "Subacromial spur at the anterior acromion. Acromiohumeral distance 9 mm.",
+        },
+        {
+          id: "v5-outlet",
+          label: "Outlet Y",
+          modality: "XR",
+          src: imgPlaceholder("OUTLET Y · Right", "XR"),
+          description: "Supraspinatus outlet view",
+          findings: "Type II curved acromion with prominent anterior-inferior osteophyte — primary impingement source.",
+        },
+        {
+          id: "v5-axil",
+          label: "Axillary Lateral",
+          modality: "XR",
+          src: imgPlaceholder("AXIL · Right Shoulder", "XR"),
+          description: "Axillary lateral",
+          findings: "Glenohumeral joint preserved. AC joint mildly arthritic.",
+        },
+      ],
+    },
   },
 };
 

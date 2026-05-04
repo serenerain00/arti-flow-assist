@@ -87,6 +87,22 @@ export interface DashboardActions {
   switchRole: (role: ActiveRole) => ArtiToolResult;
   openPatientDetails: () => ArtiToolResult;
   closePatientDetails: () => ArtiToolResult;
+  openPatientVideo: () => ArtiToolResult;
+  closePatientVideo: () => ArtiToolResult;
+  playPatientVideo: () => ArtiToolResult;
+  pausePatientVideo: () => ArtiToolResult;
+  restartPatientVideo: () => ArtiToolResult;
+  togglePatientVideoCaptions: () => ArtiToolResult;
+  mutePatientVideo: () => ArtiToolResult;
+  unmutePatientVideo: () => ArtiToolResult;
+  openXrays: () => ArtiToolResult;
+  closeXrays: () => ArtiToolResult;
+  xraysNextView: () => ArtiToolResult;
+  xraysPrevView: () => ArtiToolResult;
+  xraysShowView: (query: string) => ArtiToolResult;
+  xraysZoomIn: () => ArtiToolResult;
+  xraysZoomOut: () => ArtiToolResult;
+  xraysResetZoom: () => ArtiToolResult;
   toggleOpeningChecklistItem: (index: number) => ArtiToolResult;
   toggleMachineCheckItem: (index: number) => ArtiToolResult;
   /**
@@ -324,6 +340,30 @@ function ArtiWallRoot() {
         dashboardActionsRef.current?.openPatientDetails() ?? notAvailable(),
       onClosePatientDetails: () =>
         dashboardActionsRef.current?.closePatientDetails() ?? notAvailable(),
+      onOpenPatientVideo: () =>
+        dashboardActionsRef.current?.openPatientVideo() ?? notAvailable(),
+      onClosePatientVideo: () =>
+        dashboardActionsRef.current?.closePatientVideo() ?? notAvailable(),
+      onPlayPatientVideo: () =>
+        dashboardActionsRef.current?.playPatientVideo() ?? notAvailable(),
+      onPausePatientVideo: () =>
+        dashboardActionsRef.current?.pausePatientVideo() ?? notAvailable(),
+      onRestartPatientVideo: () =>
+        dashboardActionsRef.current?.restartPatientVideo() ?? notAvailable(),
+      onTogglePatientVideoCaptions: () =>
+        dashboardActionsRef.current?.togglePatientVideoCaptions() ?? notAvailable(),
+      onMutePatientVideo: () =>
+        dashboardActionsRef.current?.mutePatientVideo() ?? notAvailable(),
+      onUnmutePatientVideo: () =>
+        dashboardActionsRef.current?.unmutePatientVideo() ?? notAvailable(),
+      onOpenXrays: () => dashboardActionsRef.current?.openXrays() ?? notAvailable(),
+      onCloseXrays: () => dashboardActionsRef.current?.closeXrays() ?? notAvailable(),
+      onXraysNextView: () => dashboardActionsRef.current?.xraysNextView() ?? notAvailable(),
+      onXraysPrevView: () => dashboardActionsRef.current?.xraysPrevView() ?? notAvailable(),
+      onXraysShowView: (q) => dashboardActionsRef.current?.xraysShowView(q) ?? notAvailable(),
+      onXraysZoomIn: () => dashboardActionsRef.current?.xraysZoomIn() ?? notAvailable(),
+      onXraysZoomOut: () => dashboardActionsRef.current?.xraysZoomOut() ?? notAvailable(),
+      onXraysResetZoom: () => dashboardActionsRef.current?.xraysResetZoom() ?? notAvailable(),
       onToggleOpeningChecklistItem: (index) =>
         dashboardActionsRef.current?.toggleOpeningChecklistItem(index) ?? notAvailable(),
       onToggleMachineCheckItem: (index) =>
@@ -1482,7 +1522,7 @@ function ArtiWall({
      *   3. How-to video modal (z-50)
      *   4. Image lightbox (z-50)
      *   5. Schedule day drawer (when on schedule screen)
-     *   6. Dashboard-scoped (patient details > quad view) — delegated
+     *   6. Dashboard-scoped (x-rays > patient video > patient details > quad view) — delegated
      * No-op when nothing is open. Voice tool description tells Claude to
      * prefer this over the specific close_* tools for generic "close".
      */
