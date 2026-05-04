@@ -1,5 +1,5 @@
 import { useMemo, useState } from "react";
-import { BookOpen, Play, Search, Sparkles, X } from "lucide-react";
+import { BookmarkCheck, BookmarkPlus, BookOpen, Play, Search, Sparkles, X } from "lucide-react";
 import { Sidebar, type SidebarKey } from "./Sidebar";
 import { TopBar } from "./TopBar";
 import { ArtiInvoker } from "./ArtiInvoker";
@@ -29,6 +29,12 @@ interface Props {
   onCategoryChange: (c: VideoCategory | "All") => void;
   animatedOnly: boolean;
   onAnimatedOnlyChange: (v: boolean) => void;
+  /** Set of saved video ids for the bookmark badge + saved-only filter. */
+  savedIds: ReadonlySet<string>;
+  savedOnly: boolean;
+  onSavedOnlyChange: (v: boolean) => void;
+  /** Toggle save state for a single video (used by per-card bookmark button). */
+  onToggleSave: (videoId: string) => void;
 }
 
 const CATEGORIES: Array<{ id: VideoCategory | "All"; label: string }> = [
@@ -79,17 +85,21 @@ export function VideoLibraryScreen({
   onCategoryChange,
   animatedOnly,
   onAnimatedOnlyChange,
+  savedIds,
+  savedOnly,
+  onSavedOnlyChange,
+  onToggleSave,
 }: Props) {
   // Sort is local-only — voice doesn't currently drive sort, so no need
   // to lift it. Searching/filtering lifts because that's what users say.
   const [sort, setSort] = useState<SortId>("newest");
 
   const filtered = useMemo<ProcedureVideo[]>(() => {
-    const out = filterLibrary({ search, category, animatedOnly });
+    const out = filterLibrary({ search, category, animatedOnly, savedIds, savedOnly });
     if (sort === "newest") return [...out].sort((a, b) => b.publishedYear - a.publishedYear);
     if (sort === "category") return [...out].sort((a, b) => a.category.localeCompare(b.category));
     return [...out].sort((a, b) => a.title.localeCompare(b.title));
-  }, [search, category, animatedOnly, sort]);
+  }, [search, category, animatedOnly, savedIds, savedOnly, sort]);
 
   const counts = useMemo(() => {
     const out: Record<VideoCategory | "All", number> = {
@@ -171,17 +181,40 @@ export function VideoLibraryScreen({
               )}
             </div>
 
-            {/* Animated-only toggle */}
-            <label className="flex shrink-0 cursor-pointer items-center gap-2 rounded-full border border-border bg-surface-2/60 px-4 py-2 font-mono text-[10px] uppercase tracking-wider text-muted-foreground hover:border-primary/40">
-              <input
-                type="checkbox"
-                checked={animatedOnly}
-                onChange={(e) => onAnimatedOnlyChange(e.target.checked)}
-                className="h-3 w-3 cursor-pointer accent-primary"
-              />
-              <Sparkles className="h-3 w-3" />
-              Animated only
-            </label>
+            <div className="flex shrink-0 items-center gap-2">
+              {/* Saved-only toggle */}
+              <button
+                type="button"
+                onClick={() => onSavedOnlyChange(!savedOnly)}
+                aria-pressed={savedOnly}
+                title={savedOnly ? "Show all videos" : "Show only my saved videos"}
+                className={cn(
+                  "flex items-center gap-2 rounded-full border px-4 py-2 font-mono text-[10px] uppercase tracking-wider transition-colors",
+                  savedOnly
+                    ? "border-primary bg-primary text-primary-foreground"
+                    : "border-border bg-surface-2/60 text-muted-foreground hover:border-primary/40 hover:text-foreground",
+                )}
+              >
+                {savedOnly ? (
+                  <BookmarkCheck className="h-3 w-3" />
+                ) : (
+                  <BookmarkPlus className="h-3 w-3" />
+                )}
+                Saved {savedIds.size > 0 && <span className="tabular-nums">· {savedIds.size}</span>}
+              </button>
+
+              {/* Animated-only toggle */}
+              <label className="flex cursor-pointer items-center gap-2 rounded-full border border-border bg-surface-2/60 px-4 py-2 font-mono text-[10px] uppercase tracking-wider text-muted-foreground hover:border-primary/40">
+                <input
+                  type="checkbox"
+                  checked={animatedOnly}
+                  onChange={(e) => onAnimatedOnlyChange(e.target.checked)}
+                  className="h-3 w-3 cursor-pointer accent-primary"
+                />
+                <Sparkles className="h-3 w-3" />
+                Animated only
+              </label>
+            </div>
           </div>
 
           {/* Category chips */}
@@ -218,13 +251,14 @@ export function VideoLibraryScreen({
             <span>
               Showing {filtered.length} of {PROCEDURE_VIDEOS.length} videos
             </span>
-            {(search || category !== "All" || animatedOnly) && (
+            {(search || category !== "All" || animatedOnly || savedOnly) && (
               <button
                 type="button"
                 onClick={() => {
                   onSearchChange("");
                   onCategoryChange("All");
                   onAnimatedOnlyChange(false);
+                  onSavedOnlyChange(false);
                 }}
                 className="text-primary hover:text-foreground"
               >
@@ -237,16 +271,24 @@ export function VideoLibraryScreen({
           {filtered.length === 0 ? (
             <div className="mt-12 flex flex-col items-center justify-center gap-3 rounded-2xl border border-dashed border-border bg-surface-2/30 px-6 py-16 text-center">
               <div className="font-mono text-[10px] uppercase tracking-[0.3em] text-muted-foreground">
-                No matches
+                {savedOnly && savedIds.size === 0 ? "No saved videos yet" : "No matches"}
               </div>
               <div className="max-w-md text-sm font-light text-muted-foreground">
-                Try a broader search term, or clear the filters above.
+                {savedOnly && savedIds.size === 0
+                  ? "Open a video and tap Save (or say \"save this video\") to bookmark it."
+                  : "Try a broader search term, or clear the filters above."}
               </div>
             </div>
           ) : (
             <div className="mt-4 grid grid-cols-1 gap-4 sm:grid-cols-2 lg:grid-cols-3 xl:grid-cols-4">
               {filtered.map((v) => (
-                <VideoCard key={v.id} video={v} onOpen={() => onOpenVideo(v.id)} />
+                <VideoCard
+                  key={v.id}
+                  video={v}
+                  saved={savedIds.has(v.id)}
+                  onOpen={() => onOpenVideo(v.id)}
+                  onToggleSave={() => onToggleSave(v.id)}
+                />
               ))}
             </div>
           )}
@@ -259,7 +301,8 @@ export function VideoLibraryScreen({
         placeholder="Search the library or ask Arti for a video…"
         onSubmit={onPrompt}
         suggestions={[
-          "Show me the latest ACL video",
+          "Show me my videos",
+          "Save this video",
           "Find rotator cuff videos",
           "Open the meniscus animation",
         ]}
@@ -270,20 +313,37 @@ export function VideoLibraryScreen({
 
 // ── Card ──────────────────────────────────────────────────────────────────
 
-function VideoCard({ video, onOpen }: { video: ProcedureVideo; onOpen: () => void }) {
+function VideoCard({
+  video,
+  saved,
+  onOpen,
+  onToggleSave,
+}: {
+  video: ProcedureVideo;
+  saved: boolean;
+  onOpen: () => void;
+  onToggleSave: () => void;
+}) {
   const currentYear = new Date().getFullYear();
   const isFresh = video.publishedYear >= currentYear - 1;
 
   return (
-    <button
-      type="button"
-      onClick={onOpen}
+    <div
       className={cn(
-        "group flex flex-col overflow-hidden rounded-2xl border border-border bg-surface-2/40 text-left transition-all",
+        "group relative flex flex-col overflow-hidden rounded-2xl border bg-surface-2/40 text-left transition-all",
+        saved ? "border-primary/45" : "border-border",
         "hover:border-primary/50 hover:bg-surface-2 hover:shadow-[0_0_30px_-10px_rgb(34_211_238/0.4)]",
-        "focus:outline-none focus:ring-2 focus:ring-primary/40",
+        "focus-within:ring-2 focus-within:ring-primary/40",
       )}
     >
+      {/* Card-wide click-to-open. Save button below intercepts its own clicks. */}
+      <button
+        type="button"
+        onClick={onOpen}
+        className="absolute inset-0 z-0"
+        aria-label={`Open ${video.title}`}
+      />
+
       {/* Thumbnail */}
       <div className="relative aspect-video w-full overflow-hidden bg-black">
         <img
@@ -293,14 +353,37 @@ function VideoCard({ video, onOpen }: { video: ProcedureVideo; onOpen: () => voi
           className="h-full w-full object-cover transition-transform duration-500 group-hover:scale-[1.04]"
         />
         {/* Play scrim */}
-        <div className="absolute inset-0 bg-gradient-to-t from-black/70 via-transparent to-transparent" />
-        <div className="absolute inset-0 flex items-center justify-center opacity-0 transition-opacity group-hover:opacity-100">
+        <div className="pointer-events-none absolute inset-0 bg-gradient-to-t from-black/70 via-transparent to-transparent" />
+        <div className="pointer-events-none absolute inset-0 flex items-center justify-center opacity-0 transition-opacity group-hover:opacity-100">
           <span className="flex h-14 w-14 items-center justify-center rounded-full bg-primary text-primary-foreground glow-primary">
             <Play className="ml-0.5 h-6 w-6" />
           </span>
         </div>
+        {/* Per-card bookmark button — z-10 so it sits above the click overlay */}
+        <button
+          type="button"
+          onClick={(e) => {
+            e.stopPropagation();
+            onToggleSave();
+          }}
+          aria-pressed={saved}
+          aria-label={saved ? "Remove from saved" : "Save video"}
+          title={saved ? "Saved · tap to remove" : "Save to your videos"}
+          className={cn(
+            "absolute left-2 top-2 z-10 flex h-8 w-8 items-center justify-center rounded-full border backdrop-blur-sm transition-colors",
+            saved
+              ? "border-primary bg-primary text-primary-foreground"
+              : "border-white/30 bg-black/50 text-white/85 hover:border-primary/60 hover:text-white",
+          )}
+        >
+          {saved ? (
+            <BookmarkCheck className="h-4 w-4" />
+          ) : (
+            <BookmarkPlus className="h-4 w-4" />
+          )}
+        </button>
         {/* Top-right badges */}
-        <div className="absolute right-2 top-2 flex items-center gap-1.5">
+        <div className="pointer-events-none absolute right-2 top-2 flex items-center gap-1.5">
           {isFresh && (
             <span className="rounded-full bg-cyan-500/90 px-2 py-0.5 font-mono text-[9px] uppercase tracking-wider text-black">
               New
@@ -314,15 +397,16 @@ function VideoCard({ video, onOpen }: { video: ProcedureVideo; onOpen: () => voi
           )}
         </div>
         {/* Bottom-left chip: category + year */}
-        <div className="absolute bottom-2 left-2 flex items-center gap-1.5 rounded-full bg-black/65 px-2 py-0.5 font-mono text-[9px] uppercase tracking-wider text-white/85 backdrop-blur-sm">
+        <div className="pointer-events-none absolute bottom-2 left-2 flex items-center gap-1.5 rounded-full bg-black/65 px-2 py-0.5 font-mono text-[9px] uppercase tracking-wider text-white/85 backdrop-blur-sm">
           <span>{video.category}</span>
           <span className="text-white/50">·</span>
           <span className="tabular-nums">{video.publishedYear}</span>
         </div>
       </div>
 
-      {/* Card body */}
-      <div className="flex flex-1 flex-col gap-1.5 px-4 py-3">
+      {/* Card body — pointer-events-none so the underlying click overlay
+          handles taps; bookmark button above re-enables its own pointer events. */}
+      <div className="pointer-events-none relative flex flex-1 flex-col gap-1.5 px-4 py-3">
         <div className="font-mono text-[9px] uppercase tracking-[0.25em] text-primary">
           {video.channel}
         </div>
@@ -333,6 +417,6 @@ function VideoCard({ video, onOpen }: { video: ProcedureVideo; onOpen: () => voi
           {video.surgeon}
         </div>
       </div>
-    </button>
+    </div>
   );
 }

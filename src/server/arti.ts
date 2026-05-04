@@ -200,11 +200,78 @@ const TOOLS: Anthropic.Tool[] = [
     },
   },
   {
+    name: "library_set_saved_only",
+    description:
+      "Toggle the 'Saved only' filter on the Video Library, which narrows the grid to videos the user has bookmarked. ALWAYS works — closes any modal and navigates to the library if needed. Use for: 'show only saved videos', 'show my saved videos', 'show my favorites', 'show all videos again' (pass false), 'turn off saved filter'. Prefer the more-specific show_saved_videos tool when the user just says 'show me my videos' / 'show my videos' (it also clears other filters for a clean view).",
+    input_schema: {
+      type: "object" as const,
+      properties: {
+        enabled: {
+          type: "boolean",
+          description: "true = restrict to saved/bookmarked only; false = show all videos.",
+        },
+      },
+      required: ["enabled"],
+    },
+  },
+  {
+    name: "show_saved_videos",
+    description:
+      "Open the Video Library filtered to only the user's saved/bookmarked videos. Clears any other active filters (search, category, animated-only) so the saved set is presented cleanly. Trigger phrases: 'show me my videos', 'show my videos', 'show my saved videos', 'show my bookmarks', 'pull up my saved videos', 'show me what I saved', 'open my saved videos', 'my favorites', 'my library', 'what have I saved'. Use this instead of library_set_saved_only when the user wants a clean view of what they've personally bookmarked.",
+    input_schema: { type: "object" as const, properties: {}, required: [] },
+  },
+  {
+    name: "save_video",
+    description:
+      "Add a surgical how-to video to the user's saved/bookmarked set so they can find it later under 'show my videos'. With no args, saves the video currently open in the how-to viewer (the most common case). Pass `id` for a specific library video, or `query` to resolve by free-text procedure name (same fuzzy matching as open_how_to_video). Trigger phrases: 'save this', 'save it', 'save this video', 'save the video', 'bookmark this', 'bookmark it', 'add to my saved videos', 'save it for later', 'add to favorites', 'favorite this', 'save the [procedure] video' (use query). Idempotent — re-saving an already-saved video is a no-op.",
+    input_schema: {
+      type: "object" as const,
+      properties: {
+        id: {
+          type: "string",
+          description: "Library video id (e.g. 'v-rtsa'). Optional.",
+        },
+        query: {
+          type: "string",
+          description:
+            "Free-text procedure / topic to resolve when the user names a video without opening it (e.g. 'save the rotator cuff video'). Optional.",
+        },
+      },
+      required: [],
+    },
+  },
+  {
+    name: "unsave_video",
+    description:
+      "Remove a surgical how-to video from the user's saved/bookmarked set. With no args, targets the currently-open video. Trigger phrases: 'unsave', 'unsave this', 'remove from saved', 'remove bookmark', 'unbookmark', 'take this off my saved list', 'forget this video', 'don't save this anymore'. Use toggle_save_video instead if the user just says 'toggle save' or it's unclear whether they want to add or remove.",
+    input_schema: {
+      type: "object" as const,
+      properties: {
+        id: { type: "string", description: "Library video id. Optional." },
+        query: { type: "string", description: "Free-text resolver. Optional." },
+      },
+      required: [],
+    },
+  },
+  {
+    name: "toggle_save_video",
+    description:
+      "Toggle the saved/bookmarked state of the currently-open how-to video (or one resolved by id/query). Adds it to saved if it isn't there, removes it if it is. Use ONLY when the user explicitly says 'toggle save' / 'toggle bookmark' or it's genuinely ambiguous. Prefer save_video / unsave_video for explicit save / unsave intents.",
+    input_schema: {
+      type: "object" as const,
+      properties: {
+        id: { type: "string", description: "Library video id. Optional." },
+        query: { type: "string", description: "Free-text resolver. Optional." },
+      },
+      required: [],
+    },
+  },
+  {
     name: "library_clear_filters",
     description:
-      "Reset every Video Library filter — clear search, set category to 'All', turn off animated-only. ALWAYS works regardless of current screen or open modal. " +
+      "Reset every Video Library filter — clear search, set category to 'All', turn off animated-only and saved-only. ALWAYS works regardless of current screen or open modal. " +
       "OR STAFF SPEAK — recognize all of these terse imperatives: 'clear filters' / 'clear it' / 'reset' / 'reset filters' / 'reset library' / 'show all' / 'show all videos' / 'show me everything' / 'everything' / 'no filters' / 'remove filters' / 'drop the filter' / 'wipe filters' / 'start over'. " +
-      "Prefer this over library_filter_category('All') when the user wants a TOTAL reset (also clears search + animated-only). Use library_filter_category('All') only when they want to keep the search but drop the region filter.",
+      "Prefer this over library_filter_category('All') when the user wants a TOTAL reset (also clears search + animated-only + saved-only). Use library_filter_category('All') only when they want to keep the search but drop the region filter.",
     input_schema: { type: "object" as const, properties: {}, required: [] },
   },
   {
@@ -1063,7 +1130,9 @@ export const processVoiceCommand = createServerFn({ method: "POST" })
       "library_filter_category",
       "library_search",
       "library_set_animated_only",
+      "library_set_saved_only",
       "library_clear_filters",
+      "show_saved_videos",
       // focus_console is intentionally NOT silent — when the user asks
       // "is the pump connected?" Arti reads the live tower status block
       // and speaks a one-sentence telemetry answer in the same turn.

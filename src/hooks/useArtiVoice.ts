@@ -41,8 +41,20 @@ export interface ArtiVoiceCallbacks {
   onLibrarySearch?: (query: string) => void;
   /** Toggle the Video Library "Animated only" checkbox. */
   onLibrarySetAnimatedOnly?: (enabled: boolean) => void;
+  /** Toggle the Video Library "Saved only" filter. */
+  onLibrarySetSavedOnly?: (enabled: boolean) => void;
   /** Reset every Video Library filter to defaults. */
   onLibraryClearFilters?: () => void;
+  /** Convenience: navigate to the library and apply the saved-only filter. */
+  onShowSavedVideos?: () => void;
+  /**
+   * Save a video to the user's "saved" set. Without args, saves the
+   * currently-open how-to video. With `id`, saves that exact library id.
+   * With `query`, resolves a video by free-text and saves it.
+   */
+  onSaveVideo?: (id?: string, query?: string) => ArtiToolResult;
+  onUnsaveVideo?: (id?: string, query?: string) => ArtiToolResult;
+  onToggleSaveVideo?: (id?: string, query?: string) => ArtiToolResult;
   // ── Journey walkthrough ────────────────────────────────────────────
   onStartJourney?: () => void;
   onExitJourney?: () => void;
@@ -217,8 +229,32 @@ function executeToolCall(call: ArtiToolCall, cb: ArtiVoiceCallbacks): void {
     case "library_set_animated_only":
       cb.onLibrarySetAnimatedOnly?.(Boolean(inp.enabled));
       break;
+    case "library_set_saved_only":
+      cb.onLibrarySetSavedOnly?.(Boolean(inp.enabled));
+      break;
     case "library_clear_filters":
       cb.onLibraryClearFilters?.();
+      break;
+    case "show_saved_videos":
+      cb.onShowSavedVideos?.();
+      break;
+    case "save_video":
+      cb.onSaveVideo?.(
+        inp.id != null ? String(inp.id) : undefined,
+        inp.query != null ? String(inp.query) : undefined,
+      );
+      break;
+    case "unsave_video":
+      cb.onUnsaveVideo?.(
+        inp.id != null ? String(inp.id) : undefined,
+        inp.query != null ? String(inp.query) : undefined,
+      );
+      break;
+    case "toggle_save_video":
+      cb.onToggleSaveVideo?.(
+        inp.id != null ? String(inp.id) : undefined,
+        inp.query != null ? String(inp.query) : undefined,
+      );
       break;
     case "start_journey":
       cb.onStartJourney?.();

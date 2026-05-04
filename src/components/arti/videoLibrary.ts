@@ -750,9 +750,13 @@ export function filterLibrary(opts: {
   search?: string;
   category?: VideoCategory | "All";
   animatedOnly?: boolean;
+  /** When set with savedOnly=true, narrow to videos whose ids are in this set. */
+  savedIds?: ReadonlySet<string>;
+  savedOnly?: boolean;
 }): ProcedureVideo[] {
   const q = opts.search?.trim().toLowerCase() ?? "";
   return PROCEDURE_VIDEOS.filter((v) => {
+    if (opts.savedOnly && !opts.savedIds?.has(v.id)) return false;
     if (opts.category && opts.category !== "All" && v.category !== opts.category) {
       return false;
     }

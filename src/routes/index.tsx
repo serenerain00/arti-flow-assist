@@ -21,6 +21,7 @@ import {
 } from "@/components/arti/consoles";
 import {
   filterLibrary,
+  findLatestVideo,
   PROCEDURE_VIDEOS,
   type VideoCategory,
 } from "@/components/arti/videoLibrary";
@@ -142,7 +143,12 @@ function ArtiWallRoot() {
       | "onLibraryFilterCategory"
       | "onLibrarySearch"
       | "onLibrarySetAnimatedOnly"
+      | "onLibrarySetSavedOnly"
       | "onLibraryClearFilters"
+      | "onShowSavedVideos"
+      | "onSaveVideo"
+      | "onUnsaveVideo"
+      | "onToggleSaveVideo"
       | "onStartJourney"
       | "onExitJourney"
       | "onJourneyPause"
@@ -199,6 +205,11 @@ function ArtiWallRoot() {
     onLibrarySearch: () => {},
     onLibrarySetAnimatedOnly: () => {},
     onLibraryClearFilters: () => {},
+    onLibrarySetSavedOnly: () => {},
+    onShowSavedVideos: () => {},
+    onSaveVideo: () => ({ ok: false, reason: "no handler" }),
+    onUnsaveVideo: () => ({ ok: false, reason: "no handler" }),
+    onToggleSaveVideo: () => ({ ok: false, reason: "no handler" }),
     onStartJourney: () => {},
     onExitJourney: () => {},
     onJourneyPause: () => {},
@@ -286,6 +297,14 @@ function ArtiWallRoot() {
       onLibrarySearch: (q) => navCallbacksRef.current.onLibrarySearch?.(q),
       onLibrarySetAnimatedOnly: (v) => navCallbacksRef.current.onLibrarySetAnimatedOnly?.(v),
       onLibraryClearFilters: () => navCallbacksRef.current.onLibraryClearFilters?.(),
+      onLibrarySetSavedOnly: (v) => navCallbacksRef.current.onLibrarySetSavedOnly?.(v),
+      onShowSavedVideos: () => navCallbacksRef.current.onShowSavedVideos?.(),
+      onSaveVideo: (id, q) =>
+        navCallbacksRef.current.onSaveVideo?.(id, q) ?? notAvailable(),
+      onUnsaveVideo: (id, q) =>
+        navCallbacksRef.current.onUnsaveVideo?.(id, q) ?? notAvailable(),
+      onToggleSaveVideo: (id, q) =>
+        navCallbacksRef.current.onToggleSaveVideo?.(id, q) ?? notAvailable(),
       onStartJourney: () => navCallbacksRef.current.onStartJourney?.(),
       onExitJourney: () => navCallbacksRef.current.onExitJourney?.(),
       onJourneyPause: () => navCallbacksRef.current.onJourneyPause?.(),
@@ -452,7 +471,12 @@ interface ArtiWallProps {
       | "onLibraryFilterCategory"
       | "onLibrarySearch"
       | "onLibrarySetAnimatedOnly"
+      | "onLibrarySetSavedOnly"
       | "onLibraryClearFilters"
+      | "onShowSavedVideos"
+      | "onSaveVideo"
+      | "onUnsaveVideo"
+      | "onToggleSaveVideo"
       | "onStartJourney"
       | "onExitJourney"
       | "onJourneyPause"
@@ -619,6 +643,36 @@ function ArtiWall({
   const [librarySearch, setLibrarySearch] = useState("");
   const [libraryCategory, setLibraryCategory] = useState<VideoCategory | "All">("All");
   const [libraryAnimatedOnly, setLibraryAnimatedOnly] = useState(false);
+  const [librarySavedOnly, setLibrarySavedOnly] = useState(false);
+
+  /**
+   * Saved videos — persisted across page reloads in localStorage so the
+   * surgeon's bookmarks survive a refresh. Voice or tap can mutate this
+   * via the toggle handler. Set is the right shape for cheap membership
+   * checks during render.
+   */
+  const [savedVideos, setSavedVideos] = useState<Set<string>>(() => {
+    if (typeof window === "undefined") return new Set();
+    try {
+      const raw = window.localStorage.getItem("arti.savedVideos");
+      const parsed: unknown = raw ? JSON.parse(raw) : null;
+      if (Array.isArray(parsed) && parsed.every((x) => typeof x === "string")) {
+        return new Set(parsed);
+      }
+    } catch {
+      /* corrupt or quota-exceeded — start empty */
+    }
+    return new Set();
+  });
+
+  useEffect(() => {
+    if (typeof window === "undefined") return;
+    try {
+      window.localStorage.setItem("arti.savedVideos", JSON.stringify([...savedVideos]));
+    } catch {
+      /* ignore quota / private mode failures */
+    }
+  }, [savedVideos]);
 
   // Journey walkthrough state. `journeyPaused` toggled by voice / button.
   // `journeyStageDelta` is a monotonically-increasing counter the voice
@@ -916,13 +970,17 @@ function ArtiWall({
         const papersList = status.papers
           .map((p, i) => `${i + 1}=${p.title.slice(0, 60)} (${p.journal} ${p.year})`)
           .join("; ");
+        const activeId =
+          howToVideoId ?? (howToProcedure ? findLatestVideo(howToProcedure).id : null);
+        const isSaved = activeId ? savedVideos.has(activeId) : false;
         return [
           `How-to video modal: OPEN — "${status.videoTitle}" (${status.procedure}, ${status.surgeon}, ${status.publishedYear})`,
+          `  Active video id: ${activeId ?? "(unresolved)"} · saved: ${isSaved ? "YES" : "no"}`,
           `  Playback: ${status.playing ? "playing" : "paused"} at ${fmt(status.currentSec)}/${fmt(status.durationSec)} · ${chapterLine} · ${status.speed}× speed`,
           `  Chapters: ${status.chapters.map((c, i) => `${i + 1}=${c.title}`).join(" · ")}`,
           `  Research panel: ${status.papersPanelOpen ? "OPEN" : "closed"}${status.activePaper ? ` · viewing paper "${status.activePaper.title}"` : ""}`,
           `  Available papers: ${papersList || "none"}`,
-          `  Voice tools: video_play, video_pause, video_seek, video_next_chapter, video_prev_chapter, video_restart, video_set_speed, video_show_papers, video_hide_papers, video_open_paper, video_close_paper, close_how_to_video`,
+          `  Voice tools: video_play, video_pause, video_seek, video_next_chapter, video_prev_chapter, video_restart, video_set_speed, video_show_papers, video_hide_papers, video_open_paper, video_close_paper, save_video, unsave_video, close_how_to_video`,
         ].join("\n");
       })(),
       lightboxOpen
@@ -945,8 +1003,10 @@ function ArtiWall({
               search: librarySearch,
               category: libraryCategory,
               animatedOnly: libraryAnimatedOnly,
+              savedIds: savedVideos,
+              savedOnly: librarySavedOnly,
             });
-            const head = `Video Library filters — search: ${librarySearch ? `"${librarySearch}"` : "(none)"} · category: ${libraryCategory} · animated only: ${libraryAnimatedOnly ? "on" : "off"}`;
+            const head = `Video Library filters — search: ${librarySearch ? `"${librarySearch}"` : "(none)"} · category: ${libraryCategory} · animated only: ${libraryAnimatedOnly ? "on" : "off"} · saved only: ${librarySavedOnly ? "on" : "off"} · saved set size: ${savedVideos.size}`;
             const list =
               filtered.length === 0
                 ? "  (no videos match — broaden the filters)"
@@ -954,7 +1014,7 @@ function ArtiWall({
                     .slice(0, 12)
                     .map(
                       (v, i) =>
-                        `  ${i + 1}. id="${v.id}" · "${v.title}" · ${v.category} · ${v.publishedYear} · procedure="${v.procedure}"`,
+                        `  ${i + 1}. id="${v.id}"${savedVideos.has(v.id) ? " ★saved" : ""} · "${v.title}" · ${v.category} · ${v.publishedYear} · procedure="${v.procedure}"`,
                     )
                     .join("\n");
             const guidance =
@@ -1389,6 +1449,81 @@ function ArtiWall({
     return { ok: true };
   };
 
+  /**
+   * Resolve which library video id is "active" right now. Mirrors the
+   * priority HowToVideoModal uses internally so save/unsave acts on the
+   * same video the user is looking at.
+   */
+  const resolveActiveVideoId = (): string | null => {
+    if (howToVideoId) return howToVideoId;
+    if (howToProcedure) return findLatestVideo(howToProcedure).id;
+    return null;
+  };
+
+  /**
+   * Resolve a save target. Priority: explicit id > free-text query >
+   * currently-open video. Returns null if nothing reasonable matches.
+   */
+  const resolveSaveTarget = (id?: string, query?: string): string | null => {
+    if (id) {
+      if (PROCEDURE_VIDEOS.some((v) => v.id === id)) return id;
+    }
+    if (query && query.trim()) return findLatestVideo(query).id;
+    return resolveActiveVideoId();
+  };
+
+  const handleSaveVideo = (id?: string, query?: string): ArtiToolResult => {
+    const target = resolveSaveTarget(id, query);
+    if (!target) return { ok: false, reason: "no video to save" };
+    setSavedVideos((prev) => {
+      if (prev.has(target)) return prev; // already saved — no-op
+      const next = new Set(prev);
+      next.add(target);
+      return next;
+    });
+    return { ok: true };
+  };
+
+  const handleUnsaveVideo = (id?: string, query?: string): ArtiToolResult => {
+    const target = resolveSaveTarget(id, query);
+    if (!target) return { ok: false, reason: "no video to remove" };
+    setSavedVideos((prev) => {
+      if (!prev.has(target)) return prev;
+      const next = new Set(prev);
+      next.delete(target);
+      return next;
+    });
+    return { ok: true };
+  };
+
+  const handleToggleSaveVideo = (id?: string, query?: string): ArtiToolResult => {
+    const target = resolveSaveTarget(id, query);
+    if (!target) return { ok: false, reason: "no video to toggle" };
+    setSavedVideos((prev) => {
+      const next = new Set(prev);
+      if (next.has(target)) next.delete(target);
+      else next.add(target);
+      return next;
+    });
+    return { ok: true };
+  };
+
+  const handleLibrarySetSavedOnly = (enabled: boolean) => {
+    closeOverlays();
+    setLibrarySavedOnly(enabled);
+    setPhase("library");
+  };
+
+  /** Convenience: nav to library + show only saved. "Show me my videos." */
+  const handleShowSavedVideos = () => {
+    closeOverlays();
+    setLibrarySearch("");
+    setLibraryCategory("All");
+    setLibraryAnimatedOnly(false);
+    setLibrarySavedOnly(true);
+    setPhase("library");
+  };
+
   // ── Image lightbox handlers ──────────────────────────────────────────────
   const handleShowPreferenceCardLayoutImages = (
     caseQuery?: string,
@@ -1583,7 +1718,13 @@ function ArtiWall({
       setLibrarySearch("");
       setLibraryCategory("All");
       setLibraryAnimatedOnly(false);
+      setLibrarySavedOnly(false);
     },
+    onLibrarySetSavedOnly: handleLibrarySetSavedOnly,
+    onShowSavedVideos: handleShowSavedVideos,
+    onSaveVideo: handleSaveVideo,
+    onUnsaveVideo: handleUnsaveVideo,
+    onToggleSaveVideo: handleToggleSaveVideo,
     // ── Journey walkthrough ──────────────────────────────────────────
     onStartJourney: () => {
       // Cancel any audio still playing from prior turns so it can't bleed
@@ -1757,6 +1898,10 @@ function ArtiWall({
         onCategoryChange={setLibraryCategory}
         animatedOnly={libraryAnimatedOnly}
         onAnimatedOnlyChange={setLibraryAnimatedOnly}
+        savedIds={savedVideos}
+        savedOnly={librarySavedOnly}
+        onSavedOnlyChange={setLibrarySavedOnly}
+        onToggleSave={(id) => handleToggleSaveVideo(id)}
       />
     );
   } else if (phase === "surgeons") {
@@ -1851,6 +1996,11 @@ function ArtiWall({
         videoId={howToVideoId}
         initialPapersOpen={howToInitialPapersOpen}
         initialPaperQuery={howToInitialPaperQuery}
+        saved={(() => {
+          const id = howToVideoId ?? (howToProcedure ? findLatestVideo(howToProcedure).id : null);
+          return id ? savedVideos.has(id) : false;
+        })()}
+        onToggleSave={(id) => handleToggleSaveVideo(id)}
       />
       <ImageLightboxModal
         ref={lightboxRef}

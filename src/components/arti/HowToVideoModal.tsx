@@ -13,6 +13,7 @@ import {
   Play,
   Pause,
   BookmarkPlus,
+  BookmarkCheck,
   RotateCcw,
   ChevronLeft,
   ChevronRight,
@@ -186,6 +187,10 @@ interface Props {
    * resolved against the active video's papers).
    */
   initialPaperQuery?: string;
+  /** True when the currently-resolved video is in the user's saved set. */
+  saved?: boolean;
+  /** Toggle the active video's saved state. */
+  onToggleSave?: (videoId: string) => void;
 }
 
 const PLAYBACK_SPEEDS = [0.5, 0.75, 1, 1.25, 1.5, 2] as const;
@@ -213,7 +218,17 @@ function paperPool(video: ProcedureVideo): ResearchPaper[] {
  * playing without lifting state up.
  */
 export const HowToVideoModal = forwardRef<HowToVideoHandle, Props>(function HowToVideoModal(
-  { open, onClose, title, procedure, videoId, initialPapersOpen, initialPaperQuery }: Props,
+  {
+    open,
+    onClose,
+    title,
+    procedure,
+    videoId,
+    initialPapersOpen,
+    initialPaperQuery,
+    saved,
+    onToggleSave,
+  }: Props,
   ref,
 ) {
   const playerContainerId = useId().replace(/[:]/g, "-") + "-yt";
@@ -659,10 +674,22 @@ export const HowToVideoModal = forwardRef<HowToVideoHandle, Props>(function HowT
                     {papersOpen ? "Hide research" : `Research (${papers.length})`}
                   </button>
                   <button
-                    className="flex items-center gap-2 rounded-full border border-border px-3 py-1.5 text-xs font-light text-muted-foreground hover:text-foreground"
-                    title="Save to favorites"
+                    onClick={() => onToggleSave?.(video.id)}
+                    className={cn(
+                      "flex items-center gap-2 rounded-full border px-3 py-1.5 text-xs font-medium transition-colors",
+                      saved
+                        ? "border-primary bg-primary text-primary-foreground"
+                        : "border-border bg-transparent text-muted-foreground hover:border-primary/50 hover:text-foreground",
+                    )}
+                    aria-pressed={Boolean(saved)}
+                    title={saved ? "Remove from saved" : "Save to your videos"}
                   >
-                    <BookmarkPlus className="h-3.5 w-3.5" /> Save
+                    {saved ? (
+                      <BookmarkCheck className="h-3.5 w-3.5" />
+                    ) : (
+                      <BookmarkPlus className="h-3.5 w-3.5" />
+                    )}
+                    {saved ? "Saved" : "Save"}
                   </button>
                   <button
                     onClick={onClose}
