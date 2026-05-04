@@ -1,4 +1,4 @@
-import { Clock, MapPin, User } from "lucide-react";
+import { CheckCircle, Clock, MapPin, User, XCircle } from "lucide-react";
 import { useEffect, useState } from "react";
 import type { CaseItem } from "./cases";
 
@@ -36,11 +36,10 @@ export function CaseHeader({ activeCase, onOpenPatientDetails }: Props) {
     return () => clearInterval(i);
   }, []);
 
-  const countdown = secs > 0;   // true = before start, false = elapsed
+  const countdown = secs > 0; // true = before scheduled start, false = past it
   const timeDisplay = formatSecs(Math.abs(secs));
 
   const status = activeCase?.status;
-  const showCountdown = status === "next" || status === "scheduled";
 
   const patientDisplay = activeCase
     ? `${activeCase.patientName} · ${activeCase.patientAgeSex}${activeCase.side ? ` · ${activeCase.side} shoulder` : ""}`
@@ -51,8 +50,26 @@ export function CaseHeader({ activeCase, onOpenPatientDetails }: Props) {
       <div className="relative flex flex-wrap items-end justify-between gap-6">
         <div>
           <div className="flex items-center gap-3">
-            <div className="font-mono text-[10px] uppercase tracking-[0.3em] text-primary">
-              {status === "in-progress" ? "In Progress · Pre-Op" : status === "completed" ? "Completed" : "Next Case · Pre-Op"}
+            <div
+              className={`font-mono text-[10px] uppercase tracking-[0.3em] ${
+                status === "completed"
+                  ? "text-success"
+                  : status === "delayed"
+                    ? "text-warning"
+                    : status === "cancelled"
+                      ? "text-destructive"
+                      : "text-primary"
+              }`}
+            >
+              {status === "in-progress"
+                ? "In Progress · Pre-Op"
+                : status === "completed"
+                  ? "Completed"
+                  : status === "delayed"
+                    ? "Delayed · Pre-Op"
+                    : status === "cancelled"
+                      ? "Cancelled"
+                      : "Next Case · Pre-Op"}
             </div>
             <span className="rounded-full border border-border bg-surface-3/60 px-2 py-0.5 font-mono text-[9px] uppercase tracking-wider text-muted-foreground">
               Medtronix VIP plan
@@ -87,16 +104,28 @@ export function CaseHeader({ activeCase, onOpenPatientDetails }: Props) {
             </button>
           )}
 
-          {showCountdown && (
+          {/* Right column — status-aware. Each branch renders the timer
+              shape that matches what the OR team actually wants to see for
+              that case state, instead of a single elapsed/countdown switch. */}
+          {(status === "next" || status === "scheduled") && (
             <div className="text-right">
               <div className="font-mono text-[10px] uppercase tracking-[0.3em] text-muted-foreground">
-                {countdown ? "Incision in" : "Elapsed"}
+                {countdown ? "Incision in" : "Overdue by"}
               </div>
               <div className="mt-1 flex items-baseline gap-2">
-                <Clock className={`h-5 w-5 ${countdown ? "text-primary" : "text-warning"}`} />
-                <span className={`font-mono text-5xl font-thin tabular-nums tracking-tight ${countdown ? "" : "text-warning"}`}>
+                <Clock
+                  className={`h-5 w-5 ${countdown ? "text-primary" : "text-warning"}`}
+                />
+                <span
+                  className={`font-mono text-5xl font-thin tabular-nums tracking-tight ${
+                    countdown ? "" : "text-warning"
+                  }`}
+                >
                   {timeDisplay}
                 </span>
+              </div>
+              <div className="mt-0.5 font-mono text-[9px] uppercase tracking-wider text-muted-foreground">
+                Scheduled {activeCase?.time}
               </div>
             </div>
           )}
@@ -115,10 +144,44 @@ export function CaseHeader({ activeCase, onOpenPatientDetails }: Props) {
           {status === "delayed" && (
             <div className="text-right">
               <div className="font-mono text-[10px] uppercase tracking-[0.3em] text-warning">
-                Delayed
+                {countdown ? "Delayed · starts in" : "Delayed by"}
               </div>
-              <div className="mt-1 font-mono text-3xl font-thin tabular-nums text-warning">
-                {activeCase?.time}
+              <div className="mt-1 flex items-baseline justify-end gap-2">
+                <Clock className="h-5 w-5 text-warning" />
+                <span className="font-mono text-5xl font-thin tabular-nums tracking-tight text-warning">
+                  {timeDisplay}
+                </span>
+              </div>
+              <div className="mt-0.5 font-mono text-[9px] uppercase tracking-wider text-warning/70">
+                Originally {activeCase?.time}
+              </div>
+            </div>
+          )}
+
+          {status === "completed" && (
+            <div className="text-right">
+              <div className="font-mono text-[10px] uppercase tracking-[0.3em] text-success">
+                Completed
+              </div>
+              <div className="mt-1 flex items-baseline justify-end gap-2 text-success">
+                <CheckCircle className="h-5 w-5" />
+                <span className="font-mono text-3xl font-thin tabular-nums tracking-tight">
+                  {activeCase?.time}
+                </span>
+              </div>
+            </div>
+          )}
+
+          {status === "cancelled" && (
+            <div className="text-right">
+              <div className="font-mono text-[10px] uppercase tracking-[0.3em] text-destructive">
+                Cancelled
+              </div>
+              <div className="mt-1 flex items-baseline justify-end gap-2 text-destructive">
+                <XCircle className="h-5 w-5" />
+                <span className="font-mono text-3xl font-thin tabular-nums tracking-tight">
+                  {activeCase?.time}
+                </span>
               </div>
             </div>
           )}

@@ -54,8 +54,25 @@ interface Props {
 export type TimeOutId = "patient" | "site" | "procedure" | "allergies";
 export type InstrumentId = "raytec" | "lap" | "needle" | "blade" | "clamps";
 
-/** Suggestions shown in the ArtiInvoker on the preop dashboard. */
-const DEFAULT_SUGGESTIONS = ["Show team", "Read time-out", "Back to cases"];
+/**
+ * Voice-prompt training chips shown in the ArtiInvoker. Indexed by the
+ * active role so the chips teach the surgeon the role-specific tools that
+ * actually exist on their panel — surgeon learns about imaging + patient
+ * video, scrub tech learns about the back-table layout, etc.
+ *
+ * When a modal is currently open we override these with modal-scoped
+ * prompts (see SUGGESTIONS_PATIENT_VIDEO / SUGGESTIONS_XRAYS) so the
+ * training surface always matches what's on screen.
+ */
+const SUGGESTIONS_BY_ROLE: Record<ActiveRole, string[]> = {
+  nurse: ["Read the time-out", "Add a Raytec", "Show alerts", "Open quad view"],
+  scrub: ["Show the back table", "Mark suture loaded", "Open AP X-ray"],
+  surgeon: ["Open patient video", "Show me the X-rays", "Show the MRI", "Open patient details"],
+  anesthesia: ["Show allergies", "Mark machine check", "Show the airway plan"],
+};
+
+const SUGGESTIONS_PATIENT_VIDEO = ["Unmute", "Pause", "Show captions", "Restart"];
+const SUGGESTIONS_XRAYS = ["Show the AP", "Next view", "Show the MRI", "Zoom in"];
 
 export function AwakeDashboard({
   staffName,
@@ -188,6 +205,22 @@ export function AwakeDashboard({
           ? "  ⚠ COUNT DISCREPANCY — investigate before closure"
           : "  All counts nominal",
         `Dismissed alerts: ${dismissedAlerts.size}`,
+        (() => {
+          const activeAlerts = ALERT_DEFS.map((a, i) => ({ ...a, index: i })).filter(
+            (a) => !dismissedAlerts.has(a.index),
+          );
+          if (activeAlerts.length === 0) {
+            return `── Arti · Prioritized Awareness ──\nNo active alerts — all acknowledged.`;
+          }
+          const lines = activeAlerts.map(
+            (a, i) => `  ${i + 1}. [${a.tier.toUpperCase()}] ${a.title} — ${a.body}`,
+          );
+          return [
+            `── Arti · Prioritized Awareness (${activeAlerts.length} active) ──`,
+            ...lines,
+            `READ-BACK GUIDANCE: when the user asks "what should I be aware of / anything I should know / what do I need to watch / what's important / read me the awareness / what are the alerts / what's flagged" or any close variation, read these alerts aloud — lead with CRITICAL items first, then advisory, then info. Use one short sentence per alert (tier + title + key detail). No preamble, no editorializing. This overrides the default "one short sentence" rule because the user is explicitly requesting situational awareness.`,
+          ].join("\n");
+        })(),
         `Opening checklist (scrub tech): ${openingChecklist.size}/${OPENING_CHECKLIST_ITEMS.length} done. Items by index: ${OPENING_CHECKLIST_ITEMS.map((label, i) => `${i}=${label}${openingChecklist.has(i) ? " ✓" : ""}`).join(" · ")}`,
         `Machine check (anesthesia): ${machineCheck.size}/${MACHINE_CHECK_ITEMS.length} done. Items by index: ${MACHINE_CHECK_ITEMS.map((label, i) => `${i}=${label}${machineCheck.has(i) ? " ✓" : ""}`).join(" · ")}`,
         patientDetailsOpen
@@ -236,6 +269,11 @@ export function AwakeDashboard({
               `Surgeon notes: ${clinical.notes.join(" | ")}`,
               `Procedure steps: ${clinical.procedureSteps.map((s) => `${s.step}. ${s.title}`).join(" → ")}`,
               `Implants: ${clinical.implantPlan.map((i) => `${i.component} ${i.spec}${i.confirmed ? "" : " [UNCONFIRMED]"}`).join(", ")}`,
+              `── Patient pre-op video (recorded ${clinical.patientVideo.recordedAt}) ──`,
+              `Summary: ${clinical.patientVideo.summary}`,
+              `AI-extracted video notes / insights (${clinical.patientVideo.aiInsights.length}):`,
+              ...clinical.patientVideo.aiInsights.map((insight, i) => `  ${i + 1}. ${insight}`),
+              `READ-BACK GUIDANCE: when the user asks "what are the video notes / patient notes / AI insights / patient video notes / video insights / what did the patient say" or any close variation, read these bullets aloud — one short sentence per insight, no preamble, no editorializing. List them in order. Cap at 5 bullets unless user asks for "all". This overrides the default "one short sentence" rule because the user is explicitly requesting a list.`,
             ].join("\n")
           : "",
         `Actions available from this screen: toggle time-out items, adjust instrument counts, dismiss advisory alerts, open quad view, show preference card, show table layout images, open scrub tech table layout images, toggle opening checklist items, toggle machine check items, switch role view, open patient details, open patient video, open patient X-rays, open how-to video`,
@@ -727,7 +765,13 @@ export function AwakeDashboard({
       <ArtiInvoker
         placeholder="Ask Arti about this case…"
         onSubmit={onPrompt}
-        suggestions={DEFAULT_SUGGESTIONS}
+        suggestions={
+          xraysOpen
+            ? SUGGESTIONS_XRAYS
+            : patientVideoOpen
+              ? SUGGESTIONS_PATIENT_VIDEO
+              : SUGGESTIONS_BY_ROLE[activeRole]
+        }
       />
     </div>
   );

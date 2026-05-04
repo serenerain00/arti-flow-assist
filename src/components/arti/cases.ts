@@ -40,78 +40,107 @@ export interface CaseItem {
   side?: "Left" | "Right";
 }
 
-export const TODAY_CASES: CaseItem[] = [
-  {
-    id: "c-001",
-    time: "07:30",
-    durationMin: 90,
-    room: "OR 326",
-    patientName: "Helena Voss",
-    patientMrn: "MRN 884‑221",
-    patientAgeSex: "58F",
-    procedure: "Arthroscopic Rotator Cuff Repair",
-    procedureShort: "RCR",
-    surgeon: "Dr. Anika Patel",
-    status: "completed",
-    side: "Left",
-  },
-  {
-    id: "c-002",
-    time: "09:45",
-    durationMin: 150,
-    room: "OR 326",
-    patientName: "Marcus Chen",
-    patientMrn: "MRN 902‑118",
-    patientAgeSex: "62M",
-    procedure: "Reverse Total Shoulder Arthroplasty",
-    procedureShort: "RSA",
-    surgeon: "Dr. Anika Patel",
-    status: "next",
-    side: "Right",
-  },
-  {
-    id: "c-003",
-    time: "12:30",
-    durationMin: 75,
-    room: "OR 326",
-    patientName: "Priya Raman",
-    patientMrn: "MRN 871‑044",
-    patientAgeSex: "44F",
-    procedure: "SLAP Repair · Biceps Tenodesis",
-    procedureShort: "SLAP",
-    surgeon: "Dr. Anika Patel",
-    status: "scheduled",
-    side: "Right",
-  },
-  {
-    id: "c-004",
-    time: "14:15",
-    durationMin: 60,
-    room: "OR 326",
-    patientName: "Jonas Albrecht",
-    patientMrn: "MRN 913‑207",
-    patientAgeSex: "37M",
-    procedure: "Bankart Repair",
-    procedureShort: "BNK",
-    surgeon: "Dr. Anika Patel",
-    status: "delayed",
-    side: "Left",
-  },
-  {
-    id: "c-005",
-    time: "16:00",
-    durationMin: 105,
-    room: "OR 326",
-    patientName: "Linnea Sundberg",
-    patientMrn: "MRN 845‑553",
-    patientAgeSex: "51F",
-    procedure: "Subacromial Decompression",
-    procedureShort: "SAD",
-    surgeon: "Dr. Anika Patel",
-    status: "scheduled",
-    side: "Right",
-  },
-];
+/**
+ * Build today's case list with start times anchored to the current clock,
+ * so the wall display always shows a realistic spread regardless of when
+ * the prototype is loaded. The status mix stays the same — one completed
+ * (earlier today), one delayed, one "next" with a near-term countdown,
+ * and the rest scheduled later in the day.
+ *
+ * Computed once at module load. Refresh the page to re-anchor against a
+ * new "now"; within a session the live countdown ticks naturally as time
+ * passes (so the "next" case will eventually become overdue if the page
+ * is left open for long enough — same behavior a real OR display has).
+ */
+function buildTodayCases(): CaseItem[] {
+  const now = new Date();
+  /** Offset minutes-from-now → "HH:MM" 24-hour string. */
+  const offset = (minutes: number): string => {
+    const t = new Date(now.getTime() + minutes * 60_000);
+    return `${String(t.getHours()).padStart(2, "0")}:${String(t.getMinutes()).padStart(2, "0")}`;
+  };
+
+  return [
+    {
+      id: "c-001",
+      // Earliest case of the day — wrapped up about 3 hours ago.
+      time: offset(-180),
+      durationMin: 90,
+      room: "OR 326",
+      patientName: "Helena Voss",
+      patientMrn: "MRN 884‑221",
+      patientAgeSex: "58F",
+      procedure: "Arthroscopic Rotator Cuff Repair",
+      procedureShort: "RCR",
+      surgeon: "Dr. Anika Patel",
+      status: "completed",
+      side: "Left",
+    },
+    {
+      id: "c-002",
+      // Focus case — starts in 35 minutes. Pre-op view counts down to it.
+      time: offset(35),
+      durationMin: 150,
+      room: "OR 326",
+      patientName: "Marcus Chen",
+      patientMrn: "MRN 902‑118",
+      patientAgeSex: "62M",
+      procedure: "Reverse Total Shoulder Arthroplasty",
+      procedureShort: "RSA",
+      surgeon: "Dr. Anika Patel",
+      status: "next",
+      side: "Right",
+    },
+    {
+      id: "c-003",
+      // Held over from earlier — was supposed to start 45 min ago,
+      // delayed waiting on equipment turnover.
+      time: offset(-45),
+      durationMin: 75,
+      room: "OR 326",
+      patientName: "Priya Raman",
+      patientMrn: "MRN 871‑044",
+      patientAgeSex: "44F",
+      procedure: "SLAP Repair · Biceps Tenodesis",
+      procedureShort: "SLAP",
+      surgeon: "Dr. Anika Patel",
+      status: "delayed",
+      side: "Right",
+    },
+    {
+      id: "c-004",
+      // Mid-afternoon scheduled — a couple hours out.
+      time: offset(150),
+      durationMin: 60,
+      room: "OR 326",
+      patientName: "Jonas Albrecht",
+      patientMrn: "MRN 913‑207",
+      patientAgeSex: "37M",
+      procedure: "Bankart Repair",
+      procedureShort: "BNK",
+      surgeon: "Dr. Anika Patel",
+      status: "scheduled",
+      side: "Left",
+    },
+    {
+      id: "c-005",
+      // Last case of the day — late afternoon.
+      time: offset(285),
+      durationMin: 105,
+      room: "OR 326",
+      patientName: "Linnea Sundberg",
+      patientMrn: "MRN 845‑553",
+      patientAgeSex: "51F",
+      procedure: "Subacromial Decompression",
+      procedureShort: "SAD",
+      surgeon: "Dr. Anika Patel",
+      status: "scheduled",
+      side: "Right",
+    },
+  ];
+}
+
+export const TODAY_CASES: CaseItem[] = buildTodayCases();
 
 export interface PatientClinical {
   dob: string;

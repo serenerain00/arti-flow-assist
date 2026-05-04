@@ -995,10 +995,12 @@ export const processVoiceCommand = createServerFn({ method: "POST" })
     const first = await client.messages.create(
       {
         model: "claude-haiku-4-5-20251001",
-        // Responses are capped at ≤1–2 sentences by the system prompt. 120
-        // tokens is enough headroom for a greeting + tool call; lower cap =
-        // faster time-to-last-token for every voice turn.
-        max_tokens: 120,
+        // Responses are capped at ≤1–2 sentences by the system prompt for
+        // most turns. Headroom raised to 240 so explicit read-back queries
+        // ("what are the video notes / AI insights") can list a few short
+        // bullets without truncation. Short responses finish well before
+        // this cap, so no latency penalty.
+        max_tokens: 240,
         temperature: 0,
         // Split into a cached block (system prompt + full schedule) and a live
         // block (current screen, active case, dashboard state, time). Haiku

@@ -372,10 +372,10 @@ export const PatientVideoModal = forwardRef<PatientVideoHandle, Props>(function 
                   <button
                     onClick={() => setCaptionsOn((v) => !v)}
                     className={cn(
-                      "flex items-center gap-2 rounded-full border px-3 py-1.5 text-xs font-light transition-colors",
+                      "flex items-center gap-2 rounded-full border px-3 py-1.5 text-xs font-medium transition-colors",
                       captionsOn
-                        ? "border-primary/60 bg-primary/10 text-foreground"
-                        : "border-border text-muted-foreground hover:text-foreground",
+                        ? "border-primary bg-primary text-primary-foreground"
+                        : "border-border bg-transparent text-muted-foreground hover:border-primary/50 hover:text-foreground",
                     )}
                     aria-pressed={captionsOn}
                     title={captionsOn ? "Hide closed captions" : "Show closed captions"}
@@ -385,7 +385,7 @@ export const PatientVideoModal = forwardRef<PatientVideoHandle, Props>(function 
                     ) : (
                       <CaptionsOff className="h-3.5 w-3.5" />
                     )}
-                    {captionsOn ? "CC on" : "CC off"}
+                    CC
                   </button>
                   <button
                     onClick={() => setTranscriptOpen((v) => !v)}
