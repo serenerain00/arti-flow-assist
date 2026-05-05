@@ -161,10 +161,7 @@ export function ScreensaverScreen({ onExit, onPrompt }: Props) {
       {/* ── Soft caption (bottom center) ──────────────────────────────── */}
       <div className="pointer-events-none absolute inset-x-0 bottom-12 flex flex-col items-center gap-1">
         <div className="font-mono text-[10px] uppercase tracking-[0.45em] text-white/55">
-          arti · pause · breathe
-        </div>
-        <div className="font-light italic text-white/75 text-sm">
-          Take a moment before they come in.
+          breathe · relax
         </div>
       </div>
 
