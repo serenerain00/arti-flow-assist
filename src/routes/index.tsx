@@ -11,6 +11,7 @@ import { PatientsScreen } from "@/components/arti/PatientsScreen";
 import { ConsolesScreen } from "@/components/arti/ConsolesScreen";
 import { VideoLibraryScreen } from "@/components/arti/VideoLibraryScreen";
 import { JourneyScreen } from "@/components/arti/JourneyScreen";
+import { ScreensaverScreen } from "@/components/arti/ScreensaverScreen";
 import { JOURNEY } from "@/components/arti/journey/script";
 import { speakText } from "@/server/elevenlabs";
 import {
@@ -149,6 +150,8 @@ function ArtiWallRoot() {
       | "onSaveVideo"
       | "onUnsaveVideo"
       | "onToggleSaveVideo"
+      | "onStartScreensaver"
+      | "onExitScreensaver"
       | "onStartJourney"
       | "onExitJourney"
       | "onJourneyPause"
@@ -210,6 +213,8 @@ function ArtiWallRoot() {
     onSaveVideo: () => ({ ok: false, reason: "no handler" }),
     onUnsaveVideo: () => ({ ok: false, reason: "no handler" }),
     onToggleSaveVideo: () => ({ ok: false, reason: "no handler" }),
+    onStartScreensaver: () => {},
+    onExitScreensaver: () => {},
     onStartJourney: () => {},
     onExitJourney: () => {},
     onJourneyPause: () => {},
@@ -305,6 +310,8 @@ function ArtiWallRoot() {
         navCallbacksRef.current.onUnsaveVideo?.(id, q) ?? notAvailable(),
       onToggleSaveVideo: (id, q) =>
         navCallbacksRef.current.onToggleSaveVideo?.(id, q) ?? notAvailable(),
+      onStartScreensaver: () => navCallbacksRef.current.onStartScreensaver?.(),
+      onExitScreensaver: () => navCallbacksRef.current.onExitScreensaver?.(),
       onStartJourney: () => navCallbacksRef.current.onStartJourney?.(),
       onExitJourney: () => navCallbacksRef.current.onExitJourney?.(),
       onJourneyPause: () => navCallbacksRef.current.onJourneyPause?.(),
@@ -450,7 +457,8 @@ type ArtiPhase =
   | "patients"
   | "consoles"
   | "library"
-  | "journey";
+  | "journey"
+  | "screensaver";
 
 interface ArtiWallProps {
   navCallbacksRef: React.MutableRefObject<
@@ -477,6 +485,8 @@ interface ArtiWallProps {
       | "onSaveVideo"
       | "onUnsaveVideo"
       | "onToggleSaveVideo"
+      | "onStartScreensaver"
+      | "onExitScreensaver"
       | "onStartJourney"
       | "onExitJourney"
       | "onJourneyPause"
@@ -862,6 +872,7 @@ function ArtiWall({
     consoles: "OR equipment tower / consoles",
     library: "video library",
     journey: "how-it-was-built journey",
+    screensaver: "calm sunrise screensaver — pre-patient ambient mode",
   };
 
   // Keep contextRef current so Claude always gets a fresh state snapshot.
@@ -1181,6 +1192,7 @@ function ArtiWall({
         | "patients"
         | "consoles"
         | "library"
+        | "calm"
         | "preferences",
     ) => {
       armIdleTimer();
@@ -1208,6 +1220,9 @@ function ArtiWall({
         case "library":
           setPhase("library");
           break;
+        case "calm":
+          setPhase("screensaver");
+          break;
         case "preferences":
           // not yet implemented — ignore
           break;
@@ -1215,6 +1230,16 @@ function ArtiWall({
     },
     [armIdleTimer, closeOverlays],
   );
+
+  const handleStartScreensaver = useCallback(() => {
+    closeOverlays();
+    setPhase("screensaver");
+  }, [closeOverlays]);
+
+  /** Exit the screensaver back to home — same target as a sidebar tap. */
+  const handleExitScreensaver = useCallback(() => {
+    setPhase("home");
+  }, []);
 
   const handleSetReminder = useCallback((text: string, minutes: number) => {
     if (!text || !Number.isFinite(minutes) || minutes <= 0) return;
@@ -1725,6 +1750,8 @@ function ArtiWall({
     onSaveVideo: handleSaveVideo,
     onUnsaveVideo: handleUnsaveVideo,
     onToggleSaveVideo: handleToggleSaveVideo,
+    onStartScreensaver: handleStartScreensaver,
+    onExitScreensaver: handleExitScreensaver,
     // ── Journey walkthrough ──────────────────────────────────────────
     onStartJourney: () => {
       // Cancel any audio still playing from prior turns so it can't bleed
@@ -1882,6 +1909,8 @@ function ArtiWall({
         onExit={handleExitJourney}
       />
     );
+  } else if (phase === "screensaver") {
+    screen = <ScreensaverScreen onExit={handleExitScreensaver} onPrompt={handlePrompt} />;
   } else if (phase === "library") {
     screen = (
       <VideoLibraryScreen

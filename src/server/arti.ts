@@ -128,6 +128,18 @@ const TOOLS: Anthropic.Tool[] = [
     input_schema: { type: "object" as const, properties: {}, required: [] },
   },
   {
+    name: "start_screensaver",
+    description:
+      "Switch the wall to a calm sunrise landscape screensaver — used right before the patient is wheeled in so the room feels like a place to breathe. ALWAYS works regardless of current screen or open modal. Trigger phrases: 'start screensaver', 'screensaver', 'screensaver please', 'calm mode', 'calm screen', 'show the landscape', 'show the calm screen', 'show the sunrise', 'pause and breathe', 'patient is coming in', 'patient incoming', 'getting ready for the patient', 'bring up the calm screen', 'go to ambient mode', 'show the wallpaper'. The screen exits via exit_screensaver, the X button, the sidebar, or pressing Esc.",
+    input_schema: { type: "object" as const, properties: {}, required: [] },
+  },
+  {
+    name: "exit_screensaver",
+    description:
+      "Exit the calm sunrise screensaver and return to the home dashboard. Only valid while the screensaver is active (live context will say 'Phase: screensaver'). Trigger phrases: 'exit screensaver', 'end screensaver', 'close screensaver', 'stop screensaver', 'leave screensaver', 'turn off screensaver', 'wake me', 'we're ready', 'patient is in', 'back to home', 'I'm done with the screensaver', 'exit calm mode'. If the user says a generic 'close' / 'go back' while the screensaver is open, also use this tool (the screensaver isn't a modal so close_topmost_modal won't catch it).",
+    input_schema: { type: "object" as const, properties: {}, required: [] },
+  },
+  {
     name: "navigate_library",
     description:
       "Open the curated surgical Video Library — a searchable, filterable grid of every how-to video Arti has indexed (shoulder, knee, hip, hand/wrist, foot/ankle). Use for: 'show me the video library', 'open the library', 'pull up the surgical videos', 'browse the videos', 'show me all the how-to videos', 'show me what videos you have', 'what videos are available'. The user can then tap a card or say 'show me the [procedure] video' to play one. Differs from open_how_to_video — that one immediately plays the latest matching video; navigate_library opens the browse-and-search UI.",
@@ -1118,6 +1130,8 @@ export const processVoiceCommand = createServerFn({ method: "POST" })
       "navigate_patients",
       "navigate_consoles",
       "navigate_library",
+      "start_screensaver",
+      "exit_screensaver",
       "close_topmost_modal",
       // Journey walkthrough — all silent so Arti's narration owns the
       // audio channel without conflicting confirmations.

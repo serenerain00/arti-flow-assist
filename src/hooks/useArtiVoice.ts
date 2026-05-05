@@ -55,6 +55,10 @@ export interface ArtiVoiceCallbacks {
   onSaveVideo?: (id?: string, query?: string) => ArtiToolResult;
   onUnsaveVideo?: (id?: string, query?: string) => ArtiToolResult;
   onToggleSaveVideo?: (id?: string, query?: string) => ArtiToolResult;
+  /** Switch to the calm sunrise screensaver (pre-patient ambient mode). */
+  onStartScreensaver?: () => void;
+  /** Exit the screensaver back to home. */
+  onExitScreensaver?: () => void;
   // ── Journey walkthrough ────────────────────────────────────────────
   onStartJourney?: () => void;
   onExitJourney?: () => void;
@@ -255,6 +259,12 @@ function executeToolCall(call: ArtiToolCall, cb: ArtiVoiceCallbacks): void {
         inp.id != null ? String(inp.id) : undefined,
         inp.query != null ? String(inp.query) : undefined,
       );
+      break;
+    case "start_screensaver":
+      cb.onStartScreensaver?.();
+      break;
+    case "exit_screensaver":
+      cb.onExitScreensaver?.();
       break;
     case "start_journey":
       cb.onStartJourney?.();
@@ -688,7 +698,14 @@ export function useArtiVoice(callbacks: ArtiVoiceCallbacks) {
           console.log("[arti-voice] ignored (post-speech cooldown):", transcript);
           return;
         }
-        const hasWakeWord = /\b(?:art|ard)(?:i[ey]?|y)\b/i.test(transcript);
+        // Wake-word matcher. Browser SpeechRecognition routinely mishears
+        // "Arti" as "already" (especially after "hi"/"hey") and sometimes
+        // "hardy", so both are accepted as equivalents. Trade-off: a
+        // genuine "already" said at session start ("patient is already
+        // prepped") will wake Arti — we accept that since once a session
+        // is active the wake word isn't required for follow-ups, and the
+        // 60s idle timer puts Arti back to sleep on its own.
+        const hasWakeWord = /\b(?:(?:art|ard)(?:i[ey]?|y)|already|hardy)\b/i.test(transcript);
         if (!hasWakeWord && !sessionActiveRef.current) {
           console.log("[arti-voice] ignored (no wake word):", transcript);
           return;

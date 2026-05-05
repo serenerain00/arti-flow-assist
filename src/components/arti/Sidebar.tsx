@@ -7,6 +7,7 @@ import {
   Power,
   Settings,
   Stethoscope,
+  Sun,
   Users,
 } from "lucide-react";
 import { cn } from "@/lib/utils";
@@ -19,6 +20,7 @@ export type SidebarKey =
   | "patients"
   | "consoles"
   | "library"
+  | "calm"
   | "preferences";
 
 interface Props {
@@ -37,6 +39,7 @@ const ITEMS: Array<{ key: SidebarKey; icon: typeof Home; label: string }> = [
   { key: "patients", icon: Users, label: "Patients" },
   { key: "consoles", icon: Cpu, label: "Consoles" },
   { key: "library", icon: BookOpen, label: "Library" },
+  { key: "calm", icon: Sun, label: "Calm" },
   { key: "preferences", icon: Settings, label: "Preferences" },
 ];
 
