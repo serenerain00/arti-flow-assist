@@ -49,6 +49,8 @@ interface Props {
   onSidebarNavigate?: (key: SidebarKey) => void;
   /** Route-level lightbox opener. Used by panel thumbnail clicks. */
   onOpenLightbox: (images: LightboxImage[], index?: number, title?: string) => void;
+  /** Transition to the intraoperative ("case active") view. */
+  onStartCase?: () => void;
 }
 
 export type TimeOutId = "patient" | "site" | "procedure" | "allergies";
@@ -86,6 +88,7 @@ export function AwakeDashboard({
   dashboardContextRef,
   onSidebarNavigate,
   onOpenLightbox,
+  onStartCase,
 }: Props) {
   const patientVideoModalRef = useRef<PatientVideoHandle | null>(null);
   const xraysModalRef = useRef<PatientXraysHandle | null>(null);
@@ -647,6 +650,7 @@ export function AwakeDashboard({
             <CaseHeader
               activeCase={activeCase}
               onOpenPatientDetails={() => setPatientDetailsOpen(true)}
+              onStartCase={onStartCase}
             />
 
             {/* ── Nurse view (default) ── */}
@@ -689,9 +693,7 @@ export function AwakeDashboard({
               <SurgeonPanel
                 activeCase={activeCase}
                 onOpenLightbox={onOpenLightbox}
-                videoSession={
-                  activeCase ? patientVideoSessions[activeCase.id] : undefined
-                }
+                videoSession={activeCase ? patientVideoSessions[activeCase.id] : undefined}
                 onOpenPatientVideo={() => openPatientVideo()}
                 onOpenXrays={() => openXrays()}
               />

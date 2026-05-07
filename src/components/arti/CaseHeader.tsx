@@ -1,10 +1,17 @@
-import { CheckCircle, Clock, MapPin, User, XCircle } from "lucide-react";
+import { CheckCircle, Clock, MapPin, Play, User, XCircle } from "lucide-react";
 import { useEffect, useState } from "react";
 import type { CaseItem } from "./cases";
 
 interface Props {
   activeCase?: CaseItem;
   onOpenPatientDetails?: () => void;
+  /**
+   * Optional CTA: when provided, a "Start Case" affordance appears next to
+   * Patient Info. The route uses this to flip the dashboard into the
+   * intraoperative ("case active") layout. Suppressed for cases that are
+   * already done / cancelled.
+   */
+  onStartCase?: () => void;
 }
 
 function secsFromScheduled(timeStr: string): number {
@@ -23,8 +30,10 @@ function formatSecs(abs: number): string {
   return hh > 0 ? `${hh}:${String(mm).padStart(2, "0")}:${ss}` : `${mm}:${ss}`;
 }
 
-export function CaseHeader({ activeCase, onOpenPatientDetails }: Props) {
-  const [secs, setSecs] = useState(() => activeCase ? secsFromScheduled(activeCase.time) : 32 * 60 + 14);
+export function CaseHeader({ activeCase, onOpenPatientDetails, onStartCase }: Props) {
+  const [secs, setSecs] = useState(() =>
+    activeCase ? secsFromScheduled(activeCase.time) : 32 * 60 + 14,
+  );
 
   // Reset whenever the active case changes.
   useEffect(() => {
@@ -78,7 +87,10 @@ export function CaseHeader({ activeCase, onOpenPatientDetails }: Props) {
 
           <h1 className="mt-2 text-4xl font-extralight tracking-tight">
             {activeCase?.procedure ?? "Reverse Total Shoulder"}
-            <span className="text-muted-foreground/60"> · {activeCase?.procedureShort ?? "RSA"}</span>
+            <span className="text-muted-foreground/60">
+              {" "}
+              · {activeCase?.procedureShort ?? "RSA"}
+            </span>
           </h1>
 
           <div className="mt-3 flex flex-wrap items-center gap-x-6 gap-y-2 text-sm font-light text-muted-foreground">
@@ -104,6 +116,16 @@ export function CaseHeader({ activeCase, onOpenPatientDetails }: Props) {
             </button>
           )}
 
+          {onStartCase && status !== "completed" && status !== "cancelled" && (
+            <button
+              onClick={onStartCase}
+              className="group flex items-center gap-2 rounded-xl border border-success/40 bg-success/10 px-4 py-2.5 text-sm font-medium text-success transition-all hover:border-success/70 hover:bg-success/15 hover:shadow-[0_0_20px_-4px_var(--success)]"
+            >
+              <Play className="h-4 w-4 fill-current" />
+              Start Case
+            </button>
+          )}
+
           {/* Right column — status-aware. Each branch renders the timer
               shape that matches what the OR team actually wants to see for
               that case state, instead of a single elapsed/countdown switch. */}
@@ -113,9 +135,7 @@ export function CaseHeader({ activeCase, onOpenPatientDetails }: Props) {
                 {countdown ? "Incision in" : "Overdue by"}
               </div>
               <div className="mt-1 flex items-baseline gap-2">
-                <Clock
-                  className={`h-5 w-5 ${countdown ? "text-primary" : "text-warning"}`}
-                />
+                <Clock className={`h-5 w-5 ${countdown ? "text-primary" : "text-warning"}`} />
                 <span
                   className={`font-mono text-5xl font-thin tabular-nums tracking-tight ${
                     countdown ? "" : "text-warning"

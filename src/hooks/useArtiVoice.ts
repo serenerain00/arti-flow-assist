@@ -11,6 +11,28 @@ export type InstrumentId = "raytec" | "lap" | "needle" | "blade" | "clamps";
 export type QuadPanelId = "timeout" | "instruments" | "alerts" | "team";
 export type ActiveRole = "nurse" | "scrub" | "surgeon" | "anesthesia";
 
+/** Surgical phase ids — must match INTRAOP_PHASES in components/arti/intraop.ts. */
+export type IntraopPhaseId =
+  | "timeout"
+  | "incision"
+  | "exposure"
+  | "implant"
+  | "verification"
+  | "closure"
+  | "emergence";
+
+/** Imaging modalities the intraop screen can highlight. */
+export type IntraopImagingModality = "arthroscopy" | "fluoroscopy" | "mri" | "side_by_side";
+
+/** Support panels within the intraop role views. */
+export type IntraopPanelId =
+  | "implants"
+  | "supplies"
+  | "antibiotic"
+  | "vitals"
+  | "activity"
+  | "phase";
+
 export interface ArtiVoiceCallbacks {
   onWake?: () => void;
   onGoHome: () => void;
@@ -154,6 +176,25 @@ export interface ArtiVoiceCallbacks {
   onCloseLightbox?: () => ArtiToolResult;
   onScroll?: (direction: string, speed: string, continuous: boolean) => ArtiToolResult;
   onStopScroll?: () => ArtiToolResult;
+  // ── Intraoperative ("case active") ─────────────────────────────────
+  /**
+   * Begin the intraop view. `query` is optional — when omitted and the
+   * user is already on pre-op, the route uses the active case. With a
+   * query, it resolves via the same matcher as open_case.
+   */
+  onStartCase?: (query?: string) => ArtiToolResult;
+  /** Exit the intraop view back to pre-op. */
+  onEndCase?: () => ArtiToolResult;
+  /** Switch the role focus tab on the intraop dashboard. */
+  onIntraopFocusRole?: (role: ActiveRole) => ArtiToolResult;
+  /** Walk the surgical phase timeline forward / backward by one. */
+  onIntraopAdvancePhase?: (direction: "next" | "previous") => ArtiToolResult;
+  /** Jump to a specific surgical phase. */
+  onIntraopSetPhase?: (phase: IntraopPhaseId) => ArtiToolResult;
+  /** Highlight an imaging modality on the intraop imaging tile. */
+  onIntraopShowImaging?: (modality: IntraopImagingModality) => ArtiToolResult;
+  /** Surface a support panel within the active role view. */
+  onIntraopShowPanel?: (panel: IntraopPanelId) => ArtiToolResult;
   onUserTranscript?: (text: string) => void;
   onAgentResponse?: (text: string) => void;
   /** Returns a plain-text snapshot of live UI state for Claude's context window. */
@@ -492,6 +533,29 @@ function executeToolCall(call: ArtiToolCall, cb: ArtiVoiceCallbacks): void {
       break;
     case "stop_scroll":
       cb.onStopScroll?.();
+      break;
+    case "start_case":
+      cb.onStartCase?.(inp.query != null ? String(inp.query) : undefined);
+      break;
+    case "end_case":
+      cb.onEndCase?.();
+      break;
+    case "intraop_focus_role":
+      cb.onIntraopFocusRole?.(inp.role as ActiveRole);
+      break;
+    case "intraop_advance_phase":
+      cb.onIntraopAdvancePhase?.(
+        String(inp.direction ?? "next") === "previous" ? "previous" : "next",
+      );
+      break;
+    case "intraop_set_phase":
+      cb.onIntraopSetPhase?.(inp.phase as IntraopPhaseId);
+      break;
+    case "intraop_show_imaging":
+      cb.onIntraopShowImaging?.(inp.modality as IntraopImagingModality);
+      break;
+    case "intraop_show_panel":
+      cb.onIntraopShowPanel?.(inp.panel as IntraopPanelId);
       break;
   }
 }

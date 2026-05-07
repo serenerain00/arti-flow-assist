@@ -531,6 +531,104 @@ const TOOLS: Anthropic.Tool[] = [
     description: "Put Arti to sleep and dim the display.",
     input_schema: { type: "object" as const, properties: {}, required: [] },
   },
+  // ── Intraop ("case active") ─────────────────────────────────────────
+  {
+    name: "start_case",
+    description:
+      "Enter the intraop ('case active') view. NARRATION REQUIRED: in the same turn as the tool call, return ONE short text sentence using the resolved patient's name — e.g. 'Starting Marcus Chen's case.' Never empty.",
+    input_schema: {
+      type: "object" as const,
+      properties: {
+        query: {
+          type: "string",
+          description:
+            "Optional patient name / 'next' / procedure keyword. Omit on pre-op screen to use the active case.",
+        },
+      },
+      required: [],
+    },
+  },
+  {
+    name: "end_case",
+    description: "Exit intraop back to pre-op. Only valid while on the intraop screen.",
+    input_schema: { type: "object" as const, properties: {}, required: [] },
+  },
+  {
+    name: "intraop_focus_role",
+    description: "Switch intraop role focus tab (intraop equivalent of switch_role).",
+    input_schema: {
+      type: "object" as const,
+      properties: {
+        role: {
+          type: "string",
+          enum: ["nurse", "scrub", "surgeon", "anesthesia"],
+        },
+      },
+      required: ["role"],
+    },
+  },
+  {
+    name: "intraop_advance_phase",
+    description: "Step the phase timeline forward or backward by one.",
+    input_schema: {
+      type: "object" as const,
+      properties: {
+        direction: { type: "string", enum: ["next", "previous"] },
+      },
+      required: ["direction"],
+    },
+  },
+  {
+    name: "intraop_set_phase",
+    description: "Jump to a named phase.",
+    input_schema: {
+      type: "object" as const,
+      properties: {
+        phase: {
+          type: "string",
+          enum: [
+            "timeout",
+            "incision",
+            "exposure",
+            "implant",
+            "verification",
+            "closure",
+            "emergence",
+          ],
+        },
+      },
+      required: ["phase"],
+    },
+  },
+  {
+    name: "intraop_show_imaging",
+    description: "Highlight an imaging modality on the intraop imaging tile.",
+    input_schema: {
+      type: "object" as const,
+      properties: {
+        modality: {
+          type: "string",
+          enum: ["arthroscopy", "fluoroscopy", "mri", "side_by_side"],
+        },
+      },
+      required: ["modality"],
+    },
+  },
+  {
+    name: "intraop_show_panel",
+    description:
+      "Surface a support panel on intraop. Auto-switches role focus when the panel lives on a specific role's view.",
+    input_schema: {
+      type: "object" as const,
+      properties: {
+        panel: {
+          type: "string",
+          enum: ["implants", "supplies", "antibiotic", "vitals", "activity", "phase"],
+        },
+      },
+      required: ["panel"],
+    },
+  },
   {
     name: "toggle_timeout_item",
     description: "Check or uncheck a surgical time-out checklist item.",
@@ -1203,6 +1301,15 @@ export const processVoiceCommand = createServerFn({ method: "POST" })
       "close_how_to_video",
       // Role view switch — the panel visibly changes, audio is redundant.
       "switch_role",
+      // Intraop — all silent except start_case (narrates the patient
+      // name in turn 1, like open_case). end_case returns to pre-op
+      // visually, no audio needed.
+      "end_case",
+      "intraop_focus_role",
+      "intraop_advance_phase",
+      "intraop_set_phase",
+      "intraop_show_imaging",
+      "intraop_show_panel",
       // Schedule filters — the chips and case grid visibly update.
       "schedule_set_service_lines",
       "schedule_set_surgeon",

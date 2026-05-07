@@ -5,6 +5,11 @@ import { SleepScreen } from "@/components/arti/SleepScreen";
 import { HomeDashboard } from "@/components/arti/HomeDashboard";
 import { CaseListScreen } from "@/components/arti/CaseListScreen";
 import { AwakeDashboard } from "@/components/arti/AwakeDashboard";
+import {
+  IntraopDashboard,
+  type IntraopActions,
+  type IntraopActionsRef,
+} from "@/components/arti/IntraopDashboard";
 import { ScheduleScreen } from "@/components/arti/ScheduleScreen";
 import { SurgeonsScreen } from "@/components/arti/SurgeonsScreen";
 import { PatientsScreen } from "@/components/arti/PatientsScreen";
@@ -190,6 +195,8 @@ function ArtiWallRoot() {
       | "onLightboxZoomIn"
       | "onLightboxZoomOut"
       | "onCloseLightbox"
+      | "onStartCase"
+      | "onEndCase"
     >
   >({
     onWake: () => {},
@@ -253,10 +260,15 @@ function ArtiWallRoot() {
     onLightboxZoomIn: () => notAvailable(),
     onLightboxZoomOut: () => notAvailable(),
     onCloseLightbox: () => notAvailable(),
+    onStartCase: () => notAvailable(),
+    onEndCase: () => notAvailable(),
   });
 
   // Dashboard-only tool bridge. `null` when no dashboard is mounted.
   const dashboardActionsRef = useRef<DashboardActions | null>(null);
+
+  // Intraop-only tool bridge. Populated while the IntraopDashboard is on screen.
+  const intraopActionsRef = useRef<IntraopActions | null>(null);
 
   // Live context builder — always returns fresh state, referenced via ref
   // so stableCallbacks never needs to change.
@@ -304,10 +316,8 @@ function ArtiWallRoot() {
       onLibraryClearFilters: () => navCallbacksRef.current.onLibraryClearFilters?.(),
       onLibrarySetSavedOnly: (v) => navCallbacksRef.current.onLibrarySetSavedOnly?.(v),
       onShowSavedVideos: () => navCallbacksRef.current.onShowSavedVideos?.(),
-      onSaveVideo: (id, q) =>
-        navCallbacksRef.current.onSaveVideo?.(id, q) ?? notAvailable(),
-      onUnsaveVideo: (id, q) =>
-        navCallbacksRef.current.onUnsaveVideo?.(id, q) ?? notAvailable(),
+      onSaveVideo: (id, q) => navCallbacksRef.current.onSaveVideo?.(id, q) ?? notAvailable(),
+      onUnsaveVideo: (id, q) => navCallbacksRef.current.onUnsaveVideo?.(id, q) ?? notAvailable(),
       onToggleSaveVideo: (id, q) =>
         navCallbacksRef.current.onToggleSaveVideo?.(id, q) ?? notAvailable(),
       onStartScreensaver: () => navCallbacksRef.current.onStartScreensaver?.(),
@@ -361,25 +371,28 @@ function ArtiWallRoot() {
       onCloseHowToVideo: () => navCallbacksRef.current.onCloseHowToVideo?.() ?? notAvailable(),
       onShowPreferenceCard: () =>
         dashboardActionsRef.current?.showPreferenceCard() ?? notAvailable(),
-      onSwitchRole: (role) => dashboardActionsRef.current?.switchRole(role) ?? notAvailable(),
+      // Role switch is dual-bridged: pre-op uses dashboardActionsRef,
+      // intraop uses intraopActionsRef. Whichever screen is mounted, the
+      // call lands. Means the user can say "show me nurse view" on either
+      // dashboard and the right thing happens regardless of which tool
+      // name (switch_role vs intraop_focus_role) Claude picks.
+      onSwitchRole: (role) =>
+        dashboardActionsRef.current?.switchRole(role) ??
+        intraopActionsRef.current?.focusRole(role) ??
+        notAvailable(),
       onOpenPatientDetails: () =>
         dashboardActionsRef.current?.openPatientDetails() ?? notAvailable(),
       onClosePatientDetails: () =>
         dashboardActionsRef.current?.closePatientDetails() ?? notAvailable(),
-      onOpenPatientVideo: () =>
-        dashboardActionsRef.current?.openPatientVideo() ?? notAvailable(),
-      onClosePatientVideo: () =>
-        dashboardActionsRef.current?.closePatientVideo() ?? notAvailable(),
-      onPlayPatientVideo: () =>
-        dashboardActionsRef.current?.playPatientVideo() ?? notAvailable(),
-      onPausePatientVideo: () =>
-        dashboardActionsRef.current?.pausePatientVideo() ?? notAvailable(),
+      onOpenPatientVideo: () => dashboardActionsRef.current?.openPatientVideo() ?? notAvailable(),
+      onClosePatientVideo: () => dashboardActionsRef.current?.closePatientVideo() ?? notAvailable(),
+      onPlayPatientVideo: () => dashboardActionsRef.current?.playPatientVideo() ?? notAvailable(),
+      onPausePatientVideo: () => dashboardActionsRef.current?.pausePatientVideo() ?? notAvailable(),
       onRestartPatientVideo: () =>
         dashboardActionsRef.current?.restartPatientVideo() ?? notAvailable(),
       onTogglePatientVideoCaptions: () =>
         dashboardActionsRef.current?.togglePatientVideoCaptions() ?? notAvailable(),
-      onMutePatientVideo: () =>
-        dashboardActionsRef.current?.mutePatientVideo() ?? notAvailable(),
+      onMutePatientVideo: () => dashboardActionsRef.current?.mutePatientVideo() ?? notAvailable(),
       onUnmutePatientVideo: () =>
         dashboardActionsRef.current?.unmutePatientVideo() ?? notAvailable(),
       onOpenXrays: () => dashboardActionsRef.current?.openXrays() ?? notAvailable(),
@@ -407,6 +420,22 @@ function ArtiWallRoot() {
       onScroll: (direction, speed, continuous) =>
         scrollActionsRef.current.onScroll(direction, speed, continuous),
       onStopScroll: () => scrollActionsRef.current.onStopScroll(),
+
+      // Intraop ("case active") — start/end are route-level (phase change),
+      // role/phase/imaging/panel are dashboard-level via intraopActionsRef.
+      onStartCase: (q) => navCallbacksRef.current.onStartCase?.(q) ?? notAvailable(),
+      onEndCase: () => navCallbacksRef.current.onEndCase?.() ?? notAvailable(),
+      onIntraopFocusRole: (role) =>
+        intraopActionsRef.current?.focusRole(role) ??
+        dashboardActionsRef.current?.switchRole(role) ??
+        notAvailable(),
+      onIntraopAdvancePhase: (dir) =>
+        intraopActionsRef.current?.advancePhase(dir) ?? notAvailable(),
+      onIntraopSetPhase: (phase) => intraopActionsRef.current?.setPhase(phase) ?? notAvailable(),
+      onIntraopShowImaging: (modality) =>
+        intraopActionsRef.current?.showImaging(modality) ?? notAvailable(),
+      onIntraopShowPanel: (panel) => intraopActionsRef.current?.showPanel(panel) ?? notAvailable(),
+
       onUserTranscript: () => idleResetRef.current(),
       onAgentResponse: () => idleResetRef.current(),
 
@@ -424,6 +453,7 @@ function ArtiWallRoot() {
       <ArtiWall
         navCallbacksRef={navCallbacksRef}
         dashboardActionsRef={dashboardActionsRef}
+        intraopActionsRef={intraopActionsRef}
         dashboardContextRef={dashboardContextRef}
         contextRef={contextRef}
         scrollActionsRef={scrollActionsRef}
@@ -452,6 +482,7 @@ type ArtiPhase =
   | "home"
   | "cases"
   | "preop"
+  | "intraop"
   | "schedule"
   | "surgeons"
   | "patients"
@@ -525,9 +556,12 @@ interface ArtiWallProps {
       | "onLightboxZoomIn"
       | "onLightboxZoomOut"
       | "onCloseLightbox"
+      | "onStartCase"
+      | "onEndCase"
     >
   >;
   dashboardActionsRef: DashboardActionsRef;
+  intraopActionsRef: IntraopActionsRef;
   dashboardContextRef: React.MutableRefObject<() => string>;
   contextRef: React.MutableRefObject<() => string>;
   scrollActionsRef: React.MutableRefObject<{
@@ -581,6 +615,7 @@ function getScrollTarget(): HTMLElement {
 function ArtiWall({
   navCallbacksRef,
   dashboardActionsRef,
+  intraopActionsRef,
   dashboardContextRef,
   contextRef,
   scrollActionsRef,
@@ -866,6 +901,7 @@ function ArtiWall({
     home: "home dashboard",
     cases: "case list",
     preop: "pre-op / surgical dashboard",
+    intraop: "intraoperative · case active (live surgery)",
     schedule: "schedule / calendar",
     surgeons: "surgeons directory",
     patients: "patients today",
@@ -1078,6 +1114,15 @@ function ArtiWall({
     // Add live dashboard state when on the surgical screen.
     const dashCtx = dashboardContextRef.current();
     if (dashCtx) lines.push(dashCtx);
+
+    // Intraop dashboard live state — phase, vitals, antibiotic timer,
+    // implant + supply status. Surfaced only when the intraop screen is
+    // mounted so Claude can answer "what phase are we in?", "when is the
+    // next antibiotic?", "show implants" with current data.
+    if (phase === "intraop") {
+      const intraopCtx = intraopActionsRef.current?.getLiveContext();
+      if (intraopCtx) lines.push(intraopCtx);
+    }
 
     return lines.join("\n");
   };
@@ -1638,6 +1683,47 @@ function ArtiWall({
       artiNapSetterRef.current(true);
       vForSleepRef.current?.stopListening();
     },
+    /**
+     * Begin the intraop ("case active") view.
+     *
+     * Resolution rules:
+     *   • If a query is given, resolve via findCase. Match wins → start that case.
+     *   • If no query and we're already on preop → start the active case.
+     *   • If no query and we're already on intraop → no-op (already running).
+     *   • Otherwise (home / cases / schedule / etc., no query) → return
+     *     { ok: false, reason: "ambiguous" } so the system prompt can ask
+     *     "Which case? Marcus Chen is up next." Claude should NOT call
+     *     start_case in that situation per the personality rule, but if
+     *     it does, we soft-fail rather than silently pick a case.
+     */
+    onStartCase: (query?: string): ArtiToolResult => {
+      if (phase === "intraop") {
+        return { ok: true, state: { already: true } };
+      }
+      const q = query?.trim();
+      if (q) {
+        const match = findCase(q, activeCase.id);
+        if (match) {
+          closeOverlays();
+          setActiveCase(match);
+          setPhase("intraop");
+          return { ok: true };
+        }
+        return { ok: false, reason: "no matching case" };
+      }
+      if (phase === "preop") {
+        closeOverlays();
+        setPhase("intraop");
+        return { ok: true };
+      }
+      return { ok: false, reason: "ambiguous — ask which case" };
+    },
+    onEndCase: (): ArtiToolResult => {
+      if (phase !== "intraop") return { ok: false, reason: "not in intraop" };
+      closeOverlays();
+      setPhase("preop");
+      return { ok: true };
+    },
     onShowSchedule: () => {
       closeOverlays();
       setSelectedScheduleDate(null);
@@ -1858,6 +1944,24 @@ function ArtiWall({
         dashboardContextRef={dashboardContextRef}
         onSidebarNavigate={handleSidebarNavigate}
         onOpenLightbox={openLightbox}
+        onStartCase={() => {
+          closeOverlays();
+          setPhase("intraop");
+        }}
+      />
+    );
+  } else if (phase === "intraop") {
+    screen = (
+      <IntraopDashboard
+        staffName={staff.name}
+        staffRole={staff.role}
+        initials={staff.initials}
+        onSleep={handleSleep}
+        activeCase={activeCase}
+        onEndCase={() => setPhase("preop")}
+        onPrompt={handlePrompt}
+        onSidebarNavigate={handleSidebarNavigate}
+        actionsRef={intraopActionsRef}
       />
     );
   } else if (phase === "cases") {
