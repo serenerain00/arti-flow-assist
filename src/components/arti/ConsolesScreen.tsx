@@ -12,6 +12,7 @@ interface Props {
   staffRole: string;
   initials: string;
   onSleep: () => void;
+  onLogout: () => void;
   onPrompt: (text: string) => void;
   onSidebarNavigate?: (key: SidebarKey) => void;
   /** Voice-driven focus — set by focus_console tool. */
@@ -40,6 +41,7 @@ export function ConsolesScreen({
   staffRole,
   initials,
   onSleep,
+  onLogout,
   onPrompt,
   onSidebarNavigate,
   focusedId,
@@ -77,7 +79,7 @@ export function ConsolesScreen({
 
   return (
     <div className="flex h-screen w-full overflow-hidden bg-background">
-      <Sidebar onSleep={onSleep} activeKey="consoles" onNavigate={onSidebarNavigate} />
+      <Sidebar onSleep={onSleep} onLogout={onLogout} activeKey="consoles" onNavigate={onSidebarNavigate} />
 
       <div className="flex min-w-0 flex-1 flex-col overflow-hidden">
         <TopBar staffName={staffName} staffRole={staffRole} initials={initials} />

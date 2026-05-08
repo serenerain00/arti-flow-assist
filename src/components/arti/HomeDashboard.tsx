@@ -33,6 +33,7 @@ interface Props {
   staffRole: string;
   initials: string;
   onSleep: () => void;
+  onLogout: () => void;
   onPrompt: (text: string) => void;
   onSidebarNavigate?: (key: SidebarKey) => void;
 }
@@ -44,7 +45,7 @@ interface Props {
  *   2. Surface the next case + quick environment vitals.
  *   3. Invite the next instruction via the prompt.
  */
-export function HomeDashboard({ staffName, staffRole, initials, onSleep, onPrompt, onSidebarNavigate }: Props) {
+export function HomeDashboard({ staffName, staffRole, initials, onSleep, onLogout, onPrompt, onSidebarNavigate }: Props) {
   const [time, setTime] = useState<Date>(new Date());
   useEffect(() => {
     const i = setInterval(() => setTime(new Date()), 1000 * 30);
@@ -71,7 +72,7 @@ export function HomeDashboard({ staffName, staffRole, initials, onSleep, onPromp
 
   return (
     <div className="flex h-screen w-full overflow-hidden bg-background">
-      <Sidebar onSleep={onSleep} activeKey="home" onNavigate={onSidebarNavigate} />
+      <Sidebar onSleep={onSleep} onLogout={onLogout} activeKey="home" onNavigate={onSidebarNavigate} />
 
       <div className="flex min-w-0 flex-1 flex-col overflow-hidden">
         <TopBar

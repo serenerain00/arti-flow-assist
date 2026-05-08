@@ -17,6 +17,7 @@ interface Props {
   staffRole: string;
   initials: string;
   onSleep: () => void;
+  onLogout: () => void;
   onPrompt: (text: string) => void;
   onSidebarNavigate?: (key: SidebarKey) => void;
   /** Open a specific library video in the how-to modal. */
@@ -76,6 +77,7 @@ export function VideoLibraryScreen({
   staffRole,
   initials,
   onSleep,
+  onLogout,
   onPrompt,
   onSidebarNavigate,
   onOpenVideo,
@@ -116,7 +118,7 @@ export function VideoLibraryScreen({
 
   return (
     <div className="flex h-screen w-full overflow-hidden bg-background">
-      <Sidebar onSleep={onSleep} activeKey="library" onNavigate={onSidebarNavigate} />
+      <Sidebar onSleep={onSleep} onLogout={onLogout} activeKey="library" onNavigate={onSidebarNavigate} />
 
       <div className="flex min-w-0 flex-1 flex-col overflow-hidden">
         <TopBar staffName={staffName} staffRole={staffRole} initials={initials} />

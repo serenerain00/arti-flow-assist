@@ -17,6 +17,7 @@ interface Props {
   staffRole: string;
   initials: string;
   onSleep: () => void;
+  onLogout: () => void;
   onPrompt: (text: string) => void;
   onSidebarNavigate?: (key: SidebarKey) => void;
 }
@@ -32,6 +33,7 @@ export function PatientsScreen({
   staffRole,
   initials,
   onSleep,
+  onLogout,
   onPrompt,
   onSidebarNavigate,
 }: Props) {
@@ -63,7 +65,7 @@ export function PatientsScreen({
 
   return (
     <div className="flex h-screen w-full overflow-hidden bg-background">
-      <Sidebar onSleep={onSleep} activeKey="patients" onNavigate={onSidebarNavigate} />
+      <Sidebar onSleep={onSleep} onLogout={onLogout} activeKey="patients" onNavigate={onSidebarNavigate} />
 
       <div className="flex min-w-0 flex-1 flex-col overflow-hidden">
         <TopBar

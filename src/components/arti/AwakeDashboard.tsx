@@ -40,6 +40,7 @@ interface Props {
   staffRole: string;
   initials: string;
   onSleep: () => void;
+  onLogout: () => void;
   activeCase?: CaseItem;
   onBackToCases?: () => void;
   onPrompt: (text: string) => void;
@@ -81,6 +82,7 @@ export function AwakeDashboard({
   staffRole,
   initials,
   onSleep,
+  onLogout,
   activeCase,
   onBackToCases,
   onPrompt,
@@ -629,7 +631,7 @@ export function AwakeDashboard({
 
   return (
     <div className="flex h-screen w-full overflow-hidden bg-background">
-      <Sidebar onSleep={onSleep} activeKey="patients" onNavigate={onSidebarNavigate} />
+      <Sidebar onSleep={onSleep} onLogout={onLogout} activeKey="patients" onNavigate={onSidebarNavigate} />
 
       <div className="flex min-w-0 flex-1 flex-col overflow-hidden">
         <TopBar staffName={staffName} staffRole={staffRole} initials={initials} />

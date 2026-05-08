@@ -11,14 +11,13 @@ import type { CaseItem } from "./cases";
 
 // ── Surgical phases ────────────────────────────────────────────────────
 
-export type IntraopPhaseId =
-  | "timeout"
-  | "incision"
-  | "exposure"
-  | "implant"
-  | "verification"
-  | "closure"
-  | "emergence";
+/**
+ * Phase identifiers are now per-procedure strings (snake_case slugs of
+ * the surgical step). Each snapshot defines its own ordered list of
+ * phases — RCR's "anchor_placement" is not the same step as RSA's, so
+ * there is no global enum.
+ */
+export type IntraopPhaseId = string;
 
 export interface IntraopPhase {
   id: IntraopPhaseId;
@@ -28,57 +27,27 @@ export interface IntraopPhase {
   detail: string;
   /** Approximate share of total case minutes — used to draw the timeline. */
   weight: number;
+  /**
+   * Optional richer step text used by panels that want a different
+   * voice from the timeline pill's `detail`. Falls back to `detail` if
+   * not provided.
+   */
+  step?: string;
+  /** Per-phase AI awareness prompts surfaced on the dashboard. */
+  aiPrompts?: AiPrompt[];
+  /** Caption shown on the surgeon's imaging tile during this phase. */
+  imagingCaption?: string;
+  /**
+   * Trays / tool sets needed for this phase. Lets Arti answer
+   * "what tray is next?" / "which tray is up?" by surfacing the trays
+   * tied to the current and upcoming phases. First entry should be the
+   * primary tray (the one the scrub tech opens next).
+   */
+  trays?: string[];
 }
 
-/**
- * Canonical surgical phase script. Generic enough to map across any
- * shoulder case in the prototype; the per-procedure detail rides on the
- * IntraopPhaseSnapshot below (estimated minutes, current step text).
- */
-export const INTRAOP_PHASES: IntraopPhase[] = [
-  {
-    id: "timeout",
-    label: "Time-out",
-    detail: "Pre-incision verification. Patient, site, allergies confirmed.",
-    weight: 1,
-  },
-  {
-    id: "incision",
-    label: "Incision",
-    detail: "Skin incision and superficial dissection.",
-    weight: 2,
-  },
-  {
-    id: "exposure",
-    label: "Exposure",
-    detail: "Approach and bone preparation. Trial sizing in progress.",
-    weight: 3,
-  },
-  {
-    id: "implant",
-    label: "Implant",
-    detail: "Implant placement. Preference card open. Trays staged.",
-    weight: 4,
-  },
-  {
-    id: "verification",
-    label: "Verification",
-    detail: "Range of motion, stability, and fluoroscopy verification.",
-    weight: 2,
-  },
-  {
-    id: "closure",
-    label: "Closure",
-    detail: "Layered closure. Final counts in progress.",
-    weight: 2,
-  },
-  {
-    id: "emergence",
-    label: "Emergence",
-    detail: "Dressing, transfer, and anesthesia emergence.",
-    weight: 1,
-  },
-];
+// (Legacy global INTRAOP_PHASES removed — phases now live on each
+// snapshot as `phases: IntraopPhase[]`. Use snapshot.phases everywhere.)
 
 // ── Vitals ─────────────────────────────────────────────────────────────
 
@@ -325,13 +294,15 @@ export interface IntraopSnapshot {
   elapsedSeed: number;
   /** Total expected case length in minutes. */
   estimatedMinutes: number;
+  /**
+   * Per-procedure surgical phases — ordered, each carrying its own
+   * label, step text, AI prompts, imaging caption, and required trays.
+   * Replaces the previous parallel `phaseScripts` / `phaseAiPrompts` /
+   * `phaseImagingCaption` records.
+   */
+  phases: IntraopPhase[];
   /** Phase the case opens on. The user can walk forward/backward via voice. */
   currentPhase: IntraopPhaseId;
-  /**
-   * Per-phase step text. Rendered under the active phase pill so every
-   * phase has distinct, case-specific content as the user navigates.
-   */
-  phaseScripts: Record<IntraopPhaseId, string>;
   /** Implant log; ordered as scrub tech stages them. */
   implants: ImplantLog[];
   /** Supply requests open or in-route. */
@@ -345,18 +316,8 @@ export interface IntraopSnapshot {
     lastDose: string;
     dueInMinutes: number;
   };
-  /**
-   * Per-phase AI prompts — each phase has its own awareness card so the
-   * room sees what Arti is paying attention to as the case progresses.
-   */
-  phaseAiPrompts: Record<IntraopPhaseId, AiPrompt[]>;
   /** Activity stream events. The dashboard prepends its own as the case ticks. */
   activity: ActivityEvent[];
-  /**
-   * Per-phase imaging caption — what the room sees in the imaging tile
-   * for each phase. (Same camera feed, different annotation.)
-   */
-  phaseImagingCaption: Record<IntraopPhaseId, string>;
   /** Whether the arthroscopy camera feed is mocked as live. */
   arthroscopyLive: boolean;
   // ── Clinical realism fields ──
@@ -430,85 +391,330 @@ const DEFAULT_POSITIONING_LATERAL: PositioningStatus = {
   lastCheckAt: "14:00",
 };
 
-/**
- * Default per-phase prompt set used as a baseline for any case. Each
- * snapshot below merges its case-specific prompts on top via
- * mergePhasePrompts() so the timeline always has something coherent.
- */
-const GENERIC_PHASE_PROMPTS: Record<IntraopPhaseId, AiPrompt[]> = {
-  timeout: [
-    {
-      tone: "advisory",
-      title: "Time-out in progress",
-      body: "Patient · site · procedure · allergies. Confirm aloud.",
-      voiceHint: "Mark time-out complete.",
-    },
-  ],
-  incision: [
-    {
-      tone: "advisory",
-      title: "Antibiotic timing window",
-      body: "Cefazolin must be in within 60 min of incision.",
-      voiceHint: "Time since last antibiotic.",
-    },
-  ],
-  exposure: [
-    {
-      tone: "info",
-      title: "Preference card loaded",
-      voiceHint: "Open preference card.",
-    },
-    {
-      tone: "info",
-      title: "Arthroscopy feed live",
-      body: "Recording to case study.",
-    },
-  ],
-  implant: [
-    {
-      tone: "advisory",
-      title: "Implant verification pending",
-      voiceHint: "Show implants.",
-    },
-  ],
-  verification: [
-    {
-      tone: "info",
-      title: "Fluoroscopy available",
-      body: "C-arm in position. Save final image to study.",
-      voiceHint: "Show fluoroscopy.",
-    },
-  ],
-  closure: [
-    {
-      tone: "advisory",
-      title: "Final counts in progress",
-      body: "Raytec · lap · needle · blade · clamps.",
-      voiceHint: "Open quad view.",
-    },
-  ],
-  emergence: [
-    {
-      tone: "info",
-      title: "PACU hand-off ready",
-      body: "Vitals stable · estimated extubation 4 min.",
-    },
-  ],
-};
+// ── Per-procedure surgical phases ──────────────────────────────────────
+//
+// Each procedure defines its own ordered phases. Phases carry their own
+// step text, AI prompts, imaging caption, and required trays so a single
+// snapshot field replaces the previous parallel records.
+
+/** Rotator Cuff Repair (arthroscopic). */
+const RCR_PHASES: IntraopPhase[] = [
+  {
+    id: "diagnostic_scope",
+    label: "Diagnostic scope",
+    detail: "Posterior portal in · diagnostic arthroscopy of glenohumeral joint.",
+    weight: 1,
+    imagingCaption: "Arthroscopic survey · 30° scope",
+    trays: ["Arthroscopy tray", "Fluid management"],
+    aiPrompts: [{ tone: "info", title: "Arthroscopy feed live", body: "Recording to case study." }],
+  },
+  {
+    id: "cleaning_tissue",
+    label: "Cleaning tissue",
+    detail: "Subacromial bursectomy · debridement of degenerative tissue.",
+    weight: 2,
+    imagingCaption: "Bursectomy · subacromial space",
+    trays: ["Arthroscopy tray", "Shaver handpiece"],
+  },
+  {
+    id: "preparing_bone",
+    label: "Preparing bone",
+    detail: "Footprint preparation on greater tuberosity · light decortication.",
+    weight: 2,
+    imagingCaption: "Footprint prep · greater tuberosity",
+    trays: ["Arthroscopy tray", "Burr"],
+  },
+  {
+    id: "anchor_placement",
+    label: "Anchor placement",
+    detail: "Medial-row anchor placed · lateral-row knotless next.",
+    weight: 2,
+    imagingCaption: "Anchor placement · 30° scope",
+    trays: ["Anchor tray", "Drill guides"],
+    aiPrompts: [{ tone: "advisory", title: "Verify anchor lot", voiceHint: "Show implants." }],
+  },
+  {
+    id: "suture_passing",
+    label: "Suture passing",
+    detail: "Sutures passed through tendon · awaiting tensioning.",
+    weight: 2,
+    imagingCaption: "Suture passing through cuff",
+    trays: ["Suture tray", "Suture passers"],
+  },
+  {
+    id: "knot_tying",
+    label: "Knot tying",
+    detail: "Sliding knots set · backup half-hitches stacked.",
+    weight: 2,
+    imagingCaption: "Knot tying · cuff repair",
+    trays: ["Suture tray", "Knot pusher"],
+  },
+  {
+    id: "final_inspection",
+    label: "Final inspection",
+    detail: "Tendon coverage confirmed · footprint reduction inspected · portals closed.",
+    weight: 1,
+    imagingCaption: "Footprint coverage · final look",
+    trays: ["Arthroscopy tray", "Closure tray"],
+    aiPrompts: [{ tone: "advisory", title: "Final counts due", voiceHint: "Open quad view." }],
+  },
+];
+
+/** Reverse Total Shoulder Arthroplasty. */
+const RSA_PHASES: IntraopPhase[] = [
+  {
+    id: "approach",
+    label: "Deltopectoral approach",
+    detail: "Skin incision · deltopectoral interval developed · cephalic vein protected.",
+    weight: 2,
+    imagingCaption: "External · deltopectoral approach",
+    trays: ["Major shoulder tray", "Self-retaining retractors"],
+  },
+  {
+    id: "subscap_takedown",
+    label: "Subscap takedown",
+    detail: "Subscapularis tenotomy · humeral head exposed.",
+    weight: 2,
+    imagingCaption: "External · subscap takedown",
+    trays: ["Major shoulder tray", "Bovie · 30/30"],
+  },
+  {
+    id: "humeral_resection",
+    label: "Humeral resection",
+    detail: "Humeral head osteotomy with cut guide · canal entered.",
+    weight: 3,
+    imagingCaption: "Humeral resection",
+    trays: ["Humeral cut guide tray", "Oscillating saw"],
+  },
+  {
+    id: "glenoid_prep",
+    label: "Glenoid preparation",
+    detail: "Glenoid exposed · reaming to subchondral bone · central peg drilled.",
+    weight: 3,
+    imagingCaption: "Glenoid preparation",
+    trays: ["Glenoid reaming tray", "Power drill"],
+    aiPrompts: [
+      { tone: "info", title: "Baseplate on standby", body: "Backup glenosphere staged." },
+    ],
+  },
+  {
+    id: "baseplate_glenosphere",
+    label: "Baseplate & glenosphere",
+    detail: "Baseplate impacted · glenosphere seated and locked.",
+    weight: 3,
+    imagingCaption: "Glenosphere placement",
+    trays: ["Baseplate impactor set"],
+    aiPrompts: [{ tone: "advisory", title: "Verify implant lot", voiceHint: "Show implants." }],
+  },
+  {
+    id: "humeral_stem_poly",
+    label: "Humeral stem & poly",
+    detail: "Humeral broaching · trial reduction · final stem and poly insert seated.",
+    weight: 3,
+    imagingCaption: "Humeral stem placement",
+    trays: ["Humeral broach/stem tray", "Trial inserts"],
+  },
+  {
+    id: "reduction_rom",
+    label: "Reduction & ROM check",
+    detail: "Joint reduced · range-of-motion verified in 90° abduction · stability tested.",
+    weight: 2,
+    imagingCaption: "Reduction & ROM check",
+    trays: ["Trial inserts"],
+  },
+  {
+    id: "subscap_closure",
+    label: "Subscap repair & closure",
+    detail: "Subscapularis repaired with heavy suture · layered closure · final counts.",
+    weight: 2,
+    imagingCaption: "External · layered closure",
+    trays: ["Closure tray", "Heavy suture"],
+    aiPrompts: [{ tone: "advisory", title: "Final counts due", voiceHint: "Open quad view." }],
+  },
+];
+
+/** SLAP Repair + Biceps Tenodesis. */
+const SLAP_PHASES: IntraopPhase[] = [
+  {
+    id: "diagnostic_scope",
+    label: "Diagnostic scope",
+    detail: "Posterior portal in · diagnostic arthroscopy.",
+    weight: 1,
+    imagingCaption: "Arthroscopic survey · 70° scope",
+    trays: ["Arthroscopy tray"],
+  },
+  {
+    id: "slap_identification",
+    label: "SLAP identification",
+    detail: "SLAP lesion identified at 12 o'clock · biceps anchor inspected.",
+    weight: 1,
+    imagingCaption: "SLAP lesion · 12 o'clock",
+    trays: ["Arthroscopy tray", "Probe"],
+  },
+  {
+    id: "biceps_tenotomy",
+    label: "Biceps tenotomy",
+    detail: "Long head of biceps released at root · prepared for tenodesis.",
+    weight: 1,
+    imagingCaption: "Biceps tenotomy",
+    trays: ["Arthroscopic scissors"],
+  },
+  {
+    id: "anchor_placement",
+    label: "Anchor placement",
+    detail: "Suture anchor placed · sutures retrieved.",
+    weight: 2,
+    imagingCaption: "Suture anchor placement",
+    trays: ["Anchor tray", "Drill guides"],
+    aiPrompts: [{ tone: "advisory", title: "Verify anchor lot", voiceHint: "Show implants." }],
+  },
+  {
+    id: "tenodesis_screw",
+    label: "Tenodesis screw",
+    detail: "Bicipital groove prepared · interference screw seated.",
+    weight: 2,
+    imagingCaption: "Tenodesis screw placement",
+    trays: ["Tenodesis screw set"],
+  },
+  {
+    id: "stability_check",
+    label: "Stability check",
+    detail: "Anchor stability tested · biceps cuff secured.",
+    weight: 1,
+    imagingCaption: "Anchor stability test",
+    trays: ["Arthroscopy tray"],
+  },
+  {
+    id: "closure",
+    label: "Closure",
+    detail: "Portal sites closed · sterile dressing · final counts.",
+    weight: 1,
+    imagingCaption: "External · portal closure",
+    trays: ["Closure tray"],
+    aiPrompts: [{ tone: "advisory", title: "Final counts due", voiceHint: "Open quad view." }],
+  },
+];
+
+/** Bankart Repair (arthroscopic). */
+const BANKART_PHASES: IntraopPhase[] = [
+  {
+    id: "diagnostic_scope",
+    label: "Diagnostic scope",
+    detail: "Posterior portal in · anterior labrum inspected.",
+    weight: 1,
+    imagingCaption: "Arthroscopic survey · 30° scope",
+    trays: ["Arthroscopy tray"],
+  },
+  {
+    id: "labral_mobilization",
+    label: "Labral mobilization",
+    detail: "Anterior labrum mobilized off glenoid neck.",
+    weight: 1,
+    imagingCaption: "Labrum mobilization",
+    trays: ["Arthroscopic elevator", "Shaver handpiece"],
+  },
+  {
+    id: "glenoid_prep",
+    label: "Glenoid rim prep",
+    detail: "Glenoid rim decorticated to bleeding bone.",
+    weight: 1,
+    imagingCaption: "Glenoid rim preparation",
+    trays: ["Arthroscopic burr"],
+  },
+  {
+    id: "anchor_placement",
+    label: "Anchor placement",
+    detail: "Suture anchors placed at 3, 4, and 5 o'clock.",
+    weight: 2,
+    imagingCaption: "Anchor placement · 30° scope",
+    trays: ["Anchor tray", "Drill guides"],
+    aiPrompts: [{ tone: "advisory", title: "Verify anchor lots", voiceHint: "Show implants." }],
+  },
+  {
+    id: "suture_passing",
+    label: "Suture passing",
+    detail: "Sutures passed through labral tissue.",
+    weight: 2,
+    imagingCaption: "Suture passing through labrum",
+    trays: ["Suture tray", "Suture passer set"],
+  },
+  {
+    id: "knot_tying",
+    label: "Knot tying",
+    detail: "Sliding knots seated · labrum reduced to glenoid rim.",
+    weight: 2,
+    imagingCaption: "Knot tying · labral repair",
+    trays: ["Suture tray", "Knot pusher"],
+  },
+  {
+    id: "stability_check",
+    label: "Stability check",
+    detail: "Anterior translation tested · stable · portals closed.",
+    weight: 1,
+    imagingCaption: "Stability test · final look",
+    trays: ["Arthroscopy tray", "Closure tray"],
+    aiPrompts: [{ tone: "advisory", title: "Final counts due", voiceHint: "Open quad view." }],
+  },
+];
+
+/** Subacromial Decompression. */
+const SAD_PHASES: IntraopPhase[] = [
+  {
+    id: "diagnostic_scope",
+    label: "Diagnostic scope",
+    detail: "Posterior portal in · diagnostic arthroscopy.",
+    weight: 1,
+    imagingCaption: "Arthroscopic survey · 30° scope",
+    trays: ["Arthroscopy tray"],
+  },
+  {
+    id: "bursectomy",
+    label: "Bursectomy",
+    detail: "Subacromial bursa cleared · CA arch visualized.",
+    weight: 2,
+    imagingCaption: "Bursectomy · subacromial space",
+    trays: ["Shaver handpiece"],
+  },
+  {
+    id: "ca_release",
+    label: "CA ligament release",
+    detail: "Coracoacromial ligament released from acromial undersurface.",
+    weight: 1,
+    imagingCaption: "CA ligament release",
+    trays: ["Cautery tray"],
+  },
+  {
+    id: "acromial_debridement",
+    label: "Acromial debridement",
+    detail: "Acromial undersurface debrided to flat profile.",
+    weight: 2,
+    imagingCaption: "Acromial undersurface debridement",
+    trays: ["Arthroscopic burr"],
+  },
+  {
+    id: "acromioplasty",
+    label: "Acromioplasty",
+    detail: "Type II spur resected · subacromial space confirmed clear.",
+    weight: 2,
+    imagingCaption: "Acromioplasty in progress",
+    trays: ["Acromioplasty burr"],
+  },
+  {
+    id: "final_inspection",
+    label: "Final inspection",
+    detail: "Subacromial space cleared · portals closed · sterile dressing.",
+    weight: 1,
+    imagingCaption: "Final inspection · cleared space",
+    trays: ["Arthroscopy tray", "Closure tray"],
+    aiPrompts: [{ tone: "advisory", title: "Final counts due", voiceHint: "Open quad view." }],
+  },
+];
 
 const RSA_SNAPSHOT: IntraopSnapshot = {
   elapsedSeed: 0,
   estimatedMinutes: 150,
-  currentPhase: "timeout",
-  phaseScripts: {
-    timeout: "Patient, site, allergies confirmed aloud. Briefing complete.",
-    incision: "Deltopectoral approach · skin marked · scalpel to skin.",
-    exposure: "Subscapularis tenotomy · humeral head dislocation.",
-    implant: "Glenoid baseplate seated · trialing glenosphere 36 mm · humeral stem next.",
-    verification: "Range of motion checked · stable in 90° abduction · fluoroscopy AP saved.",
-    closure: "Subscapularis repaired · layered closure · final counts running.",
-    emergence: "Sling applied · transferring to PACU · sevoflurane off.",
-  },
+  phases: RSA_PHASES,
+  currentPhase: RSA_PHASES[0].id,
   implants: [
     {
       component: "Glenoid baseplate",
@@ -538,32 +744,7 @@ const RSA_SNAPSHOT: IntraopSnapshot = {
     lastDose: "18 min ago",
     dueInMinutes: 222,
   },
-  phaseAiPrompts: {
-    ...GENERIC_PHASE_PROMPTS,
-    implant: [
-      {
-        tone: "advisory",
-        title: "Implant verification pending — poly insert",
-        body: "+3 mm retentive insert not yet scanned.",
-        voiceHint: "Show implants.",
-      },
-      {
-        tone: "info",
-        title: "Glenosphere 39 mm trial on standby",
-        body: "Backup size delivered · staged on Mayo.",
-      },
-    ],
-  },
   activity: ACTIVITY_SEED,
-  phaseImagingCaption: {
-    timeout: "Camera idle · ready to record",
-    incision: "External · deltopectoral approach",
-    exposure: "Arthroscopic view · subscapularis · 30° scope",
-    implant: "Arthroscopic view · glenoid · 30° scope",
-    verification: "Fluoroscopy AP · implant position",
-    closure: "External · layered closure",
-    emergence: "External · dressing applied",
-  },
   arthroscopyLive: true,
   specimens: [
     {
@@ -590,16 +771,8 @@ const RSA_SNAPSHOT: IntraopSnapshot = {
 const SLAP_SNAPSHOT: IntraopSnapshot = {
   elapsedSeed: 0,
   estimatedMinutes: 75,
-  currentPhase: "timeout",
-  phaseScripts: {
-    timeout: "Patient, site, allergies confirmed. Beach-chair position verified.",
-    incision: "Posterior portal established · diagnostic arthroscopy.",
-    exposure: "SLAP lesion identified at 12 o'clock · biceps tenotomy planned.",
-    implant: "Suture anchor placed · biceps tenodesis screw next.",
-    verification: "Anchor stability tested · biceps cuff secured.",
-    closure: "Portal sites closed · sterile dressing.",
-    emergence: "Sling applied · neuro check · transfer to PACU.",
-  },
+  phases: SLAP_PHASES,
+  currentPhase: SLAP_PHASES[0].id,
   implants: [
     { component: "Suture anchor", spec: "2.9 mm BioComposite", lot: "SA-3389-J", status: "staged" },
     { component: "Tenodesis screw", spec: "8 × 23 mm PEEK", lot: "TS-7102-D", status: "staged" },
@@ -610,21 +783,11 @@ const SLAP_SNAPSHOT: IntraopSnapshot = {
     lastDose: "16 min ago",
     dueInMinutes: 224,
   },
-  phaseAiPrompts: GENERIC_PHASE_PROMPTS,
   activity: [
     { minutesAgo: 1, kind: "doc", title: "Time-out completed" },
     { minutesAgo: 4, kind: "med", title: "Cefazolin 2g IV administered" },
     { minutesAgo: 8, kind: "room", title: "Patient positioned beach chair" },
   ],
-  phaseImagingCaption: {
-    timeout: "Camera idle · ready to record",
-    incision: "External · portal placement",
-    exposure: "Arthroscopic view · biceps anchor · 70° scope",
-    implant: "Arthroscopic view · suture anchor · 70° scope",
-    verification: "Arthroscopic view · anchor stability · 70° scope",
-    closure: "External · portal closure",
-    emergence: "External · sling application",
-  },
   arthroscopyLive: true,
   specimens: [
     {
@@ -657,16 +820,8 @@ const SLAP_SNAPSHOT: IntraopSnapshot = {
 const BANKART_SNAPSHOT: IntraopSnapshot = {
   elapsedSeed: 0,
   estimatedMinutes: 60,
-  currentPhase: "timeout",
-  phaseScripts: {
-    timeout: "Patient, site, allergies confirmed. Lateral decubitus position.",
-    incision: "Posterior portal · diagnostic arthroscopy.",
-    exposure: "Labral mobilization · preparing glenoid rim.",
-    implant: "Suture anchors placed at 3, 4, and 5 o'clock.",
-    verification: "Labrum reduced · stability tested.",
-    closure: "Portal sites closed · sterile dressing.",
-    emergence: "Sling · neuro check · PACU transfer.",
-  },
+  phases: BANKART_PHASES,
+  currentPhase: BANKART_PHASES[0].id,
   implants: [
     { component: "Suture anchor", spec: "3.0 mm all-suture", lot: "AA-9987-F", status: "staged" },
     { component: "Suture anchor", spec: "3.0 mm all-suture", lot: "AA-9987-F", status: "staged" },
@@ -678,20 +833,10 @@ const BANKART_SNAPSHOT: IntraopSnapshot = {
     lastDose: "12 min ago",
     dueInMinutes: 228,
   },
-  phaseAiPrompts: GENERIC_PHASE_PROMPTS,
   activity: [
     { minutesAgo: 1, kind: "doc", title: "Time-out completed" },
     { minutesAgo: 4, kind: "med", title: "Cefazolin 2g IV administered" },
   ],
-  phaseImagingCaption: {
-    timeout: "Camera idle · ready to record",
-    incision: "External · portal placement",
-    exposure: "Arthroscopic view · anterior labrum · 30° scope",
-    implant: "Arthroscopic view · anchor placement · 30° scope",
-    verification: "Arthroscopic view · labral reduction · 30° scope",
-    closure: "External · portal closure",
-    emergence: "External · sling application",
-  },
   arthroscopyLive: true,
   specimens: [],
   sutures: [
@@ -708,16 +853,8 @@ const BANKART_SNAPSHOT: IntraopSnapshot = {
 const RCR_SNAPSHOT: IntraopSnapshot = {
   elapsedSeed: 0,
   estimatedMinutes: 90,
-  currentPhase: "timeout",
-  phaseScripts: {
-    timeout: "Patient, site, allergies confirmed. Beach-chair position.",
-    incision: "Posterior portal · diagnostic arthroscopy.",
-    exposure: "Bursectomy · footprint preparation.",
-    implant: "Medial-row anchor placed · lateral-row knotless next.",
-    verification: "Footprint reduction inspected · tendon coverage confirmed.",
-    closure: "Portal sites closed · sterile dressing.",
-    emergence: "Sling · neuro check · PACU transfer.",
-  },
+  phases: RCR_PHASES,
+  currentPhase: RCR_PHASES[0].id,
   implants: [
     {
       component: "Medial-row anchor",
@@ -738,20 +875,10 @@ const RCR_SNAPSHOT: IntraopSnapshot = {
     lastDose: "22 min ago",
     dueInMinutes: 218,
   },
-  phaseAiPrompts: GENERIC_PHASE_PROMPTS,
   activity: [
     { minutesAgo: 1, kind: "doc", title: "Time-out completed" },
     { minutesAgo: 4, kind: "med", title: "Cefazolin 2g IV administered" },
   ],
-  phaseImagingCaption: {
-    timeout: "Camera idle · ready to record",
-    incision: "External · portal placement",
-    exposure: "Arthroscopic view · supraspinatus footprint · 30° scope",
-    implant: "Arthroscopic view · anchor placement · 30° scope",
-    verification: "Arthroscopic view · footprint coverage · 30° scope",
-    closure: "External · portal closure",
-    emergence: "External · sling application",
-  },
   arthroscopyLive: true,
   specimens: [
     {
@@ -777,16 +904,8 @@ const RCR_SNAPSHOT: IntraopSnapshot = {
 const SAD_SNAPSHOT: IntraopSnapshot = {
   elapsedSeed: 0,
   estimatedMinutes: 105,
-  currentPhase: "timeout",
-  phaseScripts: {
-    timeout: "Patient, site, allergies confirmed.",
-    incision: "Posterior portal · diagnostic arthroscopy.",
-    exposure: "Bursectomy · acromial undersurface debridement.",
-    implant: "No implants planned · acromioplasty in progress.",
-    verification: "Subacromial space confirmed clear.",
-    closure: "Portal sites closed · sterile dressing.",
-    emergence: "Sling · neuro check · PACU transfer.",
-  },
+  phases: SAD_PHASES,
+  currentPhase: SAD_PHASES[0].id,
   implants: [],
   supplies: [],
   antibiotic: {
@@ -794,28 +913,10 @@ const SAD_SNAPSHOT: IntraopSnapshot = {
     lastDose: "14 min ago",
     dueInMinutes: 226,
   },
-  phaseAiPrompts: {
-    ...GENERIC_PHASE_PROMPTS,
-    implant: [
-      {
-        tone: "info",
-        title: "No implants planned for this case",
-      },
-    ],
-  },
   activity: [
     { minutesAgo: 1, kind: "doc", title: "Time-out completed" },
     { minutesAgo: 4, kind: "med", title: "Cefazolin 2g IV administered" },
   ],
-  phaseImagingCaption: {
-    timeout: "Camera idle · ready to record",
-    incision: "External · portal placement",
-    exposure: "Arthroscopic view · subacromial space · 30° scope",
-    implant: "Arthroscopic view · acromioplasty · 30° scope",
-    verification: "Arthroscopic view · cleared space · 30° scope",
-    closure: "External · portal closure",
-    emergence: "External · sling application",
-  },
   arthroscopyLive: true,
   specimens: [
     {
@@ -851,8 +952,8 @@ export function getIntraopSnapshot(caseId: string | undefined): IntraopSnapshot 
 
 // ── Helpers ────────────────────────────────────────────────────────────
 
-export function phaseIndex(id: IntraopPhaseId): number {
-  return INTRAOP_PHASES.findIndex((p) => p.id === id);
+export function phaseIndex(id: IntraopPhaseId, phases: IntraopPhase[]): number {
+  return phases.findIndex((p) => p.id === id);
 }
 
 /** "1:23:04" / "23:04" elapsed format. */
@@ -875,14 +976,42 @@ export function caseLabel(c: CaseItem | undefined): string {
 export function neighborPhase(
   current: IntraopPhaseId,
   direction: "next" | "previous",
+  phases: IntraopPhase[],
 ): IntraopPhaseId {
-  const i = phaseIndex(current);
-  if (i < 0) return INTRAOP_PHASES[0].id;
-  const j = direction === "next" ? Math.min(i + 1, INTRAOP_PHASES.length - 1) : Math.max(i - 1, 0);
-  return INTRAOP_PHASES[j].id;
+  const i = phaseIndex(current, phases);
+  if (i < 0) return phases[0]?.id ?? current;
+  const j = direction === "next" ? Math.min(i + 1, phases.length - 1) : Math.max(i - 1, 0);
+  return phases[j].id;
 }
 
-/** Returns the canonical phase label (e.g. "Implant"). Used by Arti's narration. */
-export function phaseLabel(id: IntraopPhaseId): string {
-  return INTRAOP_PHASES.find((p) => p.id === id)?.label ?? id;
+/** Returns the phase label (e.g. "Anchor placement"). Used by Arti's narration. */
+export function phaseLabel(id: IntraopPhaseId, phases: IntraopPhase[]): string {
+  return phases.find((p) => p.id === id)?.label ?? id;
+}
+
+/**
+ * Free-text phase matcher for voice. Tries (1) exact id, (2)
+ * case-insensitive label, (3) substring match on label words. Returns
+ * the matched phase or undefined. Lets Claude hand us "anchor
+ * placement", "anchors", "Anchor" etc. and land on the right step.
+ */
+export function findPhase(query: string, phases: IntraopPhase[]): IntraopPhase | undefined {
+  if (!query) return undefined;
+  const q = query.trim().toLowerCase();
+  if (!q) return undefined;
+  const exactId = phases.find((p) => p.id.toLowerCase() === q);
+  if (exactId) return exactId;
+  const exactLabel = phases.find((p) => p.label.toLowerCase() === q);
+  if (exactLabel) return exactLabel;
+  // Substring on full label first (so "anchor placement" beats "anchor")
+  const longestMatch = phases
+    .filter((p) => p.label.toLowerCase().includes(q) || p.id.toLowerCase().includes(q))
+    .sort((a, b) => b.label.length - a.label.length)[0];
+  if (longestMatch) return longestMatch;
+  // Last-ditch: any word in the query matches any label word
+  const queryWords = q.split(/\s+/).filter(Boolean);
+  return phases.find((p) => {
+    const labelWords = p.label.toLowerCase().split(/\s+/);
+    return queryWords.some((qw) => labelWords.some((lw) => lw.startsWith(qw) || qw.startsWith(lw)));
+  });
 }

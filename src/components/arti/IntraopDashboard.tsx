@@ -13,6 +13,7 @@ import {
   Droplet,
   Flame,
   Gauge,
+  Grid2x2,
   Heart,
   Image as ImageIcon,
   Layers,
@@ -39,10 +40,10 @@ import { ArtiInvoker } from "./ArtiInvoker";
 import { PATIENT_CLINICAL, type CaseItem } from "./cases";
 import {
   driftVitals,
+  findPhase,
   formatElapsed,
   getIntraopSnapshot,
   initialVitals,
-  INTRAOP_PHASES,
   neighborPhase,
   phaseIndex,
   phaseLabel,
@@ -84,10 +85,13 @@ interface Props {
   staffRole: string;
   initials: string;
   onSleep: () => void;
+  onLogout: () => void;
   activeCase?: CaseItem;
   onEndCase: () => void;
   onPrompt: (text: string) => void;
   onSidebarNavigate?: (key: SidebarKey) => void;
+  /** Switch into the 4-quadrant multi-view wall layout. */
+  onShowMultiView?: () => void;
   /** Route-owned ref bridge — IntraopDashboard registers actions on mount. */
   actionsRef?: IntraopActionsRef;
 }
@@ -146,10 +150,12 @@ export function IntraopDashboard({
   staffRole,
   initials,
   onSleep,
+  onLogout,
   activeCase,
   onEndCase,
   onPrompt,
   onSidebarNavigate,
+  onShowMultiView,
   actionsRef,
 }: Props) {
   const snapshot = useMemo(() => getIntraopSnapshot(activeCase?.id), [activeCase?.id]);
@@ -222,16 +228,26 @@ export function IntraopDashboard({
     return { ok: true };
   }, []);
 
-  const setPhase = useCallback((phase: IntraopPhaseId): ArtiToolResult => {
-    if (phaseIndex(phase) < 0) return { ok: false, reason: "unknown phase" };
-    setCurrentPhase(phase);
-    return { ok: true };
-  }, []);
+  const setPhase = useCallback(
+    (phase: IntraopPhaseId): ArtiToolResult => {
+      // Voice may pass a free-text label ("anchor placement" / "anchors").
+      // Fall back to fuzzy matching when the exact id isn't found.
+      const direct = phaseIndex(phase, snapshot.phases) >= 0 ? phase : undefined;
+      const matched = direct ?? findPhase(phase, snapshot.phases)?.id;
+      if (!matched) return { ok: false, reason: "unknown phase" };
+      setCurrentPhase(matched);
+      return { ok: true };
+    },
+    [snapshot.phases],
+  );
 
-  const advancePhase = useCallback((direction: "next" | "previous"): ArtiToolResult => {
-    setCurrentPhase((p) => neighborPhase(p, direction));
-    return { ok: true };
-  }, []);
+  const advancePhase = useCallback(
+    (direction: "next" | "previous"): ArtiToolResult => {
+      setCurrentPhase((p) => neighborPhase(p, direction, snapshot.phases));
+      return { ok: true };
+    },
+    [snapshot.phases],
+  );
 
   const showImaging = useCallback(
     (modality: "arthroscopy" | "fluoroscopy" | "mri" | "side_by_side"): ArtiToolResult => {
@@ -268,13 +284,21 @@ export function IntraopDashboard({
       showImaging,
       showPanel,
       getLiveContext: () => {
-        const idx = phaseIndex(currentPhase);
-        const step = snapshot.phaseScripts[currentPhase];
+        const idx = phaseIndex(currentPhase, snapshot.phases);
+        const phase = snapshot.phases[idx];
+        const step = phase?.step ?? phase?.detail ?? "";
+        const nextPhase = snapshot.phases[idx + 1];
+        const trayList = (p?: { trays?: string[] }) =>
+          p?.trays?.length ? p.trays.join(", ") : "none specified";
         const lines = [
           `Intraop dashboard: case ACTIVE`,
           `  Active role focus: ${activeRole}`,
-          `  Current phase: ${phaseLabel(currentPhase)} (step ${idx + 1} of ${INTRAOP_PHASES.length})`,
+          `  Current phase: ${phaseLabel(currentPhase, snapshot.phases)} (step ${idx + 1} of ${snapshot.phases.length})`,
           `  Step detail: ${step}`,
+          `  Trays for current phase: ${trayList(phase)}`,
+          nextPhase
+            ? `  Next phase: ${nextPhase.label} — trays: ${trayList(nextPhase)}`
+            : `  Next phase: none (this is the final phase)`,
           `  Elapsed: ${formatElapsed(elapsedSec)} of ~${snapshot.estimatedMinutes} min planned`,
           `  Vitals: HR ${vitals.hr} · BP ${vitals.bp.sys}/${vitals.bp.dia} · SpO2 ${vitals.spo2}% · EtCO2 ${vitals.etco2} · Temp ${vitals.tempC}°C`,
           `  Antibiotic: ${snapshot.antibiotic.agent} · last ${snapshot.antibiotic.lastDose} · next due in ${snapshot.antibiotic.dueInMinutes} min`,
@@ -316,7 +340,12 @@ export function IntraopDashboard({
         }}
       />
 
-      <Sidebar onSleep={onSleep} activeKey="case" onNavigate={onSidebarNavigate} />
+      <Sidebar
+        onSleep={onSleep}
+        onLogout={onLogout}
+        activeKey="case"
+        onNavigate={onSidebarNavigate}
+      />
 
       <div className="relative flex min-w-0 flex-1 flex-col overflow-hidden">
         <TopBar staffName={staffName} staffRole={staffRole} initials={initials} />
@@ -401,10 +430,15 @@ export function IntraopDashboard({
             {/* ── Phase timeline (controllable via voice + click) ── */}
             <PhaseTimeline
               currentPhase={currentPhase}
-              currentStep={snapshot.phaseScripts[currentPhase]}
+              phases={snapshot.phases}
+              currentStep={
+                snapshot.phases.find((p) => p.id === currentPhase)?.step ??
+                snapshot.phases.find((p) => p.id === currentPhase)?.detail ??
+                ""
+              }
               onSetPhase={(p) => setCurrentPhase(p)}
-              onPrev={() => setCurrentPhase((p) => neighborPhase(p, "previous"))}
-              onNext={() => setCurrentPhase((p) => neighborPhase(p, "next"))}
+              onPrev={() => setCurrentPhase((p) => neighborPhase(p, "previous", snapshot.phases))}
+              onNext={() => setCurrentPhase((p) => neighborPhase(p, "next", snapshot.phases))}
               highlight={panelFocus === "phase"}
             />
 
@@ -437,6 +471,20 @@ export function IntraopDashboard({
                   </button>
                 );
               })}
+              {onShowMultiView && (
+                <>
+                  <span className="mx-1 h-4 w-px bg-border" aria-hidden />
+                  <button
+                    type="button"
+                    onClick={onShowMultiView}
+                    title="Show all four roles at once on the wall"
+                    className="flex items-center gap-2 rounded-full border border-border/50 px-4 py-2 text-xs font-light text-muted-foreground transition-all duration-200 hover:border-foreground/40 hover:text-foreground"
+                  >
+                    <Grid2x2 className="h-3.5 w-3.5 text-muted-foreground/60" strokeWidth={1.8} />
+                    Multi-view
+                  </button>
+                </>
+              )}
             </div>
 
             {/* ── Main grid ── */}
@@ -459,7 +507,9 @@ export function IntraopDashboard({
 
               {/* Right column — alerts + activity + AI */}
               <div className="space-y-5">
-                <AiPromptsCard prompts={snapshot.phaseAiPrompts[currentPhase]} />
+                <AiPromptsCard
+                  prompts={snapshot.phases.find((p) => p.id === currentPhase)?.aiPrompts ?? []}
+                />
                 <ActivityStream events={snapshot.activity} highlight={panelFocus === "activity"} />
               </div>
             </div>
@@ -481,6 +531,7 @@ export function IntraopDashboard({
 // ─────────────────────────────────────────────────────────────────────────
 
 function PhaseTimeline({
+  phases,
   currentPhase,
   currentStep,
   onSetPhase,
@@ -488,6 +539,7 @@ function PhaseTimeline({
   onNext,
   highlight,
 }: {
+  phases: import("./intraop").IntraopPhase[];
   currentPhase: IntraopPhaseId;
   currentStep: string;
   onSetPhase: (p: IntraopPhaseId) => void;
@@ -495,9 +547,9 @@ function PhaseTimeline({
   onNext: () => void;
   highlight?: boolean;
 }) {
-  const currentIdx = phaseIndex(currentPhase);
+  const currentIdx = phaseIndex(currentPhase, phases);
   const atStart = currentIdx <= 0;
-  const atEnd = currentIdx >= INTRAOP_PHASES.length - 1;
+  const atEnd = currentIdx >= phases.length - 1;
 
   return (
     <section
@@ -512,9 +564,9 @@ function PhaseTimeline({
             Surgical phase
           </div>
           <h2 className="mt-1 text-lg font-light">
-            {INTRAOP_PHASES[currentIdx]?.label ?? "Active"}
+            {phases[currentIdx]?.label ?? "Active"}
             <span className="ml-2 text-sm text-muted-foreground">
-              · step {currentIdx + 1} of {INTRAOP_PHASES.length}
+              · step {currentIdx + 1} of {phases.length}
             </span>
           </h2>
         </div>
@@ -550,7 +602,7 @@ function PhaseTimeline({
 
       {/* Pill row — each pill is clickable to jump to that phase. */}
       <div className="flex w-full gap-2">
-        {INTRAOP_PHASES.map((p, i) => {
+        {phases.map((p, i) => {
           const done = i < currentIdx;
           const active = i === currentIdx;
           return (
@@ -721,7 +773,7 @@ function ImagingTile({
   currentPhase: IntraopPhaseId;
   imagingFocus: "arthroscopy" | "fluoroscopy" | "mri" | "side_by_side" | null;
 }) {
-  const caption = snapshot.phaseImagingCaption[currentPhase];
+  const caption = snapshot.phases.find((p) => p.id === currentPhase)?.imagingCaption ?? "";
   const focusBorder =
     imagingFocus === "fluoroscopy"
       ? "ring-2 ring-accent/60"
@@ -1429,9 +1481,9 @@ function SurgeonPanel({
         iconTone="text-accent"
       >
         <ol className="space-y-2">
-          {INTRAOP_PHASES.map((p, i) => {
+          {snapshot.phases.map((p, i) => {
             const active = p.id === currentPhase;
-            const done = i < phaseIndex(currentPhase);
+            const done = i < phaseIndex(currentPhase, snapshot.phases);
             return (
               <li
                 key={p.id}
@@ -1464,7 +1516,7 @@ function SurgeonPanel({
                     {p.label}
                   </div>
                   <div className="font-mono text-[10px] uppercase tracking-wider text-muted-foreground">
-                    {active ? snapshot.phaseScripts[p.id] : p.detail}
+                    {active ? (p.step ?? p.detail) : p.detail}
                   </div>
                 </div>
               </li>

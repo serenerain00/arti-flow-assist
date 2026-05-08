@@ -554,6 +554,18 @@ const TOOLS: Anthropic.Tool[] = [
     input_schema: { type: "object" as const, properties: {}, required: [] },
   },
   {
+    name: "open_multi_view",
+    description:
+      "Switch the intraop screen into the 4-quadrant 'multi-view' wall layout. Shows surgeon's primary video, anesthesia vitals, circulating-nurse counts/allergies, and scrub-tech instruments simultaneously. Only valid while a case is active (live context will say 'Phase: intraop'). Trigger phrases: 'show multi view', 'show me multi-view', 'open multi-view', 'multi view please', 'show all roles', 'put up the wall view', 'show everything', 'open the command center', 'show me everything at once'. If not in intraop, do not call — say 'Multi-view is only available during a case.'",
+    input_schema: { type: "object" as const, properties: {}, required: [] },
+  },
+  {
+    name: "close_multi_view",
+    description:
+      "Exit the multi-view wall layout and return to the standard intraop dashboard. Only valid while multi-view is active (live context will say 'Multi-view: case ACTIVE'). Trigger phrases: 'close multi view', 'exit multi-view', 'go back to single view', 'leave multi view', 'back to nurse view' (when currently in multi-view). If user says generic 'close' / 'go back' on multi-view, also use this tool.",
+    input_schema: { type: "object" as const, properties: {}, required: [] },
+  },
+  {
     name: "intraop_focus_role",
     description: "Switch intraop role focus tab (intraop equivalent of switch_role).",
     input_schema: {
@@ -580,21 +592,15 @@ const TOOLS: Anthropic.Tool[] = [
   },
   {
     name: "intraop_set_phase",
-    description: "Jump to a named phase.",
+    description:
+      "Jump the surgical phase timeline to a named phase. Phases are PER-PROCEDURE, so the valid names depend on the active case (e.g. RCR has 'Diagnostic scope', 'Anchor placement', 'Knot tying', 'Final inspection'; RSA has 'Deltopectoral approach', 'Glenoid preparation', etc.). Pass the spoken phase name (label or any clear substring — the dashboard does fuzzy matching). Examples: 'anchor placement', 'anchors', 'knots', 'final inspection'. Don't invent phases that aren't in the live context.",
     input_schema: {
       type: "object" as const,
       properties: {
         phase: {
           type: "string",
-          enum: [
-            "timeout",
-            "incision",
-            "exposure",
-            "implant",
-            "verification",
-            "closure",
-            "emergence",
-          ],
+          description:
+            "Phase name to jump to. Free-text — dashboard matches by exact id, exact label, or substring on label words.",
         },
       },
       required: ["phase"],
@@ -602,7 +608,8 @@ const TOOLS: Anthropic.Tool[] = [
   },
   {
     name: "intraop_show_imaging",
-    description: "Highlight an imaging modality on the intraop imaging tile.",
+    description:
+      "Swap the surgeon's primary view tile (multi-view) or spotlight the imaging tile (standard intraop) to a chosen modality. PREFER THIS OVER open_xrays whenever live context says 'Phase: intraop' or 'Multi-view: case ACTIVE'. Trigger phrases: 'show me the MRI', 'show MRI', 'show MRI scans', 'pull up the MRI', 'show fluoroscopy', 'show the fluoro', 'show the live feed' (→ arthroscopy), 'show the arthroscope', 'back to live', 'side by side'. Modality 'arthroscopy' returns the surgeon tile to the live arthroscope feed; 'mri' shows the patient's MRI study; 'fluoroscopy' shows fluoro; 'side_by_side' splits.",
     input_schema: {
       type: "object" as const,
       properties: {
@@ -998,7 +1005,7 @@ const TOOLS: Anthropic.Tool[] = [
   {
     name: "open_xrays",
     description:
-      "Open the PACS-style imaging viewer for the active patient — pre-op X-rays, MRI, CT views with DICOM-style overlays, laterality marker, and radiology read panel. Trigger phrases: 'show me the X-rays', 'pull up the X-rays', 'open the imaging', 'show the films', 'show me the films', 'show the imaging', 'show the patient's X-rays', 'open the PACS', 'pull up imaging', 'show me the MRI', 'show the CT'. Even when the user names a single modality (MRI/CT), open this viewer — the modality-specific view becomes selectable inside. Auto-switches to the surgeon role view if the user is on a different panel. Requires an active case.",
+      "Open the PACS-style imaging viewer for the active patient — pre-op X-rays, MRI, CT views with DICOM-style overlays, laterality marker, and radiology read panel. Trigger phrases: 'show me the X-rays', 'pull up the X-rays', 'open the imaging', 'show the films', 'show me the films', 'show the imaging', 'show the patient's X-rays', 'open the PACS', 'pull up imaging', 'show the CT'. Even when the user names a single modality (MRI/CT), open this viewer — the modality-specific view becomes selectable inside. Auto-switches to the surgeon role view if the user is on a different panel. Requires an active case. IMPORTANT: do NOT use this tool when the live context says 'Phase: intraop' or 'Multi-view: case ACTIVE' — in those screens use intraop_show_imaging instead (it swaps the surgeon's primary view tile in place, which is what the team wants mid-case).",
     input_schema: { type: "object" as const, properties: {}, required: [] },
   },
   {
@@ -1305,6 +1312,8 @@ export const processVoiceCommand = createServerFn({ method: "POST" })
       // name in turn 1, like open_case). end_case returns to pre-op
       // visually, no audio needed.
       "end_case",
+      "open_multi_view",
+      "close_multi_view",
       "intraop_focus_role",
       "intraop_advance_phase",
       "intraop_set_phase",

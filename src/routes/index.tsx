@@ -10,6 +10,7 @@ import {
   type IntraopActions,
   type IntraopActionsRef,
 } from "@/components/arti/IntraopDashboard";
+import { MultiViewScreen } from "@/components/arti/MultiViewScreen";
 import { ScheduleScreen } from "@/components/arti/ScheduleScreen";
 import { SurgeonsScreen } from "@/components/arti/SurgeonsScreen";
 import { PatientsScreen } from "@/components/arti/PatientsScreen";
@@ -17,6 +18,7 @@ import { ConsolesScreen } from "@/components/arti/ConsolesScreen";
 import { VideoLibraryScreen } from "@/components/arti/VideoLibraryScreen";
 import { JourneyScreen } from "@/components/arti/JourneyScreen";
 import { ScreensaverScreen } from "@/components/arti/ScreensaverScreen";
+import { LoginScreen } from "@/components/arti/LoginScreen";
 import { JOURNEY } from "@/components/arti/journey/script";
 import { speakText } from "@/server/elevenlabs";
 import {
@@ -131,6 +133,16 @@ export type DashboardActionsRef = React.MutableRefObject<DashboardActions | null
  * the agent always talks to the freshest closures.
  */
 function ArtiWallRoot() {
+  const [isAuthenticated, setIsAuthenticated] = useState(false);
+
+  if (!isAuthenticated) {
+    return <LoginScreen onAuthenticated={() => setIsAuthenticated(true)} />;
+  }
+
+  return <ArtiWallAuthenticated onLogout={() => setIsAuthenticated(false)} />;
+}
+
+function ArtiWallAuthenticated({ onLogout }: { onLogout: () => void }) {
   const navCallbacksRef = useRef<
     Pick<
       ArtiVoiceCallbacks,
@@ -197,6 +209,8 @@ function ArtiWallRoot() {
       | "onCloseLightbox"
       | "onStartCase"
       | "onEndCase"
+      | "onShowMultiView"
+      | "onCloseMultiView"
     >
   >({
     onWake: () => {},
@@ -262,6 +276,8 @@ function ArtiWallRoot() {
     onCloseLightbox: () => notAvailable(),
     onStartCase: () => notAvailable(),
     onEndCase: () => notAvailable(),
+    onShowMultiView: () => notAvailable(),
+    onCloseMultiView: () => notAvailable(),
   });
 
   // Dashboard-only tool bridge. `null` when no dashboard is mounted.
@@ -425,6 +441,8 @@ function ArtiWallRoot() {
       // role/phase/imaging/panel are dashboard-level via intraopActionsRef.
       onStartCase: (q) => navCallbacksRef.current.onStartCase?.(q) ?? notAvailable(),
       onEndCase: () => navCallbacksRef.current.onEndCase?.() ?? notAvailable(),
+      onShowMultiView: () => navCallbacksRef.current.onShowMultiView?.() ?? notAvailable(),
+      onCloseMultiView: () => navCallbacksRef.current.onCloseMultiView?.() ?? notAvailable(),
       onIntraopFocusRole: (role) =>
         intraopActionsRef.current?.focusRole(role) ??
         dashboardActionsRef.current?.switchRole(role) ??
@@ -460,6 +478,7 @@ function ArtiWallRoot() {
         idleResetRef={idleResetRef}
         artiNapSetterRef={artiNapSetterRef}
         artiNapping={artiNapping}
+        onLogout={onLogout}
       />
     </ArtiVoiceProvider>
   );
@@ -558,6 +577,8 @@ interface ArtiWallProps {
       | "onCloseLightbox"
       | "onStartCase"
       | "onEndCase"
+      | "onShowMultiView"
+      | "onCloseMultiView"
     >
   >;
   dashboardActionsRef: DashboardActionsRef;
@@ -571,6 +592,7 @@ interface ArtiWallProps {
   idleResetRef: React.MutableRefObject<() => void>;
   artiNapSetterRef: MutableRefObject<(v: boolean) => void>;
   artiNapping: boolean;
+  onLogout: () => void;
 }
 
 // px-per-frame for continuous scroll
@@ -622,6 +644,7 @@ function ArtiWall({
   idleResetRef,
   artiNapSetterRef,
   artiNapping,
+  onLogout,
 }: ArtiWallProps) {
   const scrollIntervalRef = useRef<ReturnType<typeof setInterval> | null>(null);
 
@@ -663,6 +686,10 @@ function ArtiWall({
     },
   };
   const [phase, setPhase] = useState<ArtiPhase>("sleep");
+  // When true and phase === "intraop", render MultiViewScreen instead of
+  // IntraopDashboard. This is a lens over intraop, not its own phase —
+  // ending the case clears it implicitly (see onEndCase below).
+  const [multiView, setMultiView] = useState(false);
   const [activeCase, setActiveCase] = useState<CaseItem>(
     () => TODAY_CASES.find((c) => c.status === "next") ?? TODAY_CASES[0],
   );
@@ -945,7 +972,7 @@ function ArtiWall({
       `Staff: ${staff.name}, ${staff.role}`,
       `Current time: ${timeStr} — use "${timeGreeting}" for any greeting`,
       `Today is ${formatLongDate(toDateKey(now))} (${toDateKey(now)})`,
-      `Current screen: ${PHASE_LABEL[phase]}`,
+      `Current screen: ${PHASE_LABEL[phase]}${phase === "intraop" && multiView ? " (multi-view 4-quadrant layout active)" : ""}`,
       // Emphasized active-case marker so Haiku anchors on the latest
       // loaded case rather than drifting to a stale name from history.
       `>>> ACTIVE CASE (use this name): ${activeCase.patientName} · ${activeCase.procedure}${activeCase.side ? ` (${activeCase.side})` : ""} · MRN ${activeCase.patientMrn} · ${activeCase.time} · OR ${activeCase.room} · ${activeCase.status}`,
@@ -1721,7 +1748,20 @@ function ArtiWall({
     onEndCase: (): ArtiToolResult => {
       if (phase !== "intraop") return { ok: false, reason: "not in intraop" };
       closeOverlays();
+      setMultiView(false);
       setPhase("preop");
+      return { ok: true };
+    },
+    onShowMultiView: (): ArtiToolResult => {
+      if (phase !== "intraop") return { ok: false, reason: "case not active" };
+      if (multiView) return { ok: true, state: { already: true } };
+      closeOverlays();
+      setMultiView(true);
+      return { ok: true };
+    },
+    onCloseMultiView: (): ArtiToolResult => {
+      if (!multiView) return { ok: false, reason: "multi-view not active" };
+      setMultiView(false);
       return { ok: true };
     },
     onShowSchedule: () => {
@@ -1937,6 +1977,7 @@ function ArtiWall({
         staffRole={staff.role}
         initials={staff.initials}
         onSleep={handleSleep}
+        onLogout={onLogout}
         activeCase={activeCase}
         onBackToCases={() => setPhase("cases")}
         onPrompt={handlePrompt}
@@ -1951,16 +1992,31 @@ function ArtiWall({
       />
     );
   } else if (phase === "intraop") {
-    screen = (
+    screen = multiView ? (
+      <MultiViewScreen
+        staffName={staff.name}
+        staffRole={staff.role}
+        initials={staff.initials}
+        activeCase={activeCase}
+        onExitMultiView={() => setMultiView(false)}
+        onPrompt={handlePrompt}
+        actionsRef={intraopActionsRef}
+      />
+    ) : (
       <IntraopDashboard
         staffName={staff.name}
         staffRole={staff.role}
         initials={staff.initials}
         onSleep={handleSleep}
+        onLogout={onLogout}
         activeCase={activeCase}
-        onEndCase={() => setPhase("preop")}
+        onEndCase={() => {
+          setMultiView(false);
+          setPhase("preop");
+        }}
         onPrompt={handlePrompt}
         onSidebarNavigate={handleSidebarNavigate}
+        onShowMultiView={() => setMultiView(true)}
         actionsRef={intraopActionsRef}
       />
     );
@@ -1971,6 +2027,7 @@ function ArtiWall({
         staffRole={staff.role}
         initials={staff.initials}
         onSleep={handleSleep}
+        onLogout={onLogout}
         onBackHome={() => setPhase("home")}
         onSelectCase={handleSelectCase}
         onPrompt={handlePrompt}
@@ -1984,6 +2041,7 @@ function ArtiWall({
         staffRole={staff.role}
         initials={staff.initials}
         onSleep={handleSleep}
+        onLogout={onLogout}
         onPrompt={handlePrompt}
         onSidebarNavigate={handleSidebarNavigate}
       />
@@ -1995,6 +2053,7 @@ function ArtiWall({
         staffRole={staff.role}
         initials={staff.initials}
         onSleep={handleSleep}
+        onLogout={onLogout}
         onPrompt={handlePrompt}
         onSidebarNavigate={handleSidebarNavigate}
         focusedId={focusedConsoleId}
@@ -2022,6 +2081,7 @@ function ArtiWall({
         staffRole={staff.role}
         initials={staff.initials}
         onSleep={handleSleep}
+        onLogout={onLogout}
         onPrompt={handlePrompt}
         onSidebarNavigate={handleSidebarNavigate}
         onOpenVideo={handleOpenLibraryVideo}
@@ -2044,6 +2104,7 @@ function ArtiWall({
         staffRole={staff.role}
         initials={staff.initials}
         onSleep={handleSleep}
+        onLogout={onLogout}
         onPrompt={handlePrompt}
         onSidebarNavigate={handleSidebarNavigate}
         onOpenSurgeonSchedule={handleOpenSurgeonSchedule}
@@ -2056,6 +2117,7 @@ function ArtiWall({
         staffRole={staff.role}
         initials={staff.initials}
         onSleep={handleSleep}
+        onLogout={onLogout}
         onBackHome={() => setPhase("home")}
         onPrompt={handlePrompt}
         selectedDate={selectedScheduleDate}
@@ -2075,6 +2137,7 @@ function ArtiWall({
         staffRole={staff.role}
         initials={staff.initials}
         onSleep={handleSleep}
+        onLogout={onLogout}
         onPrompt={handlePrompt}
         onSidebarNavigate={handleSidebarNavigate}
       />

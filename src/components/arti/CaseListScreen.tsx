@@ -11,6 +11,7 @@ interface Props {
   staffRole: string;
   initials: string;
   onSleep: () => void;
+  onLogout: () => void;
   onBackHome: () => void;
   onSelectCase: (c: CaseItem) => void;
   onPrompt: (text: string) => void;
@@ -27,6 +28,7 @@ export function CaseListScreen({
   staffRole,
   initials,
   onSleep,
+  onLogout,
   onBackHome,
   onSelectCase,
   onPrompt,
@@ -40,7 +42,7 @@ export function CaseListScreen({
 
   return (
     <div className="flex h-screen w-full overflow-hidden bg-background">
-      <Sidebar onSleep={onSleep} activeKey="case" onNavigate={onSidebarNavigate} />
+      <Sidebar onSleep={onSleep} onLogout={onLogout} activeKey="case" onNavigate={onSidebarNavigate} />
 
       <div className="flex min-w-0 flex-1 flex-col overflow-hidden">
         <TopBar

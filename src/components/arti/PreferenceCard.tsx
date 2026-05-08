@@ -30,7 +30,7 @@ export const PREF_CARD_IMAGES: LightboxImage[] = [
 ];
 
 // Demo data — in production this comes from the surgeon's saved preference card
-const PREF_CARD = {
+export const PREF_CARD = {
   surgeon: "Dr. Anika Patel",
   procedure: "Reverse Total Shoulder Arthroplasty (RSA)",
   positioning: {

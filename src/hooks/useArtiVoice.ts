@@ -11,15 +11,8 @@ export type InstrumentId = "raytec" | "lap" | "needle" | "blade" | "clamps";
 export type QuadPanelId = "timeout" | "instruments" | "alerts" | "team";
 export type ActiveRole = "nurse" | "scrub" | "surgeon" | "anesthesia";
 
-/** Surgical phase ids — must match INTRAOP_PHASES in components/arti/intraop.ts. */
-export type IntraopPhaseId =
-  | "timeout"
-  | "incision"
-  | "exposure"
-  | "implant"
-  | "verification"
-  | "closure"
-  | "emergence";
+/** Surgical phase ids — per-procedure free-string slugs (see components/arti/intraop.ts). */
+export type IntraopPhaseId = string;
 
 /** Imaging modalities the intraop screen can highlight. */
 export type IntraopImagingModality = "arthroscopy" | "fluoroscopy" | "mri" | "side_by_side";
@@ -185,6 +178,10 @@ export interface ArtiVoiceCallbacks {
   onStartCase?: (query?: string) => ArtiToolResult;
   /** Exit the intraop view back to pre-op. */
   onEndCase?: () => ArtiToolResult;
+  /** Switch intraop into the 4-quadrant multi-view wall layout. */
+  onShowMultiView?: () => ArtiToolResult;
+  /** Exit multi-view and return to the standard intraop dashboard. */
+  onCloseMultiView?: () => ArtiToolResult;
   /** Switch the role focus tab on the intraop dashboard. */
   onIntraopFocusRole?: (role: ActiveRole) => ArtiToolResult;
   /** Walk the surgical phase timeline forward / backward by one. */
@@ -539,6 +536,12 @@ function executeToolCall(call: ArtiToolCall, cb: ArtiVoiceCallbacks): void {
       break;
     case "end_case":
       cb.onEndCase?.();
+      break;
+    case "open_multi_view":
+      cb.onShowMultiView?.();
+      break;
+    case "close_multi_view":
+      cb.onCloseMultiView?.();
       break;
     case "intraop_focus_role":
       cb.onIntraopFocusRole?.(inp.role as ActiveRole);

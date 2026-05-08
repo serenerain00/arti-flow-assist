@@ -37,6 +37,7 @@ interface Props {
   staffRole: string;
   initials: string;
   onSleep: () => void;
+  onLogout: () => void;
   onBackHome: () => void;
   onPrompt: (text: string) => void;
   /** Populated when a voice command like "show me May 20th" selects a day. */
@@ -62,6 +63,7 @@ export function ScheduleScreen({
   staffRole,
   initials,
   onSleep,
+  onLogout,
   onPrompt,
   selectedDate,
   onSelectDate,
@@ -117,7 +119,7 @@ export function ScheduleScreen({
 
   return (
     <div className="flex h-screen w-full overflow-hidden bg-background">
-      <Sidebar onSleep={onSleep} activeKey="schedule" onNavigate={onSidebarNavigate} />
+      <Sidebar onSleep={onSleep} onLogout={onLogout} activeKey="schedule" onNavigate={onSidebarNavigate} />
 
       <div className="flex min-w-0 flex-1 flex-col overflow-hidden">
         <TopBar
