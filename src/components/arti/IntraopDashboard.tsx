@@ -791,31 +791,27 @@ function ImagingTile({
         focusBorder,
       )}
     >
-      {/* Mock arthroscopy backdrop — radial dark green for tissue feel,
-          plus a subtle scope vignette. */}
+      {/* Looping arthroscopy feed — same asset as MultiViewScreen's
+          surgeon tile so both screens read as the same camera. Public
+          folder, autoplay + loop + muted so it's safe to render
+          anywhere without a gesture. */}
+      <video
+        src="/scopeFeed.mov"
+        className="absolute inset-0 h-full w-full object-cover"
+        autoPlay
+        loop
+        muted
+        playsInline
+        preload="auto"
+        aria-hidden
+      />
+      {/* Subtle vignette so the DICOM-style overlays read clearly over
+          the brighter parts of the feed. */}
       <div
         aria-hidden
         className="absolute inset-0"
         style={{
-          background:
-            "radial-gradient(ellipse at center, oklch(0.32 0.08 150 / 0.9) 0%, oklch(0.18 0.05 160 / 0.95) 35%, oklch(0.08 0.02 200) 75%)",
-        }}
-      />
-      <div
-        aria-hidden
-        className="absolute inset-0"
-        style={{
-          background: "radial-gradient(circle at center, transparent 50%, rgba(0,0,0,0.85) 100%)",
-        }}
-      />
-
-      {/* Soft moving tissue specular */}
-      <div
-        aria-hidden
-        className="absolute inset-0 opacity-60 mix-blend-screen"
-        style={{
-          background:
-            "radial-gradient(ellipse at 38% 42%, oklch(0.85 0.02 160 / 0.18) 0%, transparent 28%), radial-gradient(ellipse at 62% 60%, oklch(0.7 0.05 150 / 0.18) 0%, transparent 30%)",
+          background: "radial-gradient(circle at center, transparent 55%, rgba(0,0,0,0.55) 100%)",
         }}
       />
 
