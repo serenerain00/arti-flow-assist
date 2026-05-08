@@ -796,7 +796,7 @@ function ImagingTile({
           folder, autoplay + loop + muted so it's safe to render
           anywhere without a gesture. */}
       <video
-        src="/scopeFeed.mov"
+        src="/scopeFeed.mp4"
         className="absolute inset-0 h-full w-full object-cover"
         autoPlay
         loop

@@ -7,6 +7,11 @@
 import { defineConfig } from "@lovable.dev/vite-tanstack-config";
 
 export default defineConfig({
+  // Disable the auto-injected Cloudflare Workers build plugin. Without it,
+  // TanStack Start emits its standard dual output: dist/client/ (static
+  // assets) + dist/server/server.js (a default-exported fetch handler).
+  // The Vercel deployment is wired in api/handler.ts + vercel.json.
+  cloudflare: false,
   vite: {
     server: { port: 8002, allowedHosts: true },
   },

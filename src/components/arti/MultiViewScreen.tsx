@@ -71,7 +71,7 @@ const SUGGESTIONS = [
 
 // Local placeholder for the surgeon's arthroscope feed. Muted so OR
 // audio stays clean for voice. File lives in /public.
-const SURGEON_VIDEO_SRC = "/scopeFeed.mov";
+const SURGEON_VIDEO_SRC = "/scopeFeed.mp4";
 
 // Imaging modality sources. The arthroscope is treated as "live" — it's
 // the default view. The others are mock external studies that can be

@@ -1,0 +1,13 @@
+{
+  "$schema": "https://openapi.vercel.sh/vercel.json",
+  "buildCommand": "npm run build",
+  "outputDirectory": "dist/client",
+  "framework": null,
+  "rewrites": [{ "source": "/(.*)", "destination": "/api/handler" }],
+  "functions": {
+    "api/handler.ts": {
+      "maxDuration": 30,
+      "includeFiles": "dist/server/**"
+    }
+  }
+}
