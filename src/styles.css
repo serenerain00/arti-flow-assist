@@ -2,6 +2,12 @@
 @source "../src";
 @import "tw-animate-css";
 
+/* Vision design tokens — vendored from @arthrex/vision-tokens.
+   Defines the brand-new --vision-* CSS variables. The actual override
+   that re-skins the app lives at the bottom of this file so it
+   cascade-wins over the local :root block above. */
+@import "./styles/vision-tokens.css";
+
 @custom-variant dark (&:is(.dark *));
 
 @theme inline {
@@ -314,4 +320,133 @@
   .heartbeat {
     animation: none !important;
   }
+}
+
+/* ────────────────────────────────────────────────────────────────────────
+ * VISION DESIGN SYSTEM OVERRIDE (vision-design-system branch)
+ * ────────────────────────────────────────────────────────────────────────
+ * Re-points every app token to its --vision-* equivalent so the entire
+ * UI inherits Arthrex Vision look and feel (sharp 4px radius, near-black
+ * --vision-black-700 surfaces, brand blue --vision-blue-600, yellow
+ * focus). Lives at the bottom of styles.css so it wins the cascade
+ * against the original :root block above (CSS @import inserts files
+ * AT the import position, which would otherwise be earlier).
+ *
+ * The override IS the rebrand — no component-level edits.
+ * ────────────────────────────────────────────────────────────────────── */
+
+:root {
+  /* ── Core surfaces — near-pure-black hierarchy for AA/AAA contrast ────
+   *   bg            #0a0a0b                     (page — deep black)
+   *   surface       #0c0c0d   vision-black-800  (cards, widgets — slight lift)
+   *   surface-2     #161617   vision-black-700  (inputs, chips on cards)
+   *   surface-3     #222426   vision-black-600  (hover, raised affordances)
+   *   popover       #161617   vision-black-700  (lifted off rich-black cards)
+   * ──────────────────────────────────────────────────────────────────── */
+  --background: #0a0a0b;
+  --foreground: var(--vision-color-text);
+
+  --surface: var(--vision-black-800);
+  --surface-2: var(--vision-black-700);
+  --surface-3: var(--vision-black-600);
+
+  --card: var(--vision-black-800);
+  --card-foreground: var(--vision-color-text);
+
+  --popover: var(--vision-black-700);
+  --popover-foreground: var(--vision-color-text);
+
+  /* Brand */
+  --primary: var(--vision-color-primary);
+  --primary-foreground: var(--vision-color-on-primary);
+
+  --secondary: var(--vision-color-secondary);
+  --secondary-foreground: var(--vision-color-on-secondary);
+
+  --muted: var(--vision-gray-700);
+  --muted-foreground: var(--vision-color-text-muted);
+
+  --accent: var(--vision-color-accent);
+  --accent-foreground: var(--vision-white);
+
+  /* Status */
+  --destructive: var(--vision-color-error);
+  --destructive-foreground: var(--vision-white);
+  --success: var(--vision-color-success);
+  --success-foreground: var(--vision-white);
+  --warning: var(--vision-color-warning);
+  --warning-foreground: #1c1c00;
+
+  /* Chrome */
+  --border: var(--vision-color-border-default);
+  --input: var(--vision-color-border-strong);
+  --ring: var(--vision-color-focus);
+
+  /* Sharp Vision corners (collapses Tailwind's rounded-* chain). */
+  --radius: 4px;
+
+  /* Drop the cinematic radial-gradient stack — Vision is flat. */
+  --gradient-deep:
+    linear-gradient(180deg, var(--vision-black-700) 0%, var(--vision-black-600) 100%);
+  --gradient-primary: linear-gradient(
+    135deg,
+    var(--vision-blue-700),
+    var(--vision-color-primary)
+  );
+
+  /* Ripple/orb tint stays Vision blue. */
+  --ripple-color: var(--vision-color-primary);
+}
+
+.dark {
+  /* App is always dark — keep the .dark variant in lockstep. */
+  --background: #0a0a0b;
+  --foreground: var(--vision-color-text);
+}
+
+/* The bespoke `.glass` utility — drop the heavy backdrop blur and use the
+   rich-black card surface so glass cards match the rest of the widget
+   hierarchy. Border bumped slightly so the card edge stays visible
+   against the lighter background. */
+.glass {
+  background: var(--surface);
+  backdrop-filter: none;
+  border: 1px solid color-mix(in srgb, var(--vision-gray-100) 12%, transparent);
+  box-shadow: var(--vision-shadow-1);
+}
+
+/* Tailwind's `rounded-3xl` is a hard-coded 1.5rem; pin to a Vision-friendly
+   value so big cards don't read as bubbly even with --radius at 4px. */
+.rounded-3xl {
+  border-radius: 8px;
+}
+
+/* Vision-style 9px overlay scrollbars (default app uses 6px). */
+::-webkit-scrollbar {
+  width: 9px;
+  height: 9px;
+}
+::-webkit-scrollbar-thumb {
+  background: color-mix(in srgb, var(--vision-gray-100) 26%, transparent);
+  border-radius: 100px;
+  border: 3px solid transparent;
+  background-clip: padding-box;
+}
+::-webkit-scrollbar-thumb:hover {
+  background: var(--vision-color-primary);
+  border: 3px solid transparent;
+  background-clip: padding-box;
+}
+
+/* Display font — Proxima Nova / Inter fallback per the Vision spec. */
+:root,
+body {
+  font-family: var(--vision-font-family-base);
+}
+
+/* Tone down the heavy `font-mono uppercase tracking-[0.5em]` eyebrow
+   labels — Vision reads as proper-case clinical, not flight-terminal. */
+.font-mono {
+  font-family: var(--vision-font-family-base);
+  font-weight: var(--vision-font-weight-medium);
 }

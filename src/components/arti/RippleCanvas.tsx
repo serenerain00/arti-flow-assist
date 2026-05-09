@@ -27,7 +27,7 @@ export function RippleCanvas({ intensity = 1 }: { intensity?: number }) {
     resize();
     window.addEventListener("resize", resize);
 
-    type Ripple = { x: number; y: number; t: number; life: number; hue: number };
+    type Ripple = { x: number; y: number; t: number; life: number };
     const ripples: Ripple[] = [];
 
     const spawn = () => {
@@ -38,7 +38,6 @@ export function RippleCanvas({ intensity = 1 }: { intensity?: number }) {
         y: h / 2 + (Math.random() - 0.5) * h * 0.4,
         t: 0,
         life: 640 + Math.random() * 400,
-        hue: 210 + Math.random() * 30,
       });
     };
 
@@ -49,9 +48,10 @@ export function RippleCanvas({ intensity = 1 }: { intensity?: number }) {
 
       ctx.clearRect(0, 0, w, h);
 
-      // soft vignette wash
+      // Vision-aligned wash — near-black with the faintest neutral lift
+      // at center so the room reads as "blackish" rather than blue.
       const grad = ctx.createRadialGradient(w / 2, h / 2, 0, w / 2, h / 2, Math.max(w, h) * 0.7);
-      grad.addColorStop(0, "rgba(40, 80, 130, 0.08)");
+      grad.addColorStop(0, "rgba(50, 52, 54, 0.10)");
       grad.addColorStop(1, "rgba(0, 0, 0, 0)");
       ctx.fillStyle = grad;
       ctx.fillRect(0, 0, w, h);
@@ -70,18 +70,20 @@ export function RippleCanvas({ intensity = 1 }: { intensity?: number }) {
         }
         const p = r.t / r.life;
         const radius = p * 520;
-        const alpha = (1 - p) * 0.28 * intensity;
+        const alpha = (1 - p) * 0.22 * intensity;
 
+        // Neutral gray rings — no hue cast. Vision standby room reads
+        // monochrome with motion only, the way the spec intends.
         ctx.beginPath();
         ctx.arc(r.x, r.y, radius, 0, Math.PI * 2);
-        ctx.strokeStyle = `hsla(${r.hue}, 70%, 65%, ${alpha})`;
+        ctx.strokeStyle = `rgba(210, 216, 223, ${alpha})`; /* --vision-gray-100 */
         ctx.lineWidth = 1.2;
         ctx.stroke();
 
         // inner echo
         ctx.beginPath();
         ctx.arc(r.x, r.y, radius * 0.6, 0, Math.PI * 2);
-        ctx.strokeStyle = `hsla(${r.hue + 10}, 70%, 70%, ${alpha * 0.5})`;
+        ctx.strokeStyle = `rgba(186, 192, 199, ${alpha * 0.5})`; /* --vision-gray-200 */
         ctx.lineWidth = 0.6;
         ctx.stroke();
       }

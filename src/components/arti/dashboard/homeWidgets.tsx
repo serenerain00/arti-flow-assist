@@ -61,11 +61,7 @@ export function HomeHeroWidget({ ctx, staffName }: { ctx: WidgetContext; staffNa
   void ctx;
 
   return (
-    <section className="relative overflow-hidden rounded-3xl border border-border bg-surface/50 p-7 md:p-8">
-      <div
-        className="pointer-events-none absolute inset-0 opacity-60"
-        style={{ background: "var(--gradient-deep)" }}
-      />
+    <section className="glass relative overflow-hidden rounded-2xl p-7 md:p-8">
       <div className="relative flex flex-wrap items-start justify-between gap-x-10 gap-y-6">
         <div className="min-w-0 flex-1">
           <div className="font-mono text-[10px] uppercase tracking-[0.5em] text-primary">
