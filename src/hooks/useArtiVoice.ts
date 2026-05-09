@@ -691,6 +691,11 @@ export function useArtiVoice(callbacks: ArtiVoiceCallbacks) {
   const historyRef = useRef<Array<{ role: "user" | "assistant"; content: string }>>([]);
   // Blocks voice input briefly after TTS ends to prevent capturing reverb/echo.
   const postSpeechCooldownRef = useRef(false);
+  // Text Arti is currently narrating. Used by the interrupt path to (a) echo-
+  // filter SR results that look like transcriptions of Arti's own voice, and
+  // (b) compute the truncated portion of the response that was actually
+  // spoken before the user cut in (for history continuity).
+  const currentNarrationRef = useRef<string>("");
 
   // Safely restart recognition after TTS — clears dead ref instead of silent swallow.
   const restartRecognition = useCallback(() => {
@@ -744,20 +749,21 @@ export function useArtiVoice(callbacks: ArtiVoiceCallbacks) {
         speakResolveRef.current = null;
       }
 
+      // If the response was cancelled (interrupted) before playback could
+      // start — typically the user spoke during the TTS fetch window — bail
+      // before queuing audio. The interrupt handler clears isSpeakingRef.
+      if (!isSpeakingRef.current) {
+        return;
+      }
+
       isSpeakingRef.current = true;
       setIsSpeaking(true);
       audioProgressRef.current = 0;
-      // Stop the recognizer before audio plays so restartRecognition() after
-      // playback sees it in a known-stopped state. Without this, continuous
-      // recognition keeps running through TTS and rec.start() below throws
-      // "already started", which the catch used to treat as fatal —
-      // orphaning the live rec and leaving the mic unrecoverable after the
-      // first response.
-      try {
-        recognitionRef.current?.abort();
-      } catch {
-        /* ignore */
-      }
+      // The recognizer stays running through TTS now — that's what enables
+      // mid-narration interrupts. handleTranscript echo-filters incoming
+      // transcripts against `currentNarrationRef` so Arti's own voice
+      // bleeding into the mic doesn't trigger a false interrupt. Real user
+      // speech stops the audio + falls through to a new turn.
       try {
         await new Promise<void>((resolve, reject) => {
           speakResolveRef.current = resolve;
@@ -807,33 +813,27 @@ export function useArtiVoice(callbacks: ArtiVoiceCallbacks) {
   );
 
   /**
-   * Announce that speech is imminent — sets isSpeakingRef + aborts the
-   * recognizer NOW, before any network fetch starts.
-   *
-   * Why: the speakText fetch takes ~300-500 ms. Without this, SR stays
-   * active during that window. When the audio finally plays, the speaker
-   * output echoes into the mic, SR transcribes a fragment of Arti's
-   * own narration ("...pause, fast, and quiet"), Claude interprets it
-   * as a command, and fires spurious tools (e.g. journey_pause mid-
-   * narration). Setting the flag synchronously closes that window.
+   * Announce that speech is imminent — sets isSpeakingRef. The recognizer
+   * is intentionally kept ACTIVE through TTS so the user can interrupt
+   * Arti at any time. Echo handling (so Arti doesn't transcribe itself
+   * as a command) lives in `handleTranscript`'s interrupt branch.
    */
-  const prepareToSpeak = useCallback(() => {
+  const prepareToSpeak = useCallback((narration?: string) => {
     isSpeakingRef.current = true;
     setIsSpeaking(true);
     // Reset progress so the previous stage's "ended at 1" value doesn't
     // leak into the gap before the new stage's audio begins playing.
     audioProgressRef.current = 0;
-    try {
-      recognitionRef.current?.abort();
-    } catch {
-      /* ignore */
+    if (typeof narration === "string") {
+      currentNarrationRef.current = narration;
     }
   }, []);
 
   const speak = useCallback(
     async (text: string) => {
-      // Block SR before the fetch — see prepareToSpeak comment.
-      prepareToSpeak();
+      // Prime the narration ref so the interrupt branch can echo-filter
+      // SR against the text Arti is about to say.
+      prepareToSpeak(text);
       try {
         const { audioBase64 } = await speakText({ data: { text } });
         await playAudio(audioBase64);
@@ -855,13 +855,102 @@ export function useArtiVoice(callbacks: ArtiVoiceCallbacks) {
   // voiceInput=false → typed text; always processed (no wake word required).
   const handleTranscript = useCallback(
     async (transcript: string, voiceInput = false) => {
+      // True when this transcript cuts in mid-narration. Bypasses the
+      // post-speech cooldown, the wake-word gate, and the busy lock.
+      let wasInterrupt = false;
+
       if (voiceInput) {
-        // Block while Arti's TTS is playing — mic picks up speaker output.
+        // ── Interrupt detection ───────────────────────────────────────
+        // Arti is mid-response (TTS fetched and/or playing). Decide if
+        // the incoming transcript is the user actually cutting in, or
+        // just speaker output bleeding back into the mic.
         if (isSpeakingRef.current) {
-          console.log("[arti-voice] ignored (Arti speaking):", transcript);
-          return;
+          const audio = activeAudioRef.current;
+          const narration = currentNarrationRef.current.toLowerCase();
+          const t = transcript.toLowerCase().trim();
+
+          // Echo heuristic — if audio is currently playing AND the
+          // transcript is short and substantially contained in the
+          // current narration, treat as Arti hearing itself. Keeps SR
+          // active without spurious self-triggers when browser AEC
+          // doesn't fully cancel the speaker.
+          const probeLen = Math.min(40, t.length);
+          const isLikelyEcho =
+            !!audio &&
+            !audio.paused &&
+            t.length > 0 &&
+            t.length < 80 &&
+            narration.length > 0 &&
+            (narration.includes(t) || (probeLen >= 12 && narration.includes(t.slice(0, probeLen))));
+
+          if (isLikelyEcho) {
+            console.log("[arti-voice] ignored (likely echo):", transcript);
+            return;
+          }
+
+          // Real interrupt. Stop the audio, mark the in-progress
+          // assistant message in history as truncated, and force-release
+          // the previous turn's busy lock so we can immediately process
+          // what the user just said.
+          console.log("[arti-voice] interrupted by user:", transcript);
+
+          if (audio) {
+            try {
+              audio.pause();
+            } catch {
+              /* ignore */
+            }
+          }
+          activeAudioRef.current = null;
+
+          if (speakResolveRef.current) {
+            try {
+              speakResolveRef.current();
+            } catch {
+              /* ignore */
+            }
+            speakResolveRef.current = null;
+          }
+
+          isSpeakingRef.current = false;
+          setIsSpeaking(false);
+          // Clear the post-speech cooldown — that's for normal completion,
+          // not interrupts.
+          postSpeechCooldownRef.current = false;
+
+          // Truncate the just-saved assistant message in history so Claude
+          // sees what was actually heard, not the full unread response.
+          const progress = audioProgressRef.current;
+          const fullText = currentNarrationRef.current;
+          if (fullText && historyRef.current.length > 0) {
+            const last = historyRef.current[historyRef.current.length - 1];
+            if (last?.role === "assistant") {
+              const cutAt = Math.max(1, Math.floor(fullText.length * Math.min(progress, 1)));
+              const spoken = fullText.slice(0, cutAt).trim();
+              const pct = Math.round(Math.min(progress, 1) * 100);
+              historyRef.current[historyRef.current.length - 1] = {
+                role: "assistant",
+                content: `[INTERRUPTED at ~${pct}%] ${spoken || fullText}${
+                  cutAt < fullText.length ? "…" : ""
+                }`,
+              };
+            }
+          }
+          currentNarrationRef.current = "";
+          // Force-release the previous turn's processing lock — its
+          // `await playAudio(...)` will resolve next tick, but we need
+          // to start the new turn now.
+          processingRef.current = false;
+          // Keep the session alive — interrupting IS engagement.
+          sessionActiveRef.current = true;
+          if (sessionTimerRef.current) clearTimeout(sessionTimerRef.current);
+          sessionTimerRef.current = setTimeout(() => {
+            sessionActiveRef.current = false;
+          }, 30_000);
+          wasInterrupt = true;
         }
-        if (postSpeechCooldownRef.current) {
+
+        if (postSpeechCooldownRef.current && !wasInterrupt) {
           console.log("[arti-voice] ignored (post-speech cooldown):", transcript);
           return;
         }
@@ -871,14 +960,15 @@ export function useArtiVoice(callbacks: ArtiVoiceCallbacks) {
         // genuine "already" said at session start ("patient is already
         // prepped") will wake Arti — we accept that since once a session
         // is active the wake word isn't required for follow-ups, and the
-        // 60s idle timer puts Arti back to sleep on its own.
+        // 60s idle timer puts Arti back to sleep on its own. Interrupts
+        // bypass the gate — by definition the session was already alive.
         const hasWakeWord = /\b(?:(?:art|ard)(?:i[ey]?|y)|already|hardy)\b/i.test(transcript);
-        if (!hasWakeWord && !sessionActiveRef.current) {
+        if (!hasWakeWord && !sessionActiveRef.current && !wasInterrupt) {
           console.log("[arti-voice] ignored (no wake word):", transcript);
           return;
         }
       }
-      if (processingRef.current) {
+      if (processingRef.current && !wasInterrupt) {
         console.log("[arti-voice] ignored (busy):", transcript);
         return;
       }
@@ -913,6 +1003,13 @@ export function useArtiVoice(callbacks: ArtiVoiceCallbacks) {
         // synchronous React state updates. Overlapping them shaves the tool
         // execution time off perceived latency, and means audio starts the
         // moment tools finish instead of after a serial network call.
+        // Prime the narration ref + speaking flag here too so an interrupt
+        // landing during the fetch window can echo-filter and abort cleanly.
+        if (response) {
+          currentNarrationRef.current = response;
+          isSpeakingRef.current = true;
+          setIsSpeaking(true);
+        }
         const ttsPromise = response ? speakText({ data: { text: response } }) : null;
 
         for (const call of toolCalls) {

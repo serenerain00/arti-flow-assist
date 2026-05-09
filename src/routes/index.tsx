@@ -1362,6 +1362,13 @@ function ArtiWall({
       `Staff: ${staff.name}, ${staff.role}`,
       `Current time: ${timeStr} — use "${timeGreeting}" for any greeting`,
       `Today is ${formatLongDate(toDateKey(now))} (${toDateKey(now)})`,
+      // Interruption rules — the user can cut Arti off mid-narration. When
+      // that happens the previous assistant turn is rewritten in history
+      // as `[INTERRUPTED at ~X%] <truncated>...`. Treat that as: the user
+      // didn't hear the rest, so DO NOT replay or re-summarize what was
+      // already spoken. Address their new request directly. Reference
+      // the cut-off content only if they ask ("you were saying…").
+      `Interruption rule: history entries prefixed with [INTERRUPTED at ~X%] mean Arti was cut off mid-sentence. The truncated text is roughly what the user heard. Address the new request directly; do not repeat the cut-off response.`,
       `Current screen: ${PHASE_LABEL[phase]}${phase === "intraop" && multiView ? " (multi-view 4-quadrant layout active)" : ""}`,
       // Emphasized active-case marker so Haiku anchors on the latest
       // loaded case rather than drifting to a stale name from history.
