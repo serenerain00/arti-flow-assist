@@ -29,6 +29,12 @@ import {
   resetAllDeviceStates as resetAllSmartDeviceStates,
 } from "@/components/arti/smart/storage";
 import { ResetAllConfirmModal } from "@/components/arti/smart/ResetAllConfirmModal";
+import {
+  SUPPLY_GROUPS as HOME_SUPPLY_GROUPS,
+  OR_STATUS_GROUPS as HOME_OR_GROUPS,
+  SEED_COMMS as HOME_COMMS,
+  loadHomeTasks,
+} from "@/components/arti/dashboard/homeWidgets";
 import { PatientsScreen } from "@/components/arti/PatientsScreen";
 import { ConsolesScreen } from "@/components/arti/ConsolesScreen";
 import { VideoLibraryScreen } from "@/components/arti/VideoLibraryScreen";
@@ -1569,6 +1575,73 @@ function ArtiWall({
           `    'upload images' / 'upload a picture' / 'add images for <X>' → prompt_pref_card_upload (pass {procedure: X} if a procedure was named — the route auto-expands it first).`,
           `    'rename <image-or-index> to <new>' → rename_pref_card_image. 'remove <image-or-index>' → remove_pref_card_image.`,
           `    'back to surgeons' / 'show me the directory' → navigate_surgeons.`,
+        ].join("\n");
+      })(),
+      // Home dashboard — surfaces the circulating nurse's live pre-case
+      // state so Arti can read it back to her without her having to look
+      // at the wall. Covers wrap-up checklist (live from localStorage),
+      // communications feed, supply status, and OR readiness. Claude
+      // answers narratively from this block — no tool call needed.
+      (() => {
+        if (phase !== "home") return "";
+        const tasks = loadHomeTasks();
+        const done = tasks.filter((t) => t.done);
+        const left = tasks.filter((t) => !t.done);
+        const supplyCounts = HOME_SUPPLY_GROUPS.flatMap((g) => g.items).reduce(
+          (acc, it) => {
+            acc[it.status] = (acc[it.status] ?? 0) + 1;
+            return acc;
+          },
+          {} as Record<string, number>,
+        );
+        const orCounts = HOME_OR_GROUPS.flatMap((g) => g.items).reduce(
+          (acc, it) => {
+            acc[it.status] = (acc[it.status] ?? 0) + 1;
+            return acc;
+          },
+          {} as Record<string, number>,
+        );
+        const unreadComms = HOME_COMMS.filter((c) => c.unread).length;
+        const fmtItems = (items: Array<{ label: string; status: string; detail?: string }>) =>
+          items
+            .map((it) => `${it.label}: ${it.status}${it.detail ? ` (${it.detail})` : ""}`)
+            .join(" · ");
+        return [
+          `Home dashboard — Laura's live pre-case state:`,
+          ``,
+          `  Wrap-up checklist (${done.length}/${tasks.length} done, ${left.length} left):`,
+          done.length
+            ? `    DONE:\n${done
+                .map((t) => `      ✓ ${t.label}${t.detail ? ` — ${t.detail}` : ""}`)
+                .join("\n")}`
+            : `    DONE: (none yet)`,
+          left.length
+            ? `    LEFT:\n${left
+                .map((t) => `      • ${t.label}${t.detail ? ` — ${t.detail}` : ""}`)
+                .join("\n")}`
+            : `    LEFT: (all clear)`,
+          ``,
+          `  Communications (${HOME_COMMS.length} total, ${unreadComms} unread):`,
+          ...HOME_COMMS.map(
+            (c) => `    ${c.unread ? "[UNREAD] " : ""}${c.source} ${c.time}: "${c.message}"`,
+          ),
+          ``,
+          `  Supply status (${supplyCounts.ready ?? 0} ready · ${
+            supplyCounts.pending ?? 0
+          } pending · ${supplyCounts.issue ?? 0} missing):`,
+          ...HOME_SUPPLY_GROUPS.map((g) => `    ${g.category} — ${fmtItems(g.items)}`),
+          ``,
+          `  OR readiness (${orCounts.ready ?? 0} ready · ${
+            orCounts.pending ?? 0
+          } pending · ${orCounts.issue ?? 0} issue):`,
+          ...HOME_OR_GROUPS.map((g) => `    ${g.category} — ${fmtItems(g.items)}`),
+          ``,
+          `  VERB ROUTING — answer these directly from the data above (NO tool call):`,
+          `    "what's on my checklist?" / "what's done?" / "what's left?" → read Wrap-up checklist.`,
+          `    "what are the latest communications?" / "anything from PACU?" / "what's come in in the last 30 minutes?" → read Communications (filter by source/time as the user asked).`,
+          `    "what's the OR readiness?" / "is the room ready?" / "what's still pending?" → read OR readiness.`,
+          `    "what supply is missing?" / "any backorders?" / "is the implant here?" → read Supply status.`,
+          `    Multi-sentence narration is OK on the home screen — the user is asking for a readout, not a confirmation.`,
         ].join("\n");
       })(),
       // Smart Settings screen — lists every device + property so voice

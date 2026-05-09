@@ -582,7 +582,7 @@ function WidgetShell({
 
 // ─── Supply status ─────────────────────────────────────────────────────
 
-const SUPPLY_GROUPS: Array<{
+export const SUPPLY_GROUPS: Array<{
   category: string;
   items: Array<{ label: string; status: ReadinessStatus; detail?: string }>;
 }> = [
@@ -696,7 +696,7 @@ export function HomeSupplyStatusWidget({ ctx }: { ctx: WidgetContext }) {
 
 // ─── OR status ─────────────────────────────────────────────────────────
 
-const OR_STATUS_GROUPS: Array<{
+export const OR_STATUS_GROUPS: Array<{
   category: string;
   items: Array<{ label: string; status: ReadinessStatus; detail?: string }>;
 }> = [
@@ -772,7 +772,14 @@ export function HomeORStatusWidget({ ctx }: { ctx: WidgetContext }) {
 
 // ─── Task checklist ────────────────────────────────────────────────────
 
-const SEED_TASKS: Array<{ id: string; label: string; done: boolean; detail?: string }> = [
+export interface HomeTask {
+  id: string;
+  label: string;
+  done: boolean;
+  detail?: string;
+}
+
+export const SEED_TASKS: HomeTask[] = [
   { id: "consent", label: "Verify consent signed in EMR", done: true, detail: "Signed 06:31" },
   { id: "prior-count", label: "Confirm prior case count complete", done: true },
   {
@@ -786,11 +793,48 @@ const SEED_TASKS: Array<{ id: string; label: string; done: boolean; detail?: str
   { id: "family", label: "Update Mrs. Chen — 09:30 check-in", done: false },
 ];
 
+const HOME_TASKS_STORAGE_KEY = "arti.home.tasks";
+
+/** Read the live checklist state from localStorage, overlaying saved
+ *  done/not-done flags onto the seed list. Used by both the widget and
+ *  the route's voice-context builder so Arti always reads the live
+ *  state — Laura can ask "what's done and what's left?" without
+ *  looking at the wall. */
+export function loadHomeTasks(): HomeTask[] {
+  if (typeof window === "undefined") return SEED_TASKS.map((t) => ({ ...t }));
+  try {
+    const raw = window.localStorage.getItem(HOME_TASKS_STORAGE_KEY);
+    if (!raw) return SEED_TASKS.map((t) => ({ ...t }));
+    const parsed = JSON.parse(raw) as Record<string, boolean> | null;
+    if (!parsed || typeof parsed !== "object") {
+      return SEED_TASKS.map((t) => ({ ...t }));
+    }
+    return SEED_TASKS.map((t) => ({
+      ...t,
+      done: typeof parsed[t.id] === "boolean" ? parsed[t.id] : t.done,
+    }));
+  } catch {
+    return SEED_TASKS.map((t) => ({ ...t }));
+  }
+}
+
+function saveHomeTasks(tasks: HomeTask[]): void {
+  if (typeof window === "undefined") return;
+  try {
+    const map = Object.fromEntries(tasks.map((t) => [t.id, t.done]));
+    window.localStorage.setItem(HOME_TASKS_STORAGE_KEY, JSON.stringify(map));
+  } catch {
+    // ignore quota / private mode
+  }
+}
+
 export function HomeTaskChecklistWidget({ ctx }: { ctx: WidgetContext }) {
   void ctx;
-  // Local toggle so the checklist feels live without depending on
-  // route-level state. Persistence isn't relevant for the demo.
-  const [tasks, setTasks] = useState(SEED_TASKS);
+  const [tasks, setTasks] = useState<HomeTask[]>(() => loadHomeTasks());
+  // Persist on every change so voice tools can read the live state.
+  useEffect(() => {
+    saveHomeTasks(tasks);
+  }, [tasks]);
   const remaining = tasks.filter((t) => !t.done).length;
   return (
     <WidgetShell
@@ -863,7 +907,15 @@ export function HomeTaskChecklistWidget({ ctx }: { ctx: WidgetContext }) {
 
 // ─── Comms feed ────────────────────────────────────────────────────────
 
-type CommSource = "PACU" | "Family" | "Anesthesia" | "Sub-sterile" | "Charge RN";
+export type CommSource = "PACU" | "Family" | "Anesthesia" | "Sub-sterile" | "Charge RN";
+
+export interface HomeComm {
+  id: string;
+  source: CommSource;
+  time: string;
+  message: string;
+  unread?: boolean;
+}
 
 const COMM_TONE: Record<CommSource, string> = {
   PACU: "border-primary/40 bg-primary/10 text-primary",
@@ -873,7 +925,7 @@ const COMM_TONE: Record<CommSource, string> = {
   "Charge RN": "border-border/60 bg-surface-2 text-foreground/85",
 };
 
-const SEED_COMMS: Array<{
+export const SEED_COMMS: Array<{
   id: string;
   source: CommSource;
   time: string;
