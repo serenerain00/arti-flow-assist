@@ -4,14 +4,13 @@ import type { DashboardConfig } from "./types";
  * "My Dashboard" — the circulating nurse's pre-case readiness view.
  *
  * Order is deliberate, prioritized for what she actually scans in the
- * minutes before incision:
+ * minutes before incision. Spans are tuned so each row packs cleanly
+ * in the 3-col grid (full | 2+1 | 2+1 | 2+1 | 2 | full):
+ *
  *   1. Welcome / day stats         — orient + glance the day
- *   2. Up-next case                — patient ID, procedure, time, side
- *      Room vitals                 — environmental snapshot adjacent to up-next
- *   3. Supply status               — implants/sutures/trays/disposables/blood
- *      Active alerts               — equipment + safety + timing reminders
- *   4. OR readiness                — instruments staged, table, imaging, sterile field
- *      Wrap-up checklist           — her remaining tasks
+ *   2. Up-next case      +  Wrap-up checklist   — case context, tasks above awareness
+ *   3. Supply status     +  Awareness (alerts)  — equipment / safety / timing
+ *   4. OR readiness      +  Room vitals         — room state below awareness
  *   5. Communications              — PACU, family, anesthesia, sub-sterile, charge
  *   6. Quick actions               — case list / pre-op / surgeon prefs
  *
@@ -22,11 +21,11 @@ export const DEFAULT_MY_DASHBOARD: DashboardConfig = {
   items: [
     { id: "home-hero" },
     { id: "home-up-next" },
-    { id: "home-room-vitals" },
+    { id: "task-checklist" },
     { id: "supply-status" },
     { id: "alerts" },
     { id: "or-status" },
-    { id: "task-checklist" },
+    { id: "home-room-vitals" },
     { id: "comms-feed" },
     { id: "home-quick-actions" },
   ],
