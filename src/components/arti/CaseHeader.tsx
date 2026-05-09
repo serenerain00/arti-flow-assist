@@ -6,10 +6,11 @@ interface Props {
   activeCase?: CaseItem;
   onOpenPatientDetails?: () => void;
   /**
-   * Optional CTA: when provided, a "Start Case" affordance appears next to
-   * Patient Info. The route uses this to flip the dashboard into the
-   * intraoperative ("case active") layout. Suppressed for cases that are
-   * already done / cancelled.
+   * Optional CTA: when provided, a "Start Checklist" affordance appears next
+   * to Patient Info. Clicking it opens the pre-incision time-out modal —
+   * the actual transition into intraop happens when all four items are
+   * confirmed and the user clicks Start Case there. Suppressed for cases
+   * that are already done / cancelled.
    */
   onStartCase?: () => void;
 }
@@ -120,9 +121,10 @@ export function CaseHeader({ activeCase, onOpenPatientDetails, onStartCase }: Pr
             <button
               onClick={onStartCase}
               className="group flex items-center gap-2 rounded-xl border border-success/40 bg-success/10 px-4 py-2.5 text-sm font-medium text-success transition-all hover:border-success/70 hover:bg-success/15 hover:shadow-[0_0_20px_-4px_var(--success)]"
+              title="Open the pre-incision time-out checklist. The case starts after all four items are confirmed."
             >
               <Play className="h-4 w-4 fill-current" />
-              Start Case
+              Start Checklist
             </button>
           )}
 

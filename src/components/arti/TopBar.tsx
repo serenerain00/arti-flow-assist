@@ -1,17 +1,23 @@
 import { useEffect, useState } from "react";
-import { Volume2, Thermometer } from "lucide-react";
+import { Moon, Thermometer, Volume2 } from "lucide-react";
 import { cn } from "@/lib/utils";
 
 interface Props {
   staffName: string;
   staffRole: string;
   initials: string;
+  /**
+   * Optional one-tap "send Arti to sleep" button. When provided, a Moon
+   * pill renders to the right of the room/patient vitals strip — saves
+   * the user from having to use voice or dig into the sidebar menu.
+   */
+  onSleep?: () => void;
 }
 
 /**
  * Ambient OR vitals strip — noise meter, room temperature, staff identity.
  */
-export function TopBar({ staffName, staffRole, initials }: Props) {
+export function TopBar({ staffName, staffRole, initials, onSleep }: Props) {
   const [time, setTime] = useState(new Date());
   const [noise, setNoise] = useState(42);
 
@@ -75,6 +81,20 @@ export function TopBar({ staffName, staffRole, initials }: Props) {
           <Thermometer className="h-4 w-4 text-muted-foreground" />
           <span className="tabular-nums">21.4°C</span>
         </div>
+
+        {/* Quick-sleep — one tap puts Arti into standby without voice. */}
+        {onSleep && (
+          <button
+            type="button"
+            onClick={onSleep}
+            className="glass group flex h-10 items-center gap-2 rounded-full px-4 text-xs font-light uppercase tracking-wider text-muted-foreground transition-all hover:border-primary/40 hover:bg-primary/10 hover:text-primary"
+            title="Send Arti to sleep (or say 'arti, sleep')"
+            aria-label="Send Arti to sleep"
+          >
+            <Moon className="h-4 w-4" strokeWidth={1.7} />
+            Sleep
+          </button>
+        )}
 
         <div className="ml-2 flex items-center gap-3">
           <div className="text-right">

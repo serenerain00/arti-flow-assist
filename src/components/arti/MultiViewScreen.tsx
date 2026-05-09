@@ -1,8 +1,10 @@
-import { useEffect, useMemo, useState } from "react";
+import { useEffect, useMemo, useRef, useState } from "react";
 import {
   Activity,
   AlertTriangle,
+  Check,
   CheckCircle2,
+  ChevronDown,
   Circle,
   Clock,
   Droplet,
@@ -10,6 +12,7 @@ import {
   Layers,
   Maximize2,
   Package,
+  Pill,
   ScanLine,
   Stethoscope,
   Thermometer,
@@ -75,18 +78,41 @@ const SURGEON_VIDEO_SRC = "/scopeFeed.mp4";
 
 // Imaging modality sources. The arthroscope is treated as "live" — it's
 // the default view. The others are mock external studies that can be
-// swapped in via voice ("show me the MRI", "show fluoroscopy").
-type ImagingMode = "arthroscopy" | "fluoroscopy" | "mri" | "side_by_side";
+// swapped in via voice ("show me the MRI", "show fluoroscopy", "show CT").
+type ImagingMode = "arthroscopy" | "fluoroscopy" | "mri" | "ct" | "side_by_side";
 
 const MRI_VIDEO_SRC =
   "https://www.youtube.com/embed/m_34buNeZ04?start=5&autoplay=1&mute=1&controls=0&modestbranding=1&rel=0&loop=1&playlist=m_34buNeZ04&playsinline=1";
+// CT image lives in /public — pre-op shoulder CT, axial + coronal panels.
+const CT_IMAGE_SRC = "/ctscans.jpeg";
 
 const IMAGING_LABEL: Record<ImagingMode, string> = {
   arthroscopy: "Live · Arthroscope",
   fluoroscopy: "Fluoroscopy",
   mri: "MRI · Patient Study",
+  ct: "CT · Patient Study",
   side_by_side: "Side-by-side",
 };
+
+// Modality-specific sublabels that appear under the main DICOM badge so
+// the team can see at a glance what the tile is showing.
+const IMAGING_SUBLABEL: Partial<Record<ImagingMode, string>> = {
+  ct: "Axial + Coronal · pre-op",
+  mri: "T2 Coronal · pre-op",
+  fluoroscopy: "Stored AP / Axial / Lateral",
+};
+
+// Dropdown order for the picker on the surgeon tile. Display labels are
+// what the team sees; `mode` is the canonical voice modality. We label
+// fluoroscopy as "X-Ray (Fluoro)" because the team colloquially asks for
+// X-rays during the case.
+const MODALITY_OPTIONS: Array<{ mode: ImagingMode; label: string }> = [
+  { mode: "arthroscopy", label: "Live Scope" },
+  { mode: "mri", label: "MRI" },
+  { mode: "fluoroscopy", label: "X-Ray (Fluoro)" },
+  { mode: "ct", label: "CT" },
+  { mode: "side_by_side", label: "Side-by-side" },
+];
 
 export function MultiViewScreen({
   staffName,
@@ -166,6 +192,12 @@ export function MultiViewScreen({
         const lines = [
           `Multi-view: case ACTIVE (4-quadrant wall layout)`,
           `  Surgeon center tile: showing ${imagingMode === "arthroscopy" ? "the LIVE arthroscope feed" : `the ${IMAGING_LABEL[imagingMode]} (external study, NOT live)`}`,
+          `  Available imaging modalities (call intraop_show_imaging with modality=...):`,
+          `    arthroscopy — live scope feed (default). Trigger: 'show the scope', 'back to live', 'live feed'.`,
+          `    mri — pre-op MRI study. Trigger: 'show MRI', 'open MRI', 'pull up the MRI'.`,
+          `    ct — pre-op CT (axial + coronal). Trigger: 'show CT', 'show CT scans', 'show me the CTs', 'pull up the CT', 'show the CAT scan'.`,
+          `    fluoroscopy — stored fluoro views. Trigger: 'show fluoro', 'show fluoroscopy', 'show X-ray'.`,
+          `    side_by_side — split view. Trigger: 'side by side'.`,
           `  Current phase: ${phaseLabel(currentPhase, snapshot.phases)} (step ${idx + 1} of ${snapshot.phases.length})`,
           `  Step detail: ${step}`,
           `  Trays for current phase: ${trayList(phase)}`,
@@ -529,6 +561,27 @@ function SurgeonTile({
   const phasesLeft = snapshot.phases.length - idx - 1;
   const isLive = imagingMode === "arthroscopy";
 
+  // Modality dropdown — mouse parity for "show me CT / MRI / X-Ray / scope".
+  const [pickerOpen, setPickerOpen] = useState(false);
+  const pickerRef = useRef<HTMLDivElement>(null);
+  useEffect(() => {
+    if (!pickerOpen) return;
+    const onDocClick = (e: MouseEvent) => {
+      if (pickerRef.current && !pickerRef.current.contains(e.target as Node)) {
+        setPickerOpen(false);
+      }
+    };
+    const onKey = (e: KeyboardEvent) => {
+      if (e.key === "Escape") setPickerOpen(false);
+    };
+    document.addEventListener("mousedown", onDocClick);
+    document.addEventListener("keydown", onKey);
+    return () => {
+      document.removeEventListener("mousedown", onDocClick);
+      document.removeEventListener("keydown", onKey);
+    };
+  }, [pickerOpen]);
+
   return (
     <Tile className={className} accent="accent" icon={Stethoscope} title="Surgeon · Primary View">
       <div className="flex h-full min-h-0 flex-col gap-3">
@@ -553,6 +606,13 @@ function SurgeonTile({
               className="h-full w-full"
               style={{ pointerEvents: "none" }}
             />
+          ) : imagingMode === "ct" ? (
+            <img
+              key="ct"
+              src={CT_IMAGE_SRC}
+              alt="CT study — axial and coronal slices of the operative shoulder"
+              className="h-full w-full object-contain bg-black"
+            />
           ) : (
             <div className="flex h-full w-full items-center justify-center text-[11px] text-white/60">
               {IMAGING_LABEL[imagingMode]} not available in this prototype
@@ -560,9 +620,67 @@ function SurgeonTile({
           )}
           {/* DICOM-style overlay */}
           <div className="pointer-events-none absolute inset-0">
-            <div className="absolute left-3 top-3 flex items-center gap-2 rounded-full border border-white/20 bg-black/60 px-2.5 py-1 font-mono text-[9px] uppercase tracking-[0.25em] text-white/90 backdrop-blur">
-              {isLive && <span className="h-1.5 w-1.5 rounded-full bg-success heartbeat" />}
-              {IMAGING_LABEL[imagingMode]}
+            <div className="absolute left-3 top-3 flex flex-col gap-1">
+              <div ref={pickerRef} className="pointer-events-auto relative">
+                <button
+                  type="button"
+                  onClick={() => setPickerOpen((o) => !o)}
+                  className="flex items-center gap-2 rounded-full border border-white/20 bg-black/60 px-2.5 py-1 font-mono text-[9px] uppercase tracking-[0.25em] text-white/90 backdrop-blur transition-colors hover:border-white/50 hover:text-white"
+                  aria-haspopup="listbox"
+                  aria-expanded={pickerOpen}
+                  title="Switch imaging source"
+                >
+                  {isLive && <span className="h-1.5 w-1.5 rounded-full bg-success heartbeat" />}
+                  {IMAGING_LABEL[imagingMode]}
+                  <ChevronDown
+                    className={cn(
+                      "h-3 w-3 transition-transform duration-200",
+                      pickerOpen && "rotate-180",
+                    )}
+                    strokeWidth={2}
+                  />
+                </button>
+                {pickerOpen && (
+                  <ul
+                    role="listbox"
+                    className="absolute left-0 top-full z-30 mt-1.5 min-w-[180px] overflow-hidden rounded-xl border border-white/15 bg-black/90 shadow-2xl backdrop-blur-xl"
+                  >
+                    {MODALITY_OPTIONS.map((opt) => {
+                      const active = opt.mode === imagingMode;
+                      return (
+                        <li key={opt.mode} role="option" aria-selected={active}>
+                          <button
+                            type="button"
+                            onClick={() => {
+                              onSetImagingMode(opt.mode);
+                              setPickerOpen(false);
+                            }}
+                            className={cn(
+                              "flex w-full items-center gap-2 px-3 py-2 text-left font-mono text-[10px] uppercase tracking-wider transition-colors",
+                              active
+                                ? "bg-white/15 text-white"
+                                : "text-white/70 hover:bg-white/10 hover:text-white",
+                            )}
+                          >
+                            <span className="flex h-3 w-3 shrink-0 items-center justify-center">
+                              {active && <Check className="h-3 w-3" strokeWidth={2.5} />}
+                            </span>
+                            <span className="flex-1">{opt.label}</span>
+                            {opt.mode === "arthroscopy" && (
+                              <span className="h-1.5 w-1.5 rounded-full bg-success heartbeat" />
+                            )}
+                          </button>
+                        </li>
+                      );
+                    })}
+                  </ul>
+                )}
+              </div>
+              {IMAGING_SUBLABEL[imagingMode] && (
+                <div className="self-start rounded-md border border-white/15 bg-black/50 px-2 py-0.5 font-mono text-[8px] uppercase tracking-wider text-white/70 backdrop-blur">
+                  {IMAGING_SUBLABEL[imagingMode]}
+                </div>
+              )}
             </div>
             {isLive && (
               <div className="absolute right-3 top-3 rounded-full border border-white/20 bg-black/60 px-2.5 py-1 font-mono text-[9px] uppercase tracking-[0.25em] text-white/90 backdrop-blur">
@@ -695,7 +813,45 @@ function AnesthesiaTile({ className, vitals, snapshot }: AnesthesiaTileProps) {
           </span>
         </div>
       </Section>
+
+      {/* Antibiotic redose reminder — surfaces the upcoming dose timing on
+          the wall so the anesthesia team sees it without having to focus
+          the role panel. Red when ≤5 min, warning when ≤15, calm otherwise. */}
+      <AntibioticReminder snapshot={snapshot} />
     </Tile>
+  );
+}
+
+function AntibioticReminder({ snapshot }: { snapshot: IntraopSnapshot }) {
+  const { agent, lastDose, dueInMinutes } = snapshot.antibiotic;
+  const tone = dueInMinutes <= 5 ? "danger" : dueInMinutes <= 15 ? "warning" : "calm";
+  const toneClasses =
+    tone === "danger"
+      ? "border-destructive/50 bg-destructive/10 text-destructive"
+      : tone === "warning"
+        ? "border-warning/50 bg-warning/10 text-warning"
+        : "border-success/30 bg-success/8 text-success";
+  const headlineLabel =
+    tone === "danger" ? "Redose now" : tone === "warning" ? "Redose soon" : "On schedule";
+  return (
+    <Section label="Antibiotic redose">
+      <div className={cn("rounded-lg border px-2.5 py-2", toneClasses)}>
+        <div className="flex items-center justify-between gap-2">
+          <div className="flex items-center gap-1.5 font-mono text-[10px] uppercase tracking-wider">
+            <Pill className="h-3 w-3" strokeWidth={2} />
+            {headlineLabel}
+          </div>
+          <div className="font-mono text-base tabular-nums">
+            {dueInMinutes}
+            <span className="ml-0.5 text-[10px] opacity-70">min</span>
+          </div>
+        </div>
+        <div className="mt-1 flex items-baseline justify-between text-[10px] font-light">
+          <span className="text-foreground/80">{agent}</span>
+          <span className="text-muted-foreground/80">last {lastDose}</span>
+        </div>
+      </div>
+    </Section>
   );
 }
 

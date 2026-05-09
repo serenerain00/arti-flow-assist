@@ -15,7 +15,7 @@ export type ActiveRole = "nurse" | "scrub" | "surgeon" | "anesthesia";
 export type IntraopPhaseId = string;
 
 /** Imaging modalities the intraop screen can highlight. */
-export type IntraopImagingModality = "arthroscopy" | "fluoroscopy" | "mri" | "side_by_side";
+export type IntraopImagingModality = "arthroscopy" | "fluoroscopy" | "mri" | "ct" | "side_by_side";
 
 /** Support panels within the intraop role views. */
 export type IntraopPanelId =
@@ -44,6 +44,27 @@ export interface ArtiVoiceCallbacks {
   onFocusConsole?: (id: string) => void;
   /** Navigate to the curated surgical Video Library screen. */
   onShowLibrary?: () => void;
+  /** Navigate to the Settings landing screen. */
+  onShowSettings?: () => void;
+  /** Navigate to Admin Settings (password-gated landing). */
+  onShowAdminSettings?: () => void;
+  /** Navigate to Smart Settings (device controls). */
+  onShowSmartSettings?: () => void;
+  /** Focus a smart device on the Smart Settings screen. Auto-navigates if needed. */
+  onSelectSmartDevice?: (device: string) => ArtiToolResult;
+  /** Set a numeric/string property on a smart device. */
+  onSetSmartProperty?: (
+    device: string | undefined,
+    property: string,
+    value: number | string | boolean,
+  ) => ArtiToolResult;
+  /** Toggle a boolean property (power, lock) on a smart device. */
+  onToggleSmartDevice?: (device: string, on: boolean, property?: string) => ArtiToolResult;
+  /**
+   * Bulk-reset every smart device. With confirmed=false (or omitted) opens
+   * the "are you sure?" modal; with confirmed=true executes the reset.
+   */
+  onResetAllSmartDevices?: (confirmed?: boolean) => ArtiToolResult;
   /**
    * Close whichever overlay is currently topmost. Called when the user
    * says generic "close" / "dismiss" / "close that" with no specific
@@ -103,6 +124,25 @@ export interface ArtiVoiceCallbacks {
   onSetPersonScheduleView?: (view: string) => void;
   /** Close the Person Schedule modal. */
   onClosePersonSchedule?: () => void;
+  /** Navigate to a surgeon's procedure-preferences profile screen (and optionally expand one procedure). */
+  onOpenSurgeonProfile?: (surgeon: string, procedure?: string) => ArtiToolResult;
+  /** While on the surgeon-profile screen, expand a specific procedure card. */
+  onExpandProcedure?: (procedure: string) => ArtiToolResult;
+  /** While on the surgeon-profile screen, collapse a specific (or the currently-open) procedure card. */
+  onCollapseProcedure?: (procedure?: string) => ArtiToolResult;
+  /** Expand the next/previous procedure in the list (relative to whichever is currently expanded). */
+  onNextProcedure?: () => ArtiToolResult;
+  onPreviousProcedure?: () => ArtiToolResult;
+  /** Rename a preference-card image inside the active surgeon profile / expanded procedure. */
+  onRenamePrefCardImage?: (image: string, newLabel: string) => ArtiToolResult;
+  /** Remove a preference-card image inside the active surgeon profile / expanded procedure. */
+  onRemovePrefCardImage?: (image: string) => ArtiToolResult;
+  /**
+   * Open the file picker to upload a new preference-card image. If `procedure`
+   * is given, the route expands that procedure first; otherwise uploads to
+   * whichever is currently expanded.
+   */
+  onPromptPrefCardUpload?: (procedure?: string) => ArtiToolResult;
   onToggleTimeOutItem?: (id: TimeOutId) => ArtiToolResult;
   onAdjustInstrumentCount?: (item: InstrumentId, delta: number) => ArtiToolResult;
   /** Set an instrument count to an absolute value (replaces the current count). */
@@ -259,6 +299,39 @@ function executeToolCall(call: ArtiToolCall, cb: ArtiVoiceCallbacks): void {
     case "navigate_library":
       cb.onShowLibrary?.();
       break;
+    case "navigate_settings":
+      cb.onShowSettings?.();
+      break;
+    case "navigate_admin_settings":
+      cb.onShowAdminSettings?.();
+      break;
+    case "navigate_smart_settings":
+      cb.onShowSmartSettings?.();
+      break;
+    case "select_smart_device":
+      cb.onSelectSmartDevice?.(String(inp.device ?? ""));
+      break;
+    case "set_smart_property": {
+      const v = inp.value;
+      cb.onSetSmartProperty?.(
+        inp.device != null ? String(inp.device) : undefined,
+        String(inp.property ?? ""),
+        typeof v === "number" || typeof v === "string" || typeof v === "boolean"
+          ? v
+          : String(v ?? ""),
+      );
+      break;
+    }
+    case "toggle_smart_device":
+      cb.onToggleSmartDevice?.(
+        String(inp.device ?? ""),
+        Boolean(inp.on),
+        inp.property != null ? String(inp.property) : undefined,
+      );
+      break;
+    case "reset_all_smart_devices":
+      cb.onResetAllSmartDevices?.(Boolean(inp.confirmed));
+      break;
     case "close_topmost_modal":
       cb.onCloseTopmostModal?.();
       break;
@@ -354,6 +427,33 @@ function executeToolCall(call: ArtiToolCall, cb: ArtiVoiceCallbacks): void {
       break;
     case "close_person_schedule":
       cb.onClosePersonSchedule?.();
+      break;
+    case "open_surgeon_profile":
+      cb.onOpenSurgeonProfile?.(
+        String(inp.surgeon ?? ""),
+        inp.procedure != null ? String(inp.procedure) : undefined,
+      );
+      break;
+    case "expand_procedure":
+      cb.onExpandProcedure?.(String(inp.procedure ?? ""));
+      break;
+    case "collapse_procedure":
+      cb.onCollapseProcedure?.(inp.procedure != null ? String(inp.procedure) : undefined);
+      break;
+    case "next_procedure":
+      cb.onNextProcedure?.();
+      break;
+    case "previous_procedure":
+      cb.onPreviousProcedure?.();
+      break;
+    case "rename_pref_card_image":
+      cb.onRenamePrefCardImage?.(String(inp.image ?? ""), String(inp.new_label ?? ""));
+      break;
+    case "remove_pref_card_image":
+      cb.onRemovePrefCardImage?.(String(inp.image ?? ""));
+      break;
+    case "prompt_pref_card_upload":
+      cb.onPromptPrefCardUpload?.(inp.procedure != null ? String(inp.procedure) : undefined);
       break;
     case "toggle_timeout_item":
       cb.onToggleTimeOutItem?.(inp.id as TimeOutId);

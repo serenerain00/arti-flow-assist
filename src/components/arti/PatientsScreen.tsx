@@ -4,12 +4,7 @@ import { Sidebar, type SidebarKey } from "./Sidebar";
 import { TopBar } from "./TopBar";
 import { ArtiInvoker } from "./ArtiInvoker";
 import { PatientDetailsModal } from "./PatientDetailsModal";
-import {
-  PATIENT_CLINICAL,
-  STATUS_META,
-  TODAY_CASES,
-  type CaseItem,
-} from "./cases";
+import { PATIENT_CLINICAL, STATUS_META, TODAY_CASES, type CaseItem } from "./cases";
 import { cn } from "@/lib/utils";
 
 interface Props {
@@ -40,10 +35,7 @@ export function PatientsScreen({
   const [query, setQuery] = useState("");
   const [selected, setSelected] = useState<CaseItem | null>(null);
 
-  const sorted = useMemo(
-    () => [...TODAY_CASES].sort((a, b) => a.time.localeCompare(b.time)),
-    [],
-  );
+  const sorted = useMemo(() => [...TODAY_CASES].sort((a, b) => a.time.localeCompare(b.time)), []);
 
   const filtered = useMemo(() => {
     const q = query.trim().toLowerCase();
@@ -65,14 +57,15 @@ export function PatientsScreen({
 
   return (
     <div className="flex h-screen w-full overflow-hidden bg-background">
-      <Sidebar onSleep={onSleep} onLogout={onLogout} activeKey="patients" onNavigate={onSidebarNavigate} />
+      <Sidebar
+        onSleep={onSleep}
+        onLogout={onLogout}
+        activeKey="patients"
+        onNavigate={onSidebarNavigate}
+      />
 
       <div className="flex min-w-0 flex-1 flex-col overflow-hidden">
-        <TopBar
-          staffName={staffName}
-          staffRole={staffRole}
-          initials={initials}
-        />
+        <TopBar staffName={staffName} staffRole={staffRole} initials={initials} onSleep={onSleep} />
 
         <main
           data-scroll
@@ -127,11 +120,7 @@ export function PatientsScreen({
         <ArtiInvoker
           placeholder="Ask Arti about a patient…"
           onSubmit={onPrompt}
-          suggestions={[
-            "Open the next case",
-            "Who has allergies today?",
-            "Back to home",
-          ]}
+          suggestions={["Open the next case", "Who has allergies today?", "Back to home"]}
         />
       </div>
 
@@ -151,10 +140,8 @@ export function PatientsScreen({
 
 function PatientCard({ c, onClick }: { c: CaseItem; onClick: () => void }) {
   const clinical = PATIENT_CLINICAL[c.id];
-  const severeAllergies =
-    clinical?.allergies.filter((a) => a.severity === "severe") ?? [];
-  const moderateAllergies =
-    clinical?.allergies.filter((a) => a.severity === "moderate") ?? [];
+  const severeAllergies = clinical?.allergies.filter((a) => a.severity === "severe") ?? [];
+  const moderateAllergies = clinical?.allergies.filter((a) => a.severity === "moderate") ?? [];
   const flaggedLabs = clinical?.labs.filter((l) => l.flag) ?? [];
   const difficultAirway = clinical?.airway.difficult;
 
@@ -215,7 +202,11 @@ function PatientCard({ c, onClick }: { c: CaseItem; onClick: () => void }) {
         </div>
 
         {/* Risk flags */}
-        {clinical && (severeAllergies.length || moderateAllergies.length || difficultAirway || flaggedLabs.length) ? (
+        {clinical &&
+        (severeAllergies.length ||
+          moderateAllergies.length ||
+          difficultAirway ||
+          flaggedLabs.length) ? (
           <div className="mt-3 flex flex-wrap gap-1.5">
             {severeAllergies.length > 0 && (
               <Flag tone="danger" icon={<AlertTriangle className="h-3 w-3" />}>
@@ -223,9 +214,7 @@ function PatientCard({ c, onClick }: { c: CaseItem; onClick: () => void }) {
               </Flag>
             )}
             {moderateAllergies.length > 0 && (
-              <Flag tone="warn">
-                {moderateAllergies.map((a) => a.agent).join(", ")}
-              </Flag>
+              <Flag tone="warn">{moderateAllergies.map((a) => a.agent).join(", ")}</Flag>
             )}
             {difficultAirway && (
               <Flag tone="warn" icon={<AlertTriangle className="h-3 w-3" />}>

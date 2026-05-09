@@ -79,10 +79,15 @@ export function ConsolesScreen({
 
   return (
     <div className="flex h-screen w-full overflow-hidden bg-background">
-      <Sidebar onSleep={onSleep} onLogout={onLogout} activeKey="consoles" onNavigate={onSidebarNavigate} />
+      <Sidebar
+        onSleep={onSleep}
+        onLogout={onLogout}
+        activeKey="consoles"
+        onNavigate={onSidebarNavigate}
+      />
 
       <div className="flex min-w-0 flex-1 flex-col overflow-hidden">
-        <TopBar staffName={staffName} staffRole={staffRole} initials={initials} />
+        <TopBar staffName={staffName} staffRole={staffRole} initials={initials} onSleep={onSleep} />
 
         <main data-scroll className="min-h-0 flex-1 overflow-y-auto px-8 py-6 animate-fade-in">
           {/* ── Header ─────────────────────────────────────────────── */}

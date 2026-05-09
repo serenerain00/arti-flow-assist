@@ -1,5 +1,6 @@
 import {
   BookOpen,
+  Box,
   CheckCircle,
   ClipboardList,
   Clock,
@@ -16,6 +17,7 @@ import type { LightboxImage } from "./ImageLightboxModal";
 import type { CaseItem } from "./cases";
 import { PATIENT_CLINICAL } from "./cases";
 import type { PatientVideoSession } from "./PatientVideoModal";
+import { AnatomyModel3D } from "./AnatomyModel3D";
 
 export const SURGEON_LIGHTBOX_IMAGES: LightboxImage[] = [
   {
@@ -31,7 +33,6 @@ export const SURGEON_LIGHTBOX_IMAGES: LightboxImage[] = [
     caption: "Reamers, trials, and impactors arranged in sequence",
   },
 ];
-
 
 interface Props {
   activeCase?: CaseItem;
@@ -209,11 +210,7 @@ export function SurgeonPanel({
                 key={v.id}
                 className="relative h-16 w-24 shrink-0 overflow-hidden rounded-lg border border-border/40 bg-black"
               >
-                <img
-                  src={v.src}
-                  alt={v.label}
-                  className="h-full w-full object-cover opacity-70"
-                />
+                <img src={v.src} alt={v.label} className="h-full w-full object-cover opacity-70" />
                 <div className="absolute inset-x-0 bottom-0 flex items-center justify-between bg-black/70 px-1.5 py-0.5 font-mono text-[8px] uppercase tracking-wider text-white/85">
                   <span className="truncate">{v.label}</span>
                   <span className="ml-1 text-white/55">{v.modality}</span>
@@ -280,15 +277,33 @@ export function SurgeonPanel({
 
       {/* ── Right column ── */}
       <div className="space-y-4">
+        {/* 3D anatomy — interactive shoulder joint with implant indicator. */}
+        <div className="rounded-2xl border border-accent/20 bg-accent/[0.04] p-5">
+          <PanelLabel icon={Box}>Anatomy · 3D</PanelLabel>
+          <div className="aspect-[16/11] w-full">
+            <AnatomyModel3D
+              caption={`${activeCase?.procedureShort ?? "RSA"} · ${
+                activeCase?.side ? `${activeCase.side} shoulder` : "Right shoulder"
+              }`}
+            />
+          </div>
+        </div>
+
         {/* Case summary */}
         <div className="rounded-2xl border border-accent/20 bg-accent/[0.04] p-5">
           <PanelLabel icon={ClipboardList}>Case Summary</PanelLabel>
           <div className="space-y-2.5 text-sm">
             {[
-              ["Patient", `${activeCase?.patientName ?? "Marcus Chen"} · ${activeCase?.patientAgeSex ?? "62M"}`],
+              [
+                "Patient",
+                `${activeCase?.patientName ?? "Marcus Chen"} · ${activeCase?.patientAgeSex ?? "62M"}`,
+              ],
               ["DOB", c.dob],
               ["MRN", activeCase?.patientMrn ?? "MRN 902‑118"],
-              ["Procedure", `${activeCase?.procedureShort ?? "RSA"} · ${activeCase?.side ? `${activeCase.side} shoulder` : "Right shoulder"}`],
+              [
+                "Procedure",
+                `${activeCase?.procedureShort ?? "RSA"} · ${activeCase?.side ? `${activeCase.side} shoulder` : "Right shoulder"}`,
+              ],
               ["Surgeon", activeCase?.surgeon ?? "Dr. Anika Patel"],
               ["Room / Time", `${activeCase?.room ?? "OR 326"} · ${activeCase?.time ?? "09:45"}`],
             ].map(([k, v]) => (

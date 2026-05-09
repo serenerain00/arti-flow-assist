@@ -42,58 +42,59 @@ export function CaseListScreen({
 
   return (
     <div className="flex h-screen w-full overflow-hidden bg-background">
-      <Sidebar onSleep={onSleep} onLogout={onLogout} activeKey="case" onNavigate={onSidebarNavigate} />
+      <Sidebar
+        onSleep={onSleep}
+        onLogout={onLogout}
+        activeKey="case"
+        onNavigate={onSidebarNavigate}
+      />
 
       <div className="flex min-w-0 flex-1 flex-col overflow-hidden">
-        <TopBar
-          staffName={staffName}
-          staffRole={staffRole}
-          initials={initials}
-        />
+        <TopBar staffName={staffName} staffRole={staffRole} initials={initials} onSleep={onSleep} />
 
         <main data-scroll className="min-h-0 flex-1 overflow-y-auto px-8 py-6 animate-fade-in">
           <div className="flex flex-col gap-5">
-          {/* Header */}
-          <div className="flex items-end justify-between gap-6">
-            <div>
-              <button
-                onClick={onBackHome}
-                className="mb-3 inline-flex items-center gap-1.5 font-mono text-[10px] uppercase tracking-[0.3em] text-muted-foreground transition-colors hover:text-foreground"
-              >
-                <ArrowLeft className="h-3 w-3" /> Home
-              </button>
-              <div className="font-mono text-[10px] uppercase tracking-[0.3em] text-primary">
-                Today's Schedule · {today}
+            {/* Header */}
+            <div className="flex items-end justify-between gap-6">
+              <div>
+                <button
+                  onClick={onBackHome}
+                  className="mb-3 inline-flex items-center gap-1.5 font-mono text-[10px] uppercase tracking-[0.3em] text-muted-foreground transition-colors hover:text-foreground"
+                >
+                  <ArrowLeft className="h-3 w-3" /> Home
+                </button>
+                <div className="font-mono text-[10px] uppercase tracking-[0.3em] text-primary">
+                  Today's Schedule · {today}
+                </div>
+                <h1 className="mt-1 text-4xl font-extralight tracking-tight">
+                  {TODAY_CASES.length} cases
+                  <span className="text-muted-foreground/60"> · OR 326</span>
+                </h1>
               </div>
-              <h1 className="mt-1 text-4xl font-extralight tracking-tight">
-                {TODAY_CASES.length} cases
-                <span className="text-muted-foreground/60"> · OR 326</span>
-              </h1>
-            </div>
 
-            <div className="grid grid-cols-3 gap-4 text-right">
-              {(["completed", "next", "scheduled"] as const).map((k) => {
-                const count = TODAY_CASES.filter((c) => c.status === k).length;
-                return (
-                  <div key={k}>
-                    <div className="font-mono text-[10px] uppercase tracking-[0.3em] text-muted-foreground">
-                      {STATUS_META[k].label}
+              <div className="grid grid-cols-3 gap-4 text-right">
+                {(["completed", "next", "scheduled"] as const).map((k) => {
+                  const count = TODAY_CASES.filter((c) => c.status === k).length;
+                  return (
+                    <div key={k}>
+                      <div className="font-mono text-[10px] uppercase tracking-[0.3em] text-muted-foreground">
+                        {STATUS_META[k].label}
+                      </div>
+                      <div className="mt-1 text-3xl font-thin tabular-nums">{count}</div>
                     </div>
-                    <div className="mt-1 text-3xl font-thin tabular-nums">{count}</div>
-                  </div>
-                );
-              })}
+                  );
+                })}
+              </div>
             </div>
-          </div>
 
-          {/* Cases list */}
-          <div className="mt-8 space-y-3">
-            {TODAY_CASES.map((c, idx) => (
-              <CaseRow key={c.id} c={c} index={idx} onSelect={() => onSelectCase(c)} />
-            ))}
-          </div>
+            {/* Cases list */}
+            <div className="mt-8 space-y-3">
+              {TODAY_CASES.map((c, idx) => (
+                <CaseRow key={c.id} c={c} index={idx} onSelect={() => onSelectCase(c)} />
+              ))}
+            </div>
 
-          <div className="h-32" />
+            <div className="h-32" />
           </div>
         </main>
 

@@ -72,9 +72,7 @@ export function RoleSwitcherBar({ activeRole, onRoleChange }: Props) {
               strokeWidth={1.8}
             />
             {label}
-            {isActive && (
-              <span className={cn("h-1.5 w-1.5 rounded-full", indicatorClass)} />
-            )}
+            {isActive && <span className={cn("h-1.5 w-1.5 rounded-full", indicatorClass)} />}
           </button>
         );
       })}

@@ -135,9 +135,7 @@ export function ScreensaverScreen({ onExit, onPrompt }: Props) {
         }}
       />
       <div className="screensaver-shimmer pointer-events-none absolute inset-x-0 bottom-[20vh] h-[1.5vh]" />
-      <div
-        className="screensaver-shimmer screensaver-shimmer-2 pointer-events-none absolute inset-x-0 bottom-[12vh] h-[1px]"
-      />
+      <div className="screensaver-shimmer screensaver-shimmer-2 pointer-events-none absolute inset-x-0 bottom-[12vh] h-[1px]" />
 
       {/* ── Bokeh particles ──────────────────────────────────────────── */}
       <div className="pointer-events-none absolute inset-0 overflow-hidden">

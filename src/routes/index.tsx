@@ -13,6 +13,22 @@ import {
 import { MultiViewScreen } from "@/components/arti/MultiViewScreen";
 import { ScheduleScreen } from "@/components/arti/ScheduleScreen";
 import { SurgeonsScreen } from "@/components/arti/SurgeonsScreen";
+import { SurgeonProfileScreen } from "@/components/arti/SurgeonProfileScreen";
+import { TimeOutModal } from "@/components/arti/TimeOutModal";
+import { SettingsScreen } from "@/components/arti/SettingsScreen";
+import { AdminSettingsScreen } from "@/components/arti/AdminSettingsScreen";
+import { SmartSettingsScreen } from "@/components/arti/smart/SmartSettingsScreen";
+import {
+  DEVICES as SMART_DEVICES,
+  type PropertySpec as SmartPropertySpec,
+  type SmartDevice,
+} from "@/components/arti/smart/devices";
+import {
+  loadDeviceState as loadSmartDeviceState,
+  saveDeviceState as saveSmartDeviceState,
+  resetAllDeviceStates as resetAllSmartDeviceStates,
+} from "@/components/arti/smart/storage";
+import { ResetAllConfirmModal } from "@/components/arti/smart/ResetAllConfirmModal";
 import { PatientsScreen } from "@/components/arti/PatientsScreen";
 import { ConsolesScreen } from "@/components/arti/ConsolesScreen";
 import { VideoLibraryScreen } from "@/components/arti/VideoLibraryScreen";
@@ -43,7 +59,12 @@ import {
 } from "@/components/arti/ImageLightboxModal";
 import { PREF_CARD_IMAGES } from "@/components/arti/PreferenceCard";
 import { SCRUB_LIGHTBOX_IMAGES } from "@/components/arti/ScrubTechPanel";
-import type { PersonRole, PersonScheduleView } from "@/components/arti/schedule";
+import type {
+  PersonRole,
+  PersonScheduleView,
+  PrefCardImage,
+  Surgeon,
+} from "@/components/arti/schedule";
 import { TODAY_CASES, PATIENT_CLINICAL, type CaseItem } from "@/components/arti/cases";
 import {
   getCasesForDate,
@@ -51,6 +72,8 @@ import {
   toDateKey,
   summarizeDay,
   SCHEDULE_CASES,
+  SURGEONS,
+  surgeonHasPrefCards,
   type ServiceLine,
 } from "@/components/arti/schedule";
 import { ArtiVoiceProvider, useArtiVoiceContext } from "@/hooks/ArtiVoiceContext";
@@ -126,6 +149,23 @@ export interface DashboardActions {
 export type DashboardActionsRef = React.MutableRefObject<DashboardActions | null>;
 
 /**
+ * Live mutators the Smart Settings screen exposes so voice tools can
+ * reflect state changes in the UI immediately. When the screen is not
+ * mounted, the route falls back to localStorage-only writes (Mock OR
+ * preview won't update visibly until the user opens the screen).
+ */
+export interface SmartSettingsActions {
+  /** Switch the focused device — must be a valid id from DEVICES. */
+  selectDevice: (id: string) => void;
+  /** Apply a property change so the screen + Mock OR preview re-render. */
+  applyPropertyChange: (deviceId: string, key: string, value: boolean | number | string) => void;
+  /** Reload every device's state from storage — called after bulk reset. */
+  reloadAllStates: () => void;
+}
+
+export type SmartSettingsActionsRef = React.MutableRefObject<SmartSettingsActions | null>;
+
+/**
  * Root that wires the shared voice session in once. We use refs to bridge
  * the agent's tool callbacks (registered up here in the provider) to the
  * actual state setters living inside the dashboard components — that way
@@ -157,6 +197,13 @@ function ArtiWallAuthenticated({ onLogout }: { onLogout: () => void }) {
       | "onShowConsoles"
       | "onFocusConsole"
       | "onShowLibrary"
+      | "onShowSettings"
+      | "onShowAdminSettings"
+      | "onShowSmartSettings"
+      | "onSelectSmartDevice"
+      | "onSetSmartProperty"
+      | "onToggleSmartDevice"
+      | "onResetAllSmartDevices"
       | "onCloseTopmostModal"
       | "onLibraryFilterCategory"
       | "onLibrarySearch"
@@ -186,6 +233,14 @@ function ArtiWallAuthenticated({ onLogout }: { onLogout: () => void }) {
       | "onShowPersonSchedule"
       | "onSetPersonScheduleView"
       | "onClosePersonSchedule"
+      | "onOpenSurgeonProfile"
+      | "onExpandProcedure"
+      | "onCollapseProcedure"
+      | "onNextProcedure"
+      | "onPreviousProcedure"
+      | "onRenamePrefCardImage"
+      | "onRemovePrefCardImage"
+      | "onPromptPrefCardUpload"
       | "onOpenHowToVideo"
       | "onOpenResearchPapers"
       | "onVideoPlay"
@@ -224,6 +279,13 @@ function ArtiWallAuthenticated({ onLogout }: { onLogout: () => void }) {
     onShowConsoles: () => {},
     onFocusConsole: () => {},
     onShowLibrary: () => {},
+    onShowSettings: () => {},
+    onShowAdminSettings: () => {},
+    onShowSmartSettings: () => {},
+    onSelectSmartDevice: () => notAvailable(),
+    onSetSmartProperty: () => notAvailable(),
+    onToggleSmartDevice: () => notAvailable(),
+    onResetAllSmartDevices: () => notAvailable(),
     onCloseTopmostModal: () => {},
     onLibraryFilterCategory: () => {},
     onLibrarySearch: () => {},
@@ -253,6 +315,14 @@ function ArtiWallAuthenticated({ onLogout }: { onLogout: () => void }) {
     onShowPersonSchedule: () => {},
     onSetPersonScheduleView: () => {},
     onClosePersonSchedule: () => {},
+    onOpenSurgeonProfile: () => notAvailable(),
+    onExpandProcedure: () => notAvailable(),
+    onCollapseProcedure: () => notAvailable(),
+    onNextProcedure: () => notAvailable(),
+    onPreviousProcedure: () => notAvailable(),
+    onRenamePrefCardImage: () => notAvailable(),
+    onRemovePrefCardImage: () => notAvailable(),
+    onPromptPrefCardUpload: () => notAvailable(),
     onOpenHowToVideo: () => notAvailable(),
     onOpenResearchPapers: () => notAvailable(),
     onVideoPlay: () => notAvailable(),
@@ -282,6 +352,12 @@ function ArtiWallAuthenticated({ onLogout }: { onLogout: () => void }) {
 
   // Dashboard-only tool bridge. `null` when no dashboard is mounted.
   const dashboardActionsRef = useRef<DashboardActions | null>(null);
+
+  // Smart Settings ref-bridge — populated by SmartSettingsScreen on mount.
+  // When the screen is open, voice device-change tools call into it so the
+  // UI + Mock OR widget update instantly. When closed, the route falls
+  // back to localStorage-only writes.
+  const smartSettingsActionsRef = useRef<SmartSettingsActions | null>(null);
 
   // Intraop-only tool bridge. Populated while the IntraopDashboard is on screen.
   const intraopActionsRef = useRef<IntraopActions | null>(null);
@@ -325,6 +401,17 @@ function ArtiWallAuthenticated({ onLogout }: { onLogout: () => void }) {
       onShowConsoles: () => navCallbacksRef.current.onShowConsoles?.(),
       onFocusConsole: (id) => navCallbacksRef.current.onFocusConsole?.(id),
       onShowLibrary: () => navCallbacksRef.current.onShowLibrary?.(),
+      onShowSettings: () => navCallbacksRef.current.onShowSettings?.(),
+      onShowAdminSettings: () => navCallbacksRef.current.onShowAdminSettings?.(),
+      onShowSmartSettings: () => navCallbacksRef.current.onShowSmartSettings?.(),
+      onSelectSmartDevice: (d) =>
+        navCallbacksRef.current.onSelectSmartDevice?.(d) ?? notAvailable(),
+      onSetSmartProperty: (d, p, v) =>
+        navCallbacksRef.current.onSetSmartProperty?.(d, p, v) ?? notAvailable(),
+      onToggleSmartDevice: (d, on, p) =>
+        navCallbacksRef.current.onToggleSmartDevice?.(d, on, p) ?? notAvailable(),
+      onResetAllSmartDevices: (c) =>
+        navCallbacksRef.current.onResetAllSmartDevices?.(c) ?? notAvailable(),
       onCloseTopmostModal: () => navCallbacksRef.current.onCloseTopmostModal?.(),
       onLibraryFilterCategory: (c) => navCallbacksRef.current.onLibraryFilterCategory?.(c),
       onLibrarySearch: (q) => navCallbacksRef.current.onLibrarySearch?.(q),
@@ -356,6 +443,19 @@ function ArtiWallAuthenticated({ onLogout }: { onLogout: () => void }) {
       onShowPersonSchedule: (n, r) => navCallbacksRef.current.onShowPersonSchedule?.(n, r),
       onSetPersonScheduleView: (v) => navCallbacksRef.current.onSetPersonScheduleView?.(v),
       onClosePersonSchedule: () => navCallbacksRef.current.onClosePersonSchedule?.(),
+      onOpenSurgeonProfile: (s, p) =>
+        navCallbacksRef.current.onOpenSurgeonProfile?.(s, p) ?? notAvailable(),
+      onExpandProcedure: (p) => navCallbacksRef.current.onExpandProcedure?.(p) ?? notAvailable(),
+      onCollapseProcedure: (p) =>
+        navCallbacksRef.current.onCollapseProcedure?.(p) ?? notAvailable(),
+      onNextProcedure: () => navCallbacksRef.current.onNextProcedure?.() ?? notAvailable(),
+      onPreviousProcedure: () => navCallbacksRef.current.onPreviousProcedure?.() ?? notAvailable(),
+      onRenamePrefCardImage: (img, label) =>
+        navCallbacksRef.current.onRenamePrefCardImage?.(img, label) ?? notAvailable(),
+      onRemovePrefCardImage: (img) =>
+        navCallbacksRef.current.onRemovePrefCardImage?.(img) ?? notAvailable(),
+      onPromptPrefCardUpload: (proc) =>
+        navCallbacksRef.current.onPromptPrefCardUpload?.(proc) ?? notAvailable(),
 
       onToggleTimeOutItem: (id) =>
         dashboardActionsRef.current?.toggleTimeOutItem(id) ?? notAvailable(),
@@ -471,6 +571,7 @@ function ArtiWallAuthenticated({ onLogout }: { onLogout: () => void }) {
       <ArtiWall
         navCallbacksRef={navCallbacksRef}
         dashboardActionsRef={dashboardActionsRef}
+        smartSettingsActionsRef={smartSettingsActionsRef}
         intraopActionsRef={intraopActionsRef}
         dashboardContextRef={dashboardContextRef}
         contextRef={contextRef}
@@ -504,11 +605,15 @@ type ArtiPhase =
   | "intraop"
   | "schedule"
   | "surgeons"
+  | "surgeon-profile"
   | "patients"
   | "consoles"
   | "library"
   | "journey"
-  | "screensaver";
+  | "screensaver"
+  | "settings"
+  | "admin-settings"
+  | "smart-settings";
 
 interface ArtiWallProps {
   navCallbacksRef: React.MutableRefObject<
@@ -525,6 +630,13 @@ interface ArtiWallProps {
       | "onShowConsoles"
       | "onFocusConsole"
       | "onShowLibrary"
+      | "onShowSettings"
+      | "onShowAdminSettings"
+      | "onShowSmartSettings"
+      | "onSelectSmartDevice"
+      | "onSetSmartProperty"
+      | "onToggleSmartDevice"
+      | "onResetAllSmartDevices"
       | "onCloseTopmostModal"
       | "onLibraryFilterCategory"
       | "onLibrarySearch"
@@ -554,6 +666,14 @@ interface ArtiWallProps {
       | "onShowPersonSchedule"
       | "onSetPersonScheduleView"
       | "onClosePersonSchedule"
+      | "onOpenSurgeonProfile"
+      | "onExpandProcedure"
+      | "onCollapseProcedure"
+      | "onNextProcedure"
+      | "onPreviousProcedure"
+      | "onRenamePrefCardImage"
+      | "onRemovePrefCardImage"
+      | "onPromptPrefCardUpload"
       | "onOpenHowToVideo"
       | "onOpenResearchPapers"
       | "onVideoPlay"
@@ -582,6 +702,7 @@ interface ArtiWallProps {
     >
   >;
   dashboardActionsRef: DashboardActionsRef;
+  smartSettingsActionsRef: SmartSettingsActionsRef;
   intraopActionsRef: IntraopActionsRef;
   dashboardContextRef: React.MutableRefObject<() => string>;
   contextRef: React.MutableRefObject<() => string>;
@@ -637,6 +758,7 @@ function getScrollTarget(): HTMLElement {
 function ArtiWall({
   navCallbacksRef,
   dashboardActionsRef,
+  smartSettingsActionsRef,
   intraopActionsRef,
   dashboardContextRef,
   contextRef,
@@ -647,6 +769,20 @@ function ArtiWall({
   onLogout,
 }: ArtiWallProps) {
   const scrollIntervalRef = useRef<ReturnType<typeof setInterval> | null>(null);
+
+  // When a voice command selects a device while Smart Settings isn't open
+  // yet, we stash the id here so the screen can adopt it on mount.
+  const [pendingSmartDeviceId, setPendingSmartDeviceId] = useState<string | null>(null);
+
+  // Admin Settings unlock state — session-scoped so navigating away from
+  // Admin and coming back doesn't re-prompt for the password. Browser
+  // refresh remounts ArtiWall and resets this to false.
+  const [adminUnlocked, setAdminUnlocked] = useState(false);
+
+  // "Are you sure?" modal for the bulk reset of every smart device.
+  // Owned by the route so voice + click both control it through the
+  // same surface, and so close_topmost_modal can dismiss it.
+  const [resetAllConfirmOpen, setResetAllConfirmOpen] = useState(false);
 
   // Keep scroll handlers current on every render — stableCallbacks delegates through the ref.
   scrollActionsRef.current = {
@@ -695,6 +831,23 @@ function ArtiWall({
   );
   // Which day's detail drawer is open on the Schedule screen. Null = closed.
   const [selectedScheduleDate, setSelectedScheduleDate] = useState<string | null>(null);
+
+  // Time-out checklist state — lifted up so the case-start modal and the
+  // nurse panel share the same source of truth (checks made in either
+  // surface immediately reflect in the other).
+  const [timeOutChecked, setTimeOutChecked] = useState<Set<TimeOutId>>(() => new Set());
+  const handleToggleTimeOutItem = useCallback((id: TimeOutId): ArtiToolResult => {
+    setTimeOutChecked((prev) => {
+      const next = new Set(prev);
+      if (next.has(id)) next.delete(id);
+      else next.add(id);
+      return next;
+    });
+    return { ok: true };
+  }, []);
+  // Whether the case-start time-out modal is open. Triggered by start_case
+  // (voice) or the Start Case button (click). Continue → setPhase("intraop").
+  const [timeOutModalOpen, setTimeOutModalOpen] = useState(false);
 
   // Schedule filter state — lifted up from ScheduleScreen so voice tools can
   // drive it. Service lines default to all visible; surgeon "all" = no filter.
@@ -823,6 +976,233 @@ function ArtiWall({
     setLightboxOpen(true);
   }, []);
 
+  // ── Surgeon profile state ────────────────────────────────────────────────
+  // Active surgeon for the SurgeonProfileScreen. Set on card click / voice
+  // open_surgeon_profile; cleared when the user navigates away.
+  const [activeSurgeonName, setActiveSurgeonName] = useState<string | null>(null);
+  // Which procedure card on the profile is expanded. null = let the screen
+  // pick the first one.
+  const [expandedProcedureSlug, setExpandedProcedureSlug] = useState<string | null>(null);
+
+  // Per-image overrides — applied on top of seed data so seed stays stable
+  // and we can still revert. Removed = soft-deleted ids; renames = id→label;
+  // uploads = `${surgeonName}::${procedureSlug}` → appended images.
+  const [imgRemoved, setImgRemoved] = useState<Set<string>>(() => new Set());
+  const [imgRenames, setImgRenames] = useState<Record<string, string>>({});
+  const [imgUploads, setImgUploads] = useState<Record<string, PrefCardImage[]>>({});
+
+  const getProcedureImages = useCallback(
+    (surgeonName: string, procedureSlug: string): PrefCardImage[] => {
+      const surgeon = SURGEONS.find((s) => s.name === surgeonName);
+      const proc = surgeon?.procedures?.find((p) => p.slug === procedureSlug);
+      if (!proc) return [];
+      const uploadKey = `${surgeonName}::${procedureSlug}`;
+      const all: PrefCardImage[] = [...proc.seedImages, ...(imgUploads[uploadKey] ?? [])];
+      return all
+        .filter((img) => !imgRemoved.has(img.id))
+        .map((img) => ({ ...img, label: imgRenames[img.id] ?? img.label }));
+    },
+    [imgRemoved, imgRenames, imgUploads],
+  );
+
+  /**
+   * Resolve a spoken phrase to a smart device. Tries id, exact name,
+   * substring on name, then a numeric variant for "boom 1" / "boom one".
+   */
+  const resolveSmartDevice = useCallback((phrase: string): SmartDevice | undefined => {
+    const q = phrase.trim().toLowerCase();
+    if (!q) return undefined;
+    // Normalize spelled numbers so "boom one" matches "boom 1".
+    const NUM_WORDS: Record<string, string> = {
+      one: "1",
+      two: "2",
+      three: "3",
+      four: "4",
+      five: "5",
+    };
+    const norm = q.replace(/\b(one|two|three|four|five)\b/g, (m) => NUM_WORDS[m] ?? m);
+    const direct =
+      SMART_DEVICES.find((d) => d.id === q) ??
+      SMART_DEVICES.find((d) => d.name.toLowerCase() === q) ??
+      SMART_DEVICES.find((d) => d.name.toLowerCase().includes(norm)) ??
+      SMART_DEVICES.find((d) => d.id.toLowerCase().includes(norm));
+    if (direct) return direct;
+    // Word-bag fallback: every token of the query has to appear somewhere
+    // in the name (covers "first surgical boom" → boom-1 if name says "boom 1").
+    const tokens = norm.split(/\s+/).filter(Boolean);
+    return SMART_DEVICES.find((d) => {
+      const hay = (d.name + " " + d.id + " " + (d.group ?? "")).toLowerCase();
+      return tokens.every((t) => hay.includes(t));
+    });
+  }, []);
+
+  /** Resolve a spoken property phrase to one of the device's spec entries. */
+  const resolvePropertySpec = useCallback(
+    (device: SmartDevice, phrase: string): SmartPropertySpec | undefined => {
+      const q = phrase
+        .trim()
+        .toLowerCase()
+        .replace(/[\s_-]+/g, "");
+      if (!q) return undefined;
+      const norm = (s: string) => s.toLowerCase().replace(/[\s_-]+/g, "");
+      // Exact key, then label, then alias map (covers "color temp" → color_temp).
+      const ALIAS: Record<string, string> = {
+        colortemp: "color_temp",
+        colortemperature: "color_temp",
+        kelvin: "color_temp",
+        spotsize: "spot_size",
+        spot: "spot_size",
+        temperature: "setpoint",
+        temp: "setpoint",
+        humidity: "target",
+        airflow: "exchanges",
+        power: "on",
+        lock: "locked",
+      };
+      const aliased = ALIAS[q] ?? q;
+      return (
+        device.propertySpecs.find((s) => norm(s.key) === aliased) ??
+        device.propertySpecs.find((s) => norm(s.label) === q) ??
+        device.propertySpecs.find((s) => norm(s.label).includes(q)) ??
+        device.propertySpecs.find((s) => norm(s.key).includes(aliased))
+      );
+    },
+    [],
+  );
+
+  /** Coerce + clamp a raw value into the spec's expected type. Returns undefined on failure. */
+  const coercePropertyValue = useCallback(
+    (
+      spec: SmartPropertySpec,
+      raw: boolean | number | string,
+    ): boolean | number | string | undefined => {
+      if (spec.kind === "toggle") {
+        if (typeof raw === "boolean") return raw;
+        if (typeof raw === "number") return raw !== 0;
+        const s = String(raw).trim().toLowerCase();
+        if (["true", "on", "yes", "1", "lock", "locked", "open"].includes(s)) return true;
+        if (["false", "off", "no", "0", "unlock", "unlocked", "close", "closed"].includes(s)) {
+          return false;
+        }
+        return undefined;
+      }
+      if (spec.kind === "select") {
+        const s = String(raw).trim().toLowerCase();
+        const opt =
+          spec.options.find((o) => o.value.toLowerCase() === s) ??
+          spec.options.find((o) => o.label.toLowerCase() === s) ??
+          spec.options.find((o) => o.label.toLowerCase().includes(s));
+        return opt?.value;
+      }
+      // percent or kelvin → numeric, clamped.
+      const min = spec.min ?? (spec.kind === "kelvin" ? 2700 : 0);
+      const max = spec.max ?? (spec.kind === "kelvin" ? 6500 : 100);
+      const n = typeof raw === "number" ? raw : Number(String(raw).replace(/[^\d.-]/g, ""));
+      if (!Number.isFinite(n)) return undefined;
+      return Math.max(min, Math.min(max, n));
+    },
+    [],
+  );
+
+  /** Resolve a spoken phrase ("Patel", "Dr. Patel", "Anika") to a Surgeon. */
+  const resolveSurgeon = useCallback((phrase: string): Surgeon | undefined => {
+    const q = phrase.trim().toLowerCase();
+    if (!q) return undefined;
+    return (
+      SURGEONS.find((s) => s.name.toLowerCase() === q) ??
+      SURGEONS.find((s) => s.name.toLowerCase().includes(q)) ??
+      SURGEONS.find((s) =>
+        s.name
+          .toLowerCase()
+          .split(/\s+/)
+          .some((part) => part.replace(/[^\w]/g, "") === q),
+      )
+    );
+  }, []);
+
+  /** Resolve a spoken phrase or 1-based index to an image within the active procedure. */
+  const resolveProcedureImage = useCallback(
+    (surgeonName: string, procedureSlug: string, target: string): PrefCardImage | undefined => {
+      const images = getProcedureImages(surgeonName, procedureSlug);
+      if (!images.length) return undefined;
+      const t = target.trim().toLowerCase();
+      // 1-based index
+      const idx = Number(t);
+      if (Number.isFinite(idx) && idx >= 1 && idx <= images.length) return images[idx - 1];
+      // Exact label match, then substring match
+      return (
+        images.find((i) => i.label.toLowerCase() === t) ??
+        images.find((i) => i.label.toLowerCase().includes(t)) ??
+        images.find((i) => t.split(/\s+/).every((w) => i.label.toLowerCase().includes(w)))
+      );
+    },
+    [getProcedureImages],
+  );
+
+  const handleOpenSurgeonProfile = useCallback(
+    (surgeon: Surgeon, opts?: { procedureSlug?: string }) => {
+      setActiveSurgeonName(surgeon.name);
+      setExpandedProcedureSlug(opts?.procedureSlug ?? null);
+      setPhase("surgeon-profile");
+    },
+    [],
+  );
+
+  const handleRenameProcedureImage = useCallback(
+    (procedureSlug: string, imageId: string, newLabel: string) => {
+      setImgRenames((prev) => ({ ...prev, [imageId]: newLabel }));
+    },
+    [],
+  );
+
+  const handleRemoveProcedureImage = useCallback((procedureSlug: string, imageId: string) => {
+    setImgRemoved((prev) => {
+      const next = new Set(prev);
+      next.add(imageId);
+      return next;
+    });
+  }, []);
+
+  const handleUploadProcedureImages = useCallback(
+    (procedureSlug: string, files: File[]) => {
+      if (!activeSurgeonName) return;
+      const uploadKey = `${activeSurgeonName}::${procedureSlug}`;
+      const additions: PrefCardImage[] = files.map((f, i) => ({
+        id: `upload-${Date.now()}-${i}-${Math.random().toString(36).slice(2, 8)}`,
+        src: URL.createObjectURL(f),
+        alt: f.name,
+        label: f.name.replace(/\.[^/.]+$/, ""),
+        caption: "Uploaded",
+      }));
+      setImgUploads((prev) => ({
+        ...prev,
+        [uploadKey]: [...(prev[uploadKey] ?? []), ...additions],
+      }));
+    },
+    [activeSurgeonName],
+  );
+
+  const handleOpenProcedureImageLightbox = useCallback(
+    (procedureSlug: string, imageIndex: number) => {
+      if (!activeSurgeonName) return;
+      const surgeon = SURGEONS.find((s) => s.name === activeSurgeonName);
+      const proc = surgeon?.procedures?.find((p) => p.slug === procedureSlug);
+      if (!surgeon || !proc) return;
+      const images = getProcedureImages(surgeon.name, procedureSlug);
+      openLightbox(
+        images.map((img) => ({
+          src: img.src,
+          alt: img.alt,
+          label: img.label,
+          caption: img.caption,
+        })),
+        imageIndex,
+        `${surgeon.name} · ${proc.name}`,
+      );
+    },
+    [activeSurgeonName, getProcedureImages, openLightbox],
+  );
+
   // ── Reminders ────────────────────────────────────────────────────────────
   // Pending reminders are scheduled one-shot via setTimeout. When a reminder
   // fires we (1) move it to firedReminders so the toast component renders
@@ -931,11 +1311,15 @@ function ArtiWall({
     intraop: "intraoperative · case active (live surgery)",
     schedule: "schedule / calendar",
     surgeons: "surgeons directory",
+    "surgeon-profile": "surgeon procedure preferences (per-procedure preference cards + images)",
     patients: "patients today",
     consoles: "OR equipment tower / consoles",
     library: "video library",
     journey: "how-it-was-built journey",
     screensaver: "calm sunrise screensaver — pre-patient ambient mode",
+    settings: "preferences / settings landing",
+    "admin-settings": "admin settings (password-protected)",
+    "smart-settings": "smart device controls (lights, displays, environment, audio, doors)",
   };
 
   // Keep contextRef current so Claude always gets a fresh state snapshot.
@@ -1010,19 +1394,51 @@ function ArtiWall({
         const which =
           firedReminders.length > 0
             ? "reminder toast"
-            : personSchedule.open
-              ? "person schedule modal"
-              : howToOpen
-                ? "how-to video modal"
-                : lightboxOpen
-                  ? "image lightbox"
-                  : selectedScheduleDate && phase === "schedule"
-                    ? "schedule day drawer"
-                    : null;
+            : resetAllConfirmOpen
+              ? "reset-all confirm modal"
+              : timeOutModalOpen
+                ? "time-out modal"
+                : personSchedule.open
+                  ? "person schedule modal"
+                  : howToOpen
+                    ? "how-to video modal"
+                    : lightboxOpen
+                      ? "image lightbox"
+                      : selectedScheduleDate && phase === "schedule"
+                        ? "schedule day drawer"
+                        : null;
         return which
           ? `TOPMOST: ${which} — generic 'close' → close_topmost_modal.`
           : `TOPMOST: none route-level (check dashboard block for patient details / quad view).`;
       })(),
+      resetAllConfirmOpen
+        ? [
+            `Reset-all confirmation modal: OPEN — asking the user to confirm bulk-reset of EVERY smart device.`,
+            `  VERB ROUTING ON THIS MODAL:`,
+            `    'yes' / 'confirm' / 'do it' / 'reset' / 'go ahead' / 'I'm sure' → reset_all_smart_devices({confirmed: true}). Executes the reset and closes the modal.`,
+            `    'no' / 'cancel' / 'never mind' / 'close' / 'back' → close_topmost_modal.`,
+            `    Any other smart-settings command should NOT fire while this modal is open — guide the user back to yes/no first.`,
+          ].join("\n")
+        : `Reset-all confirmation modal: closed`,
+      timeOutModalOpen
+        ? (() => {
+            const all: TimeOutId[] = ["patient", "site", "procedure", "allergies"];
+            const pending = all.filter((id) => !timeOutChecked.has(id));
+            const allChecked = pending.length === 0;
+            return [
+              `Time-out modal: OPEN — pre-incision Universal Protocol checklist. The case has NOT started yet — Arti must NEVER respond 'already started' on this screen.`,
+              `  Items required (4 total): patient, site, procedure, allergies`,
+              `  Confirmed (${timeOutChecked.size}/4): ${[...timeOutChecked].join(", ") || "none"}`,
+              `  Pending: ${pending.join(", ") || "none — all four are green"}`,
+              `  VERB ROUTING ON THIS SCREEN:`,
+              `    'check site' / 'mark patient confirmed' / 'allergies are good' → toggle_timeout_item ({id: "patient"|"site"|"procedure"|"allergies"}). NEVER say 'already done' before calling — call the tool and report the new state.`,
+              allChecked
+                ? `    'start' / 'start case' / 'continue' / 'go' / 'ready to start' / 'we're ready' → start_case (NO query). ALL 4 ITEMS ARE CONFIRMED — fire the tool; route returns ok:true and transitions to intraop. DO NOT respond 'already started'.`
+                : `    'start' / 'start case' / 'continue' / 'go' → start_case will REJECT (only ${timeOutChecked.size}/4 confirmed). Respond by naming the pending items so the user can mark them: ${pending.join(", ")}.`,
+              `    'cancel' / 'back' / 'close' → close_topmost_modal (returns to pre-op WITHOUT starting the case).`,
+            ].join("\n");
+          })()
+        : `Time-out modal: closed`,
       // Journey-mode hint — when on the journey screen, pause/next/exit
       // route to journey_* tools, NOT video_pause / open_case / etc.
       phase === "journey"
@@ -1103,6 +1519,93 @@ function ArtiWall({
       phase === "consoles" && focusedConsoleId
         ? `Focused console on tower: ${focusedConsoleId}. Telemetry detail panel is showing.`
         : "",
+      // Surgeon-profile screen — exposes the active surgeon, their procedures,
+      // the currently-expanded procedure, and that procedure's images so
+      // voice rename/remove/upload tools can target by name or 1-based index.
+      // Also lists EXACT verb → tool routing so generic 'close' / 'next' /
+      // 'previous' don't fall through to close_topmost_modal / open_case.
+      (() => {
+        if (phase !== "surgeon-profile" || !activeSurgeonName) return "";
+        const surgeon = SURGEONS.find((s) => s.name === activeSurgeonName);
+        if (!surgeon) return `Surgeon profile: requested "${activeSurgeonName}" — not found.`;
+        const procs = surgeon.procedures ?? [];
+        const procList = procs.length
+          ? procs
+              .map(
+                (p, i) =>
+                  `    ${i + 1}. slug="${p.slug}" name="${p.name}" — ${p.slug === expandedProcedureSlug ? "EXPANDED" : "collapsed"}`,
+              )
+              .join("\n")
+          : "    (no procedures on file)";
+        const expandedProc = procs.find((p) => p.slug === expandedProcedureSlug);
+        const expandedImages = expandedProc
+          ? getProcedureImages(surgeon.name, expandedProc.slug)
+          : [];
+        const imageList = expandedProc
+          ? expandedImages.length
+            ? expandedImages
+                .map((img, i) => `      ${i + 1}. id="${img.id}" label="${img.label}"`)
+                .join("\n")
+            : "      (no images on this procedure)"
+          : "";
+        const expandedLine = expandedProc
+          ? `  CURRENTLY EXPANDED: "${expandedProc.name}" (slug=${expandedProc.slug}). Generic 'close' / 'collapse' / 'close panel' / 'close procedure' on this screen → collapse_procedure (NO 'procedure' arg).`
+          : `  CURRENTLY EXPANDED: none. Generic 'close' is a no-op here — there is no overlay to close.`;
+        const imagesBlock = expandedProc
+          ? `  Images on the expanded procedure (${expandedImages.length}):\n${imageList}`
+          : "";
+        return [
+          `Surgeon profile: OPEN — ${surgeon.name} (${surgeon.specialty}).`,
+          `  Procedures on this surgeon (${procs.length}) — match user phrases against EITHER slug OR name:`,
+          procList,
+          expandedLine,
+          imagesBlock,
+          ``,
+          `  VERB ROUTING ON THIS SCREEN (do NOT fall through to other tools):`,
+          `    'open <X>' / 'show <X>' / 'pull up <X>' / 'expand <X>' where X is a slug or procedure name → expand_procedure({procedure: X}). Acronyms like RSA/RCR/ACL/CABG/FESS map to slugs. ALWAYS call this — do not assume "already open".`,
+          `    'close' / 'close it' / 'close that' / 'close panel' / 'close procedure' / 'close procedure panel' / 'collapse' / 'collapse it' / 'hide it' → collapse_procedure (omit \`procedure\` for bare 'close', or pass slug/name when user names one). NEVER use close_topmost_modal here.`,
+          `    'next' / 'next procedure' / 'next one' / 'show me the next procedure' / 'arti next' → next_procedure (NEVER open_case here — 'next' on this screen means next procedure card, not next OR case).`,
+          `    'previous' / 'previous one' / 'go back' / 'previous procedure' → previous_procedure.`,
+          `    'upload images' / 'upload a picture' / 'add images for <X>' → prompt_pref_card_upload (pass {procedure: X} if a procedure was named — the route auto-expands it first).`,
+          `    'rename <image-or-index> to <new>' → rename_pref_card_image. 'remove <image-or-index>' → remove_pref_card_image.`,
+          `    'back to surgeons' / 'show me the directory' → navigate_surgeons.`,
+        ].join("\n");
+      })(),
+      // Smart Settings screen — lists every device + property so voice
+      // tools can target by name/keyword. Even when the screen isn't
+      // mounted, set_smart_property / toggle_smart_device still work; this
+      // block is most useful when the user is on the screen.
+      (() => {
+        if (phase !== "smart-settings") return "";
+        const deviceLines = SMART_DEVICES.map((d) => {
+          const props = d.propertySpecs
+            .map((s) => {
+              if (s.kind === "select") {
+                return `${s.key} (select: ${s.options.map((o) => o.value).join("|")})`;
+              }
+              if (s.kind === "kelvin") {
+                return `${s.key} (kelvin ${s.min ?? 2700}–${s.max ?? 6500})`;
+              }
+              if (s.kind === "percent") {
+                return `${s.key} (${s.kind} ${s.min ?? 0}–${s.max ?? 100}${s.unit ?? "%"})`;
+              }
+              return `${s.key} (${s.kind})`;
+            })
+            .join(", ");
+          return `    - id="${d.id}" name="${d.name}" · props: ${props}`;
+        }).join("\n");
+        return [
+          `Smart Settings: OPEN${pendingSmartDeviceId ? ` (selected device id="${pendingSmartDeviceId}")` : ""}.`,
+          `  Devices on this screen — voice tools resolve by name OR id:`,
+          deviceLines,
+          `  VERB ROUTING:`,
+          `    'open <device>' / 'show <device> controls' / 'select <device>' → select_smart_device({device}).`,
+          `    'dim <device> to 60' / 'set <device> brightness to 80' → set_smart_property({device, property:"brightness", value: 60}).`,
+          `    'set <device> color temp to 4000' → set_smart_property({device, property:"color_temp", value: 4000}).`,
+          `    'turn on/off <device>' / 'lock the door' → toggle_smart_device({device, on:true|false}).`,
+          `    Bare 'set brightness to 50' (no device named) → set_smart_property with device omitted; route uses the currently-selected device.`,
+        ].join("\n");
+      })(),
     ];
 
     // Schedule filter state — always included so Arti knows the current
@@ -1161,7 +1664,11 @@ function ArtiWall({
     setPhase((p) => (p === "waking" ? "greeting" : p));
   }, []);
   const handleSleep = useCallback(() => {
-    setPhase("sleep");
+    // Mirror the voice "sleep" path: just nap Arti (dim the sparkle, stop
+    // the mic) — do NOT navigate to the sleep screen. The voice handler
+    // is registered by ArtiWall on `navCallbacksRef.current.onSleep`, so
+    // we route through it to keep both surfaces identical.
+    navCallbacksRef.current.onSleep?.();
   }, []);
 
   /**
@@ -1251,6 +1758,8 @@ function ArtiWall({
     setLightboxOpen(false);
     setHowToOpen(false);
     setPersonSchedule((prev) => (prev.open ? { ...prev, open: false } : prev));
+    setTimeOutModalOpen(false);
+    setResetAllConfirmOpen(false);
   }, []);
 
   // Shared sidebar click handler — used by every screen that renders <Sidebar>.
@@ -1296,7 +1805,7 @@ function ArtiWall({
           setPhase("screensaver");
           break;
         case "preferences":
-          // not yet implemented — ignore
+          setPhase("settings");
           break;
       }
     },
@@ -1727,21 +2236,39 @@ function ArtiWall({
       if (phase === "intraop") {
         return { ok: true, state: { already: true } };
       }
+      // If the time-out modal is already open and all 4 items are confirmed,
+      // treat start_case (and bare "continue" / "ready to start") as the
+      // Continue button → enter intraop.
+      if (timeOutModalOpen) {
+        if (timeOutChecked.size === 4) {
+          setTimeOutModalOpen(false);
+          setPhase("intraop");
+          return { ok: true, state: { continued: true } };
+        }
+        return {
+          ok: false,
+          reason: `time-out incomplete (${timeOutChecked.size}/4) — confirm remaining items first`,
+        };
+      }
+      // Start-case opens the WHO time-out modal first (Universal Protocol).
+      // The user confirms the four checks (voice or click) and hits Continue
+      // → that's where setPhase("intraop") happens.
       const q = query?.trim();
       if (q) {
         const match = findCase(q, activeCase.id);
         if (match) {
           closeOverlays();
           setActiveCase(match);
-          setPhase("intraop");
-          return { ok: true };
+          setPhase("preop");
+          setTimeOutModalOpen(true);
+          return { ok: true, state: { timeoutOpen: true } };
         }
         return { ok: false, reason: "no matching case" };
       }
       if (phase === "preop") {
         closeOverlays();
-        setPhase("intraop");
-        return { ok: true };
+        setTimeOutModalOpen(true);
+        return { ok: true, state: { timeoutOpen: true } };
       }
       return { ok: false, reason: "ambiguous — ask which case" };
     },
@@ -1799,6 +2326,90 @@ function ArtiWall({
       closeOverlays();
       setPhase("library");
     },
+    onShowSettings: () => {
+      closeOverlays();
+      setPhase("settings");
+    },
+    onShowAdminSettings: () => {
+      closeOverlays();
+      setPhase("admin-settings");
+    },
+    onShowSmartSettings: () => {
+      closeOverlays();
+      setPhase("smart-settings");
+    },
+    onSelectSmartDevice: (devicePhrase: string): ArtiToolResult => {
+      const device = resolveSmartDevice(devicePhrase);
+      if (!device) return { ok: false, reason: "device not found" };
+      // If Smart Settings is mounted, switch the selection in place.
+      if (smartSettingsActionsRef.current) {
+        smartSettingsActionsRef.current.selectDevice(device.id);
+      } else {
+        // Stash for the screen to adopt on mount, then navigate.
+        setPendingSmartDeviceId(device.id);
+        closeOverlays();
+        setPhase("smart-settings");
+      }
+      return { ok: true, state: { device: device.id, name: device.name } };
+    },
+    onSetSmartProperty: (
+      devicePhrase: string | undefined,
+      propertyPhrase: string,
+      value: boolean | number | string,
+    ): ArtiToolResult => {
+      // Resolve target device. If unspecified, try the currently-selected
+      // device from the Smart Settings screen (when mounted).
+      let device: SmartDevice | undefined;
+      if (devicePhrase && devicePhrase.trim()) {
+        device = resolveSmartDevice(devicePhrase);
+      } else if (pendingSmartDeviceId) {
+        device = SMART_DEVICES.find((d) => d.id === pendingSmartDeviceId);
+      }
+      if (!device) return { ok: false, reason: "device not specified or not found" };
+      const spec = resolvePropertySpec(device, propertyPhrase);
+      if (!spec) return { ok: false, reason: "property not found on device" };
+      const coerced = coercePropertyValue(spec, value);
+      if (coerced === undefined) return { ok: false, reason: "invalid value for property" };
+      // Persist + (if mounted) live-update the screen.
+      const current = loadSmartDeviceState(device);
+      const next = { ...current, [spec.key]: coerced };
+      saveSmartDeviceState(device, next);
+      smartSettingsActionsRef.current?.applyPropertyChange(device.id, spec.key, coerced);
+      return {
+        ok: true,
+        state: { device: device.id, property: spec.key, value: coerced },
+      };
+    },
+    onToggleSmartDevice: (
+      devicePhrase: string,
+      on: boolean,
+      propertyKey?: string,
+    ): ArtiToolResult => {
+      const device = resolveSmartDevice(devicePhrase);
+      if (!device) return { ok: false, reason: "device not found" };
+      // Default boolean property is "on", except the door uses "locked".
+      const targetKey = propertyKey ?? (device.id === "doors.main" ? "locked" : "on");
+      const spec = device.propertySpecs.find((s) => s.key === targetKey && s.kind === "toggle");
+      if (!spec) return { ok: false, reason: "no boolean property to toggle" };
+      const current = loadSmartDeviceState(device);
+      const next = { ...current, [targetKey]: on };
+      saveSmartDeviceState(device, next);
+      smartSettingsActionsRef.current?.applyPropertyChange(device.id, targetKey, on);
+      return { ok: true, state: { device: device.id, [targetKey]: on } };
+    },
+    onResetAllSmartDevices: (confirmed?: boolean): ArtiToolResult => {
+      // Two-step UX: open modal first; only execute on confirmed=true.
+      if (!confirmed) {
+        setResetAllConfirmOpen(true);
+        return { ok: true, state: { phase: "awaiting_confirmation" } };
+      }
+      // Confirmed — clear every device's localStorage entry, refresh the
+      // Smart Settings screen if mounted, close the modal.
+      resetAllSmartDeviceStates();
+      smartSettingsActionsRef.current?.reloadAllStates();
+      setResetAllConfirmOpen(false);
+      return { ok: true, state: { phase: "reset_complete" } };
+    },
     /**
      * Universal close — picks the topmost overlay and closes it. Priority
      * order top→bottom (matches what the user perceives as "the thing in
@@ -1815,6 +2426,14 @@ function ArtiWall({
     onCloseTopmostModal: () => {
       if (firedReminders.length > 0) {
         setFiredReminders([]);
+        return;
+      }
+      if (resetAllConfirmOpen) {
+        setResetAllConfirmOpen(false);
+        return;
+      }
+      if (timeOutModalOpen) {
+        setTimeOutModalOpen(false);
         return;
       }
       if (personSchedule.open) {
@@ -1929,6 +2548,185 @@ function ArtiWall({
     onShowPersonSchedule: handleShowPersonSchedule,
     onSetPersonScheduleView: handleSetPersonScheduleView,
     onClosePersonSchedule: handleClosePersonSchedule,
+    onOpenSurgeonProfile: (surgeonPhrase: string, procedurePhrase?: string): ArtiToolResult => {
+      const surgeon = resolveSurgeon(surgeonPhrase);
+      if (!surgeon) return { ok: false, reason: "surgeon not found" };
+      let slug: string | undefined;
+      if (procedurePhrase) {
+        const ph = procedurePhrase.toLowerCase();
+        const proc = surgeon.procedures?.find(
+          (p) =>
+            p.slug === ph ||
+            p.name.toLowerCase() === ph ||
+            p.slug.includes(ph) ||
+            p.name.toLowerCase().includes(ph),
+        );
+        slug = proc?.slug;
+      }
+      closeOverlays();
+      handleOpenSurgeonProfile(surgeon, { procedureSlug: slug });
+      return { ok: true, state: { surgeon: surgeon.name, procedure: slug ?? null } };
+    },
+    onExpandProcedure: (procedurePhrase: string): ArtiToolResult => {
+      if (phase !== "surgeon-profile" || !activeSurgeonName) {
+        return { ok: false, reason: "not on surgeon profile" };
+      }
+      const surgeon = SURGEONS.find((s) => s.name === activeSurgeonName);
+      if (!surgeon) return { ok: false, reason: "surgeon not loaded" };
+      const ph = procedurePhrase.trim().toLowerCase();
+      const proc = surgeon.procedures?.find(
+        (p) =>
+          p.slug === ph ||
+          p.name.toLowerCase() === ph ||
+          p.slug.includes(ph) ||
+          p.name.toLowerCase().includes(ph),
+      );
+      if (!proc) return { ok: false, reason: "procedure not found" };
+      setExpandedProcedureSlug(proc.slug);
+      // Scroll the card into view so voice users see what they expanded.
+      requestAnimationFrame(() => {
+        document.getElementById(`procedure-${proc.slug}`)?.scrollIntoView({
+          behavior: "smooth",
+          block: "start",
+        });
+      });
+      return { ok: true, state: { procedure: proc.slug } };
+    },
+    onCollapseProcedure: (procedurePhrase?: string): ArtiToolResult => {
+      if (phase !== "surgeon-profile" || !activeSurgeonName) {
+        return { ok: false, reason: "not on surgeon profile" };
+      }
+      // Bare "close" with nothing expanded: nothing to do.
+      if (!expandedProcedureSlug) {
+        return { ok: false, reason: "nothing expanded" };
+      }
+      // No phrase or phrase matches the currently-expanded card: collapse it.
+      const surgeon = SURGEONS.find((s) => s.name === activeSurgeonName);
+      const expanded = surgeon?.procedures?.find((p) => p.slug === expandedProcedureSlug);
+      if (!procedurePhrase || !procedurePhrase.trim()) {
+        setExpandedProcedureSlug(null);
+        return { ok: true, state: { collapsed: expanded?.slug ?? null } };
+      }
+      const ph = procedurePhrase.trim().toLowerCase();
+      const target = surgeon?.procedures?.find(
+        (p) =>
+          p.slug === ph ||
+          p.name.toLowerCase() === ph ||
+          p.slug.includes(ph) ||
+          p.name.toLowerCase().includes(ph),
+      );
+      if (!target) return { ok: false, reason: "procedure not found" };
+      // Only collapse if the user asked about the currently-expanded one.
+      if (target.slug !== expandedProcedureSlug) {
+        return { ok: false, reason: `${target.slug} is not currently expanded` };
+      }
+      setExpandedProcedureSlug(null);
+      return { ok: true, state: { collapsed: target.slug } };
+    },
+    onNextProcedure: (): ArtiToolResult => {
+      if (phase !== "surgeon-profile" || !activeSurgeonName) {
+        return { ok: false, reason: "not on surgeon profile" };
+      }
+      const surgeon = SURGEONS.find((s) => s.name === activeSurgeonName);
+      const procs = surgeon?.procedures ?? [];
+      if (procs.length === 0) return { ok: false, reason: "no procedures" };
+      const currentIdx = procs.findIndex((p) => p.slug === expandedProcedureSlug);
+      const nextIdx = currentIdx === -1 ? 0 : (currentIdx + 1) % procs.length;
+      const next = procs[nextIdx];
+      setExpandedProcedureSlug(next.slug);
+      requestAnimationFrame(() => {
+        document.getElementById(`procedure-${next.slug}`)?.scrollIntoView({
+          behavior: "smooth",
+          block: "start",
+        });
+      });
+      return { ok: true, state: { procedure: next.slug } };
+    },
+    onPreviousProcedure: (): ArtiToolResult => {
+      if (phase !== "surgeon-profile" || !activeSurgeonName) {
+        return { ok: false, reason: "not on surgeon profile" };
+      }
+      const surgeon = SURGEONS.find((s) => s.name === activeSurgeonName);
+      const procs = surgeon?.procedures ?? [];
+      if (procs.length === 0) return { ok: false, reason: "no procedures" };
+      const currentIdx = procs.findIndex((p) => p.slug === expandedProcedureSlug);
+      const prevIdx =
+        currentIdx === -1 ? procs.length - 1 : (currentIdx - 1 + procs.length) % procs.length;
+      const prev = procs[prevIdx];
+      setExpandedProcedureSlug(prev.slug);
+      requestAnimationFrame(() => {
+        document.getElementById(`procedure-${prev.slug}`)?.scrollIntoView({
+          behavior: "smooth",
+          block: "start",
+        });
+      });
+      return { ok: true, state: { procedure: prev.slug } };
+    },
+    onRenamePrefCardImage: (imagePhrase: string, newLabel: string): ArtiToolResult => {
+      if (phase !== "surgeon-profile" || !activeSurgeonName || !expandedProcedureSlug) {
+        return { ok: false, reason: "no procedure focused" };
+      }
+      const target = resolveProcedureImage(activeSurgeonName, expandedProcedureSlug, imagePhrase);
+      if (!target) return { ok: false, reason: "image not found" };
+      const trimmed = newLabel.trim();
+      if (!trimmed) return { ok: false, reason: "empty label" };
+      handleRenameProcedureImage(expandedProcedureSlug, target.id, trimmed);
+      return { ok: true, state: { id: target.id, label: trimmed } };
+    },
+    onRemovePrefCardImage: (imagePhrase: string): ArtiToolResult => {
+      if (phase !== "surgeon-profile" || !activeSurgeonName || !expandedProcedureSlug) {
+        return { ok: false, reason: "no procedure focused" };
+      }
+      const target = resolveProcedureImage(activeSurgeonName, expandedProcedureSlug, imagePhrase);
+      if (!target) return { ok: false, reason: "image not found" };
+      handleRemoveProcedureImage(expandedProcedureSlug, target.id);
+      return { ok: true, state: { id: target.id } };
+    },
+    onPromptPrefCardUpload: (procedurePhrase?: string): ArtiToolResult => {
+      if (phase !== "surgeon-profile" || !activeSurgeonName) {
+        return { ok: false, reason: "not on surgeon profile" };
+      }
+      // Resolve which procedure to upload into. If the user named one, prefer
+      // that and expand it (if needed) before clicking the input. Otherwise
+      // use whichever is currently expanded.
+      let targetSlug: string | null = expandedProcedureSlug;
+      let needsExpand = false;
+      if (procedurePhrase && procedurePhrase.trim()) {
+        const surgeon = SURGEONS.find((s) => s.name === activeSurgeonName);
+        const ph = procedurePhrase.trim().toLowerCase();
+        const proc = surgeon?.procedures?.find(
+          (p) =>
+            p.slug === ph ||
+            p.name.toLowerCase() === ph ||
+            p.slug.includes(ph) ||
+            p.name.toLowerCase().includes(ph),
+        );
+        if (!proc) return { ok: false, reason: "procedure not found" };
+        targetSlug = proc.slug;
+        needsExpand = proc.slug !== expandedProcedureSlug;
+        if (needsExpand) setExpandedProcedureSlug(proc.slug);
+      }
+      if (!targetSlug) return { ok: false, reason: "no procedure focused" };
+
+      // The card may have just been expanded — its file input is mounted on
+      // the next render. Click via rAF (post-paint) and fall back to a small
+      // setTimeout if the input still isn't there.
+      const click = () => {
+        const card = document.getElementById(`procedure-${targetSlug}`);
+        const input = card?.querySelector<HTMLInputElement>('input[type="file"][accept^="image"]');
+        if (input) {
+          input.click();
+          return true;
+        }
+        return false;
+      };
+      if (!click()) {
+        requestAnimationFrame(() => {
+          if (!click()) setTimeout(click, 80);
+        });
+      }
+      return { ok: true, state: { procedure: targetSlug, expanded: needsExpand } };
+    },
     onOpenHowToVideo: handleOpenHowToVideo,
     onOpenResearchPapers: handleOpenResearchPapers,
     onVideoPlay: handleVideoPlay,
@@ -1987,8 +2785,10 @@ function ArtiWall({
         onOpenLightbox={openLightbox}
         onStartCase={() => {
           closeOverlays();
-          setPhase("intraop");
+          setTimeOutModalOpen(true);
         }}
+        timeOutChecked={timeOutChecked}
+        onToggleTimeOutItem={handleToggleTimeOutItem}
       />
     );
   } else if (phase === "intraop") {
@@ -2107,7 +2907,31 @@ function ArtiWall({
         onLogout={onLogout}
         onPrompt={handlePrompt}
         onSidebarNavigate={handleSidebarNavigate}
-        onOpenSurgeonSchedule={handleOpenSurgeonSchedule}
+        onOpenSurgeonProfile={(s) => handleOpenSurgeonProfile(s)}
+        onOpenSurgeonSchedule={(name) => handleOpenSurgeonSchedule(name)}
+        hasPrefCardImages={(s) => surgeonHasPrefCards(s)}
+      />
+    );
+  } else if (phase === "surgeon-profile") {
+    screen = (
+      <SurgeonProfileScreen
+        staffName={staff.name}
+        staffRole={staff.role}
+        initials={staff.initials}
+        onSleep={handleSleep}
+        onLogout={onLogout}
+        onPrompt={handlePrompt}
+        onSidebarNavigate={handleSidebarNavigate}
+        surgeonName={activeSurgeonName ?? ""}
+        onBack={() => setPhase("surgeons")}
+        onOpenSchedule={(name) => handleOpenSurgeonSchedule(name)}
+        imagesFor={(slug) => (activeSurgeonName ? getProcedureImages(activeSurgeonName, slug) : [])}
+        onRenameImage={handleRenameProcedureImage}
+        onRemoveImage={handleRemoveProcedureImage}
+        onUploadImages={handleUploadProcedureImages}
+        onOpenImageLightbox={handleOpenProcedureImageLightbox}
+        expandedProcedureSlug={expandedProcedureSlug}
+        onSetExpandedProcedure={setExpandedProcedureSlug}
       />
     );
   } else if (phase === "schedule") {
@@ -2140,6 +2964,52 @@ function ArtiWall({
         onLogout={onLogout}
         onPrompt={handlePrompt}
         onSidebarNavigate={handleSidebarNavigate}
+      />
+    );
+  } else if (phase === "settings") {
+    screen = (
+      <SettingsScreen
+        staffName={staff.name}
+        staffRole={staff.role}
+        initials={staff.initials}
+        onSleep={handleSleep}
+        onLogout={onLogout}
+        onPrompt={handlePrompt}
+        onSidebarNavigate={handleSidebarNavigate}
+        onOpenAdmin={() => setPhase("admin-settings")}
+      />
+    );
+  } else if (phase === "admin-settings") {
+    screen = (
+      <AdminSettingsScreen
+        staffName={staff.name}
+        staffRole={staff.role}
+        initials={staff.initials}
+        onSleep={handleSleep}
+        onLogout={onLogout}
+        onPrompt={handlePrompt}
+        onSidebarNavigate={handleSidebarNavigate}
+        onBack={() => setPhase("settings")}
+        onOpenSmartSettings={() => setPhase("smart-settings")}
+        unlocked={adminUnlocked}
+        onUnlock={() => setAdminUnlocked(true)}
+      />
+    );
+  } else if (phase === "smart-settings") {
+    screen = (
+      <SmartSettingsScreen
+        staffName={staff.name}
+        staffRole={staff.role}
+        initials={staff.initials}
+        onSleep={handleSleep}
+        onLogout={onLogout}
+        onPrompt={handlePrompt}
+        onSidebarNavigate={handleSidebarNavigate}
+        onBack={() => setPhase("admin-settings")}
+        actionsRef={smartSettingsActionsRef}
+        initialDeviceId={pendingSmartDeviceId}
+        onInitialDeviceConsumed={() => setPendingSmartDeviceId(null)}
+        onOpenResetAll={() => setResetAllConfirmOpen(true)}
       />
     );
   } else {
@@ -2205,6 +3075,35 @@ function ArtiWall({
         images={lightboxImages}
         initialIndex={lightboxIndex}
         title={lightboxTitle}
+      />
+      <TimeOutModal
+        open={timeOutModalOpen}
+        activeCase={activeCase}
+        patientDob={PATIENT_CLINICAL[activeCase.id]?.dob}
+        patientMrn={activeCase.patientMrn}
+        allergiesLine={
+          PATIENT_CLINICAL[activeCase.id]?.allergies.length
+            ? PATIENT_CLINICAL[activeCase.id].allergies
+                .map((a) => `${a.agent} (${a.severity})`)
+                .join(", ")
+            : "NKDA"
+        }
+        checked={timeOutChecked}
+        onToggle={handleToggleTimeOutItem}
+        onContinue={() => {
+          setTimeOutModalOpen(false);
+          setPhase("intraop");
+        }}
+        onCancel={() => setTimeOutModalOpen(false)}
+      />
+      <ResetAllConfirmModal
+        open={resetAllConfirmOpen}
+        onCancel={() => setResetAllConfirmOpen(false)}
+        onConfirm={() => {
+          resetAllSmartDeviceStates();
+          smartSettingsActionsRef.current?.reloadAllStates();
+          setResetAllConfirmOpen(false);
+        }}
       />
     </div>
   );

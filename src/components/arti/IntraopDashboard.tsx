@@ -3,6 +3,7 @@ import {
   Activity,
   AlertTriangle,
   ArrowLeft,
+  Box,
   Camera,
   Circle,
   CheckCircle2,
@@ -38,6 +39,7 @@ import { Sidebar, type SidebarKey } from "./Sidebar";
 import { TopBar } from "./TopBar";
 import { ArtiInvoker } from "./ArtiInvoker";
 import { PATIENT_CLINICAL, type CaseItem } from "./cases";
+import { AnatomyModel3D } from "./AnatomyModel3D";
 import {
   driftVitals,
   findPhase,
@@ -70,7 +72,9 @@ export interface IntraopActions {
   focusRole: (role: IntraopRole) => ArtiToolResult;
   setPhase: (phase: IntraopPhaseId) => ArtiToolResult;
   advancePhase: (direction: "next" | "previous") => ArtiToolResult;
-  showImaging: (modality: "arthroscopy" | "fluoroscopy" | "mri" | "side_by_side") => ArtiToolResult;
+  showImaging: (
+    modality: "arthroscopy" | "fluoroscopy" | "mri" | "ct" | "side_by_side",
+  ) => ArtiToolResult;
   showPanel: (
     panel: "implants" | "supplies" | "antibiotic" | "vitals" | "activity" | "phase",
   ) => ArtiToolResult;
@@ -170,7 +174,7 @@ export function IntraopDashboard({
    * its calm default.
    */
   const [imagingFocus, setImagingFocus] = useState<
-    "arthroscopy" | "fluoroscopy" | "mri" | "side_by_side" | null
+    "arthroscopy" | "fluoroscopy" | "mri" | "ct" | "side_by_side" | null
   >(null);
   const [panelFocus, setPanelFocus] = useState<
     "implants" | "supplies" | "antibiotic" | "vitals" | "activity" | "phase" | null
@@ -250,7 +254,7 @@ export function IntraopDashboard({
   );
 
   const showImaging = useCallback(
-    (modality: "arthroscopy" | "fluoroscopy" | "mri" | "side_by_side"): ArtiToolResult => {
+    (modality: "arthroscopy" | "fluoroscopy" | "mri" | "ct" | "side_by_side"): ArtiToolResult => {
       setImagingFocus(modality);
       return { ok: true };
     },
@@ -348,17 +352,30 @@ export function IntraopDashboard({
       />
 
       <div className="relative flex min-w-0 flex-1 flex-col overflow-hidden">
-        <TopBar staffName={staffName} staffRole={staffRole} initials={initials} />
+        <TopBar staffName={staffName} staffRole={staffRole} initials={initials} onSleep={onSleep} />
 
         <main data-scroll className="min-h-0 flex-1 overflow-y-auto px-8 py-6 animate-fade-in">
           <div className="flex flex-col gap-5 pb-32">
-            {/* Back row */}
-            <button
-              onClick={onEndCase}
-              className="-mb-2 inline-flex w-fit items-center gap-1.5 font-mono text-[10px] uppercase tracking-[0.3em] text-muted-foreground transition-colors hover:text-foreground"
-            >
-              <ArrowLeft className="h-3 w-3" /> Back to pre-op
-            </button>
+            {/* Back row — Back to pre-op on the left, Multi-view toggle far right. */}
+            <div className="-mb-2 flex items-center justify-between gap-3">
+              <button
+                onClick={onEndCase}
+                className="inline-flex items-center gap-1.5 font-mono text-[10px] uppercase tracking-[0.3em] text-muted-foreground transition-colors hover:text-foreground"
+              >
+                <ArrowLeft className="h-3 w-3" /> Back to pre-op
+              </button>
+              {onShowMultiView && (
+                <button
+                  type="button"
+                  onClick={onShowMultiView}
+                  title="Show all four roles at once on the wall"
+                  className="inline-flex items-center gap-2 rounded-full border border-border bg-surface-2 px-4 py-1.5 font-mono text-[10px] uppercase tracking-wider text-muted-foreground transition-all hover:border-primary/40 hover:bg-surface-2/80 hover:text-foreground"
+                >
+                  <Grid2x2 className="h-3.5 w-3.5" strokeWidth={1.8} />
+                  Multi-view
+                </button>
+              )}
+            </div>
 
             {/* ── Live case header ── */}
             <header className="glass relative overflow-hidden rounded-2xl p-7">
@@ -445,57 +462,43 @@ export function IntraopDashboard({
             {/* ── Vitals strip (always visible — calm anesthesia awareness) ── */}
             <VitalsStrip vitals={vitals} highlight={panelFocus === "vitals"} />
 
-            {/* ── Role focus tabs ── */}
-            <div className="flex flex-wrap items-center gap-2">
-              <span className="mr-2 font-mono text-[9px] uppercase tracking-[0.3em] text-muted-foreground/60">
-                Role focus
-              </span>
-              {ROLE_DEFS.map((r) => {
-                const active = activeRole === r.id;
-                return (
-                  <button
-                    key={r.id}
-                    onClick={() => setActiveRole(r.id)}
-                    className={cn(
-                      "flex items-center gap-2 rounded-full border px-4 py-2 text-xs font-light transition-all duration-200",
-                      active
-                        ? cn(r.toneBorder, r.toneBg, r.toneText)
-                        : "border-border/50 text-muted-foreground hover:border-border hover:text-foreground",
-                    )}
-                  >
-                    <r.icon
-                      className={cn("h-3.5 w-3.5", !active && "text-muted-foreground/50")}
-                      strokeWidth={1.8}
-                    />
-                    {r.label}
-                  </button>
-                );
-              })}
-              {onShowMultiView && (
-                <>
-                  <span className="mx-1 h-4 w-px bg-border" aria-hidden />
-                  <button
-                    type="button"
-                    onClick={onShowMultiView}
-                    title="Show all four roles at once on the wall"
-                    className="flex items-center gap-2 rounded-full border border-border/50 px-4 py-2 text-xs font-light text-muted-foreground transition-all duration-200 hover:border-foreground/40 hover:text-foreground"
-                  >
-                    <Grid2x2 className="h-3.5 w-3.5 text-muted-foreground/60" strokeWidth={1.8} />
-                    Multi-view
-                  </button>
-                </>
-              )}
-            </div>
-
             {/* ── Main grid ── */}
             <div className="grid grid-cols-1 gap-5 xl:grid-cols-3">
-              {/* Left + center (2 cols) — imaging + role-specific support */}
+              {/* Left + center (2 cols) — imaging then role focus tabs +
+                  role-specific support panel. The tabs sit directly above
+                  the panel they switch so the relationship is obvious. */}
               <div className="space-y-5 xl:col-span-2">
                 <ImagingTile
                   snapshot={snapshot}
                   currentPhase={currentPhase}
                   imagingFocus={imagingFocus}
                 />
+                <div className="flex flex-wrap items-center gap-2 rounded-2xl border border-border/40 bg-surface/30 px-4 py-3">
+                  <span className="mr-2 font-mono text-[9px] uppercase tracking-[0.3em] text-muted-foreground/60">
+                    Role focus
+                  </span>
+                  {ROLE_DEFS.map((r) => {
+                    const active = activeRole === r.id;
+                    return (
+                      <button
+                        key={r.id}
+                        onClick={() => setActiveRole(r.id)}
+                        className={cn(
+                          "flex items-center gap-2 rounded-full border px-4 py-2 text-xs font-light transition-all duration-200",
+                          active
+                            ? cn(r.toneBorder, r.toneBg, r.toneText)
+                            : "border-border/50 text-muted-foreground hover:border-border hover:text-foreground",
+                        )}
+                      >
+                        <r.icon
+                          className={cn("h-3.5 w-3.5", !active && "text-muted-foreground/50")}
+                          strokeWidth={1.8}
+                        />
+                        {r.label}
+                      </button>
+                    );
+                  })}
+                </div>
                 <RolePanel
                   role={activeRole}
                   snapshot={snapshot}
@@ -771,7 +774,7 @@ function ImagingTile({
 }: {
   snapshot: IntraopSnapshot;
   currentPhase: IntraopPhaseId;
-  imagingFocus: "arthroscopy" | "fluoroscopy" | "mri" | "side_by_side" | null;
+  imagingFocus: "arthroscopy" | "fluoroscopy" | "mri" | "ct" | "side_by_side" | null;
 }) {
   const caption = snapshot.phases.find((p) => p.id === currentPhase)?.imagingCaption ?? "";
   const focusBorder =
@@ -779,11 +782,13 @@ function ImagingTile({
       ? "ring-2 ring-accent/60"
       : imagingFocus === "mri"
         ? "ring-2 ring-primary/60"
-        : imagingFocus === "side_by_side"
-          ? "ring-2 ring-success/60"
-          : imagingFocus === "arthroscopy"
+        : imagingFocus === "ct"
+          ? "ring-2 ring-warning/60"
+          : imagingFocus === "side_by_side"
             ? "ring-2 ring-success/60"
-            : "";
+            : imagingFocus === "arthroscopy"
+              ? "ring-2 ring-success/60"
+              : "";
   return (
     <section
       className={cn(
@@ -835,12 +840,13 @@ function ImagingTile({
             <div className="font-mono text-[10px] uppercase tracking-wider text-muted-foreground">
               <span className="text-foreground/70">"show fluoroscopy"</span> ·{" "}
               <span className="text-foreground/70">"open MRI"</span> ·{" "}
+              <span className="text-foreground/70">"show CT"</span> ·{" "}
               <span className="text-foreground/70">"side by side"</span>
             </div>
           </div>
         </div>
 
-        {/* Side rail — fluoroscopy thumbnails */}
+        {/* Side rail — fluoroscopy + CT thumbnails */}
         <div className="relative flex flex-col gap-2 border-l border-border/30 bg-black/35 p-4 backdrop-blur">
           <div className="font-mono text-[10px] uppercase tracking-[0.25em] text-muted-foreground">
             Fluoroscopy · stored
@@ -869,6 +875,30 @@ function ImagingTile({
               </div>
             </div>
           ))}
+
+          {/* CT — pre-op imaging on file. Voice "show CT" swaps the surgeon
+              tile to the full study; this thumb makes it discoverable. */}
+          <div className="mt-1 font-mono text-[10px] uppercase tracking-[0.25em] text-muted-foreground">
+            CT · pre-op
+          </div>
+          <div
+            className={cn(
+              "overflow-hidden rounded-lg border bg-black transition-shadow",
+              imagingFocus === "ct"
+                ? "border-warning/60 shadow-[0_0_20px_-4px_var(--warning)]"
+                : "border-border/50",
+            )}
+          >
+            <img
+              src="/ctscans.jpeg"
+              alt="Pre-op CT — axial and coronal slices"
+              className="h-20 w-full object-cover opacity-90"
+            />
+            <div className="px-2 py-1 font-mono text-[9px] uppercase tracking-wider text-muted-foreground">
+              Axial + Coronal
+            </div>
+          </div>
+
           <div className="mt-auto inline-flex items-center gap-1.5 font-mono text-[10px] uppercase tracking-wider text-muted-foreground/80">
             <ImageIcon className="h-3 w-3" /> Side-by-side: voice
           </div>
@@ -909,7 +939,8 @@ function RolePanel({
 }) {
   if (role === "nurse") return <NursePanel snapshot={snapshot} panelFocus={panelFocus} />;
   if (role === "scrub") return <ScrubPanel snapshot={snapshot} />;
-  if (role === "surgeon") return <SurgeonPanel snapshot={snapshot} currentPhase={currentPhase} />;
+  if (role === "surgeon")
+    return <SurgeonPanel snapshot={snapshot} currentPhase={currentPhase} activeCase={activeCase} />;
   return <AnesthesiaPanel snapshot={snapshot} activeCase={activeCase} />;
 }
 
@@ -1464,9 +1495,11 @@ function ScrubPanel({ snapshot }: { snapshot: IntraopSnapshot }) {
 function SurgeonPanel({
   snapshot,
   currentPhase,
+  activeCase,
 }: {
   snapshot: IntraopSnapshot;
   currentPhase: IntraopPhaseId;
+  activeCase?: CaseItem;
 }) {
   return (
     <div className="grid grid-cols-1 gap-5 lg:grid-cols-2">
@@ -1522,6 +1555,26 @@ function SurgeonPanel({
       </PanelShell>
 
       <div className="space-y-5">
+        <PanelShell
+          title="3D anatomy"
+          kicker="Drag to rotate"
+          icon={Box}
+          iconTone="text-accent"
+          trailing={
+            <span className="font-mono text-[10px] uppercase tracking-wider text-muted-foreground">
+              Mouse
+            </span>
+          }
+        >
+          <div className="aspect-[16/10] w-full">
+            <AnatomyModel3D
+              caption={`${activeCase?.procedureShort ?? "RSA"} · ${
+                activeCase?.side ? `${activeCase.side} shoulder` : "Right shoulder"
+              }`}
+            />
+          </div>
+        </PanelShell>
+
         <PanelShell
           title="Imaging access"
           kicker="One word away"

@@ -1,5 +1,5 @@
 import { useEffect, useMemo, useState } from "react";
-import { Calendar as CalendarIcon, Search, Stethoscope } from "lucide-react";
+import { Calendar as CalendarIcon, Images, Search, Stethoscope } from "lucide-react";
 import { Sidebar, type SidebarKey } from "./Sidebar";
 import { TopBar } from "./TopBar";
 import { ArtiInvoker } from "./ArtiInvoker";
@@ -21,8 +21,12 @@ interface Props {
   onLogout: () => void;
   onPrompt: (text: string) => void;
   onSidebarNavigate?: (key: SidebarKey) => void;
-  /** Click a surgeon → opens the PersonScheduleModal at the route level. */
+  /** Click a surgeon card → opens the surgeon profile (procedure preferences) screen. */
+  onOpenSurgeonProfile?: (surgeon: Surgeon) => void;
+  /** Click the calendar icon on a surgeon card → opens the PersonScheduleModal. */
   onOpenSurgeonSchedule?: (name: string) => void;
+  /** Returns true when this surgeon has at least one preference-card image on file. */
+  hasPrefCardImages?: (surgeon: Surgeon) => boolean;
 }
 
 interface SurgeonRow {
@@ -49,7 +53,9 @@ export function SurgeonsScreen({
   onLogout,
   onPrompt,
   onSidebarNavigate,
+  onOpenSurgeonProfile,
   onOpenSurgeonSchedule,
+  hasPrefCardImages,
 }: Props) {
   const [query, setQuery] = useState("");
 
@@ -79,9 +85,7 @@ export function SurgeonsScreen({
           c.status !== "cancelled" &&
           c.status !== "completed",
       ).sort((a, b) =>
-        a.date !== b.date
-          ? a.date.localeCompare(b.date)
-          : a.time.localeCompare(b.time),
+        a.date !== b.date ? a.date.localeCompare(b.date) : a.time.localeCompare(b.time),
       );
       const next = upcoming[0] ?? null;
       const weekCount = upcoming.filter((c) => c.date <= weekEndKey).length;
@@ -109,8 +113,7 @@ export function SurgeonsScreen({
       const hasProc = SCHEDULE_CASES.some(
         (c) =>
           c.surgeon === surgeon.name &&
-          (c.procedure.toLowerCase().includes(q) ||
-            c.procedureShort.toLowerCase().includes(q)),
+          (c.procedure.toLowerCase().includes(q) || c.procedureShort.toLowerCase().includes(q)),
       );
       return hasProc;
     });
@@ -118,14 +121,15 @@ export function SurgeonsScreen({
 
   return (
     <div className="flex h-screen w-full overflow-hidden bg-background">
-      <Sidebar onSleep={onSleep} onLogout={onLogout} activeKey="surgeons" onNavigate={onSidebarNavigate} />
+      <Sidebar
+        onSleep={onSleep}
+        onLogout={onLogout}
+        activeKey="surgeons"
+        onNavigate={onSidebarNavigate}
+      />
 
       <div className="flex min-w-0 flex-1 flex-col overflow-hidden">
-        <TopBar
-          staffName={staffName}
-          staffRole={staffRole}
-          initials={initials}
-        />
+        <TopBar staffName={staffName} staffRole={staffRole} initials={initials} onSleep={onSleep} />
 
         <main
           data-scroll
@@ -141,8 +145,8 @@ export function SurgeonsScreen({
                 {SURGEONS.length} surgeons
               </h1>
               <p className="mt-1 text-sm font-light text-muted-foreground">
-                Sorted by soonest upcoming case. Tap a card to open their schedule, or ask Arti:
-                <span className="ml-1 italic">"show me Dr. Patel's schedule"</span>.
+                Sorted by soonest upcoming case. Tap a card for procedure preferences, or ask Arti:
+                <span className="ml-1 italic">"open Dr. Patel's preference cards"</span>.
               </p>
             </div>
 
@@ -183,9 +187,17 @@ export function SurgeonsScreen({
                   key={row.surgeon.name}
                   row={row}
                   onClick={
+                    onOpenSurgeonProfile ? () => onOpenSurgeonProfile(row.surgeon) : undefined
+                  }
+                  onOpenSchedule={
                     onOpenSurgeonSchedule
                       ? () => onOpenSurgeonSchedule(row.surgeon.name)
                       : undefined
+                  }
+                  hasPrefCardImages={
+                    hasPrefCardImages
+                      ? hasPrefCardImages(row.surgeon)
+                      : !!row.surgeon.procedures?.some((p) => p.seedImages.length > 0)
                   }
                 />
               ))}
@@ -211,18 +223,38 @@ export function SurgeonsScreen({
 // Card
 // ──────────────────────────────────────────────────────────────────────────
 
-function SurgeonCard({ row, onClick }: { row: SurgeonRow; onClick?: () => void }) {
+function SurgeonCard({
+  row,
+  onClick,
+  onOpenSchedule,
+  hasPrefCardImages,
+}: {
+  row: SurgeonRow;
+  onClick?: () => void;
+  onOpenSchedule?: () => void;
+  hasPrefCardImages: boolean;
+}) {
   const { surgeon, next, weekCount, monthCount } = row;
 
+  // Card body click → open profile. The calendar icon (inner button) opens
+  // the schedule modal instead, so the wrapper is a div+role=button to keep
+  // the inner <button> valid HTML.
   return (
     <li>
-      <button
-        type="button"
+      <div
+        role={onClick ? "button" : undefined}
+        tabIndex={onClick ? 0 : undefined}
         onClick={onClick}
-        disabled={!onClick}
+        onKeyDown={(e) => {
+          if (!onClick) return;
+          if (e.key === "Enter" || e.key === " ") {
+            e.preventDefault();
+            onClick();
+          }
+        }}
         className={cn(
-          "group w-full rounded-2xl border border-border/60 bg-surface/40 p-5 text-left transition-all",
-          onClick && "hover:border-primary/40 hover:bg-surface/70",
+          "group block w-full rounded-2xl border border-border/60 bg-surface/40 p-5 text-left transition-all",
+          onClick && "cursor-pointer hover:border-primary/40 hover:bg-surface/70",
           !onClick && "cursor-default",
         )}
       >
@@ -239,7 +271,32 @@ function SurgeonCard({ row, onClick }: { row: SurgeonRow; onClick?: () => void }
 
           {/* Identity */}
           <div className="min-w-0 flex-1">
-            <div className="truncate text-lg font-light text-foreground">{surgeon.name}</div>
+            <div className="flex items-center gap-2">
+              <div className="truncate text-lg font-light text-foreground">{surgeon.name}</div>
+              {hasPrefCardImages && (
+                <span
+                  className="flex h-6 w-6 shrink-0 items-center justify-center rounded-full border border-primary/30 bg-primary/10 text-primary"
+                  title="Preference card images on file"
+                  aria-label="Has preference card images"
+                >
+                  <Images className="h-3 w-3" strokeWidth={1.7} />
+                </span>
+              )}
+              {onOpenSchedule && (
+                <button
+                  type="button"
+                  onClick={(e) => {
+                    e.stopPropagation();
+                    onOpenSchedule();
+                  }}
+                  className="flex h-6 w-6 shrink-0 items-center justify-center rounded-full border border-border/60 text-muted-foreground transition-all hover:border-primary/50 hover:bg-primary/10 hover:text-primary"
+                  title="Open schedule"
+                  aria-label={`Open ${surgeon.name} schedule`}
+                >
+                  <CalendarIcon className="h-3 w-3" strokeWidth={1.8} />
+                </button>
+              )}
+            </div>
             <div className="mt-0.5 flex flex-wrap items-center gap-2 text-xs font-light text-muted-foreground">
               <span>{surgeon.specialty}</span>
               <span>·</span>
@@ -276,9 +333,7 @@ function SurgeonCard({ row, onClick }: { row: SurgeonRow; onClick?: () => void }
                 {next.procedureShort}
                 {next.side ? ` ${next.side[0]}` : ""}
               </span>
-              <span className="text-xs font-light text-muted-foreground">
-                · {next.patientName}
-              </span>
+              <span className="text-xs font-light text-muted-foreground">· {next.patientName}</span>
             </div>
           ) : (
             <div className="mt-1 text-xs font-light italic text-muted-foreground">
@@ -286,7 +341,7 @@ function SurgeonCard({ row, onClick }: { row: SurgeonRow; onClick?: () => void }
             </div>
           )}
         </div>
-      </button>
+      </div>
     </li>
   );
 }
@@ -303,7 +358,11 @@ function formatRelativeDate(dateKey: string): string {
   const target = new Date(dateKey);
   const diff = (target.getTime() - today.getTime()) / (1000 * 60 * 60 * 24);
   if (diff > 0 && diff < 7) {
-    return target.toLocaleDateString(undefined, { weekday: "short", month: "short", day: "numeric" });
+    return target.toLocaleDateString(undefined, {
+      weekday: "short",
+      month: "short",
+      day: "numeric",
+    });
   }
   return formatLongDate(dateKey).replace(/^[A-Za-z]+, /, "");
 }

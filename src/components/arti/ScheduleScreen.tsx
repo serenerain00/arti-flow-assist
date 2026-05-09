@@ -119,14 +119,15 @@ export function ScheduleScreen({
 
   return (
     <div className="flex h-screen w-full overflow-hidden bg-background">
-      <Sidebar onSleep={onSleep} onLogout={onLogout} activeKey="schedule" onNavigate={onSidebarNavigate} />
+      <Sidebar
+        onSleep={onSleep}
+        onLogout={onLogout}
+        activeKey="schedule"
+        onNavigate={onSidebarNavigate}
+      />
 
       <div className="flex min-w-0 flex-1 flex-col overflow-hidden">
-        <TopBar
-          staffName={staffName}
-          staffRole={staffRole}
-          initials={initials}
-        />
+        <TopBar staffName={staffName} staffRole={staffRole} initials={initials} onSleep={onSleep} />
 
         <main
           data-scroll
@@ -836,17 +837,11 @@ function CaseRow({ c, onOpen }: { c: ScheduleCase; onOpen?: () => void }) {
 
             {/* Team (anesthesiologist · scrub tech · circulator) */}
             <dl className="mt-2 grid grid-cols-[auto_1fr] gap-x-3 gap-y-0.5 text-[11px] font-light">
-              <dt className="font-mono uppercase tracking-wider text-muted-foreground/60">
-                Anes
-              </dt>
+              <dt className="font-mono uppercase tracking-wider text-muted-foreground/60">Anes</dt>
               <dd className="text-foreground/90">{c.anesthesiologist}</dd>
-              <dt className="font-mono uppercase tracking-wider text-muted-foreground/60">
-                Scrub
-              </dt>
+              <dt className="font-mono uppercase tracking-wider text-muted-foreground/60">Scrub</dt>
               <dd className="text-foreground/90">{c.scrubTech}</dd>
-              <dt className="font-mono uppercase tracking-wider text-muted-foreground/60">
-                Circ
-              </dt>
+              <dt className="font-mono uppercase tracking-wider text-muted-foreground/60">Circ</dt>
               <dd className="text-foreground/90">{c.circulator}</dd>
             </dl>
 

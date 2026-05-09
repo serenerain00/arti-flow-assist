@@ -30,7 +30,9 @@ export function ArtiInvoker({ onSubmit, onWake, placeholder, suggestions = [], c
 
   useEffect(() => {
     if (open) resetCloseTimer();
-    return () => { if (closeTimerRef.current) clearTimeout(closeTimerRef.current); };
+    return () => {
+      if (closeTimerRef.current) clearTimeout(closeTimerRef.current);
+    };
   }, [open, resetCloseTimer]);
 
   useEffect(() => {
@@ -81,8 +83,15 @@ export function ArtiInvoker({ onSubmit, onWake, placeholder, suggestions = [], c
     const voice = vRef.current;
     if (!voice) return;
     unlockAudio();
-    if (voice.isSpeaking) { voice.stopSpeaking(); return; }
-    if (voice.listening) { voice.stopListening(); } else { voice.startListening(); }
+    if (voice.isSpeaking) {
+      voice.stopSpeaking();
+      return;
+    }
+    if (voice.listening) {
+      voice.stopListening();
+    } else {
+      voice.startListening();
+    }
   };
 
   return (
@@ -93,7 +102,6 @@ export function ArtiInvoker({ onSubmit, onWake, placeholder, suggestions = [], c
     // dismissing what they're looking at.
     <div className={cn("pointer-events-none fixed bottom-0 right-0 z-[100] p-6", className)}>
       <div className="relative flex items-end justify-end">
-
         {/* Collapsed orb — fades out when panel opens, dims when napping */}
         <button
           type="button"
@@ -118,12 +126,14 @@ export function ArtiInvoker({ onSubmit, onWake, placeholder, suggestions = [], c
           className="group relative flex h-14 w-14 items-center justify-center rounded-full border border-border bg-surface/80 backdrop-blur-xl hover:shadow-[var(--shadow-glow)]"
         >
           {listening && (
-            <span className={cn(
-              "pointer-events-none absolute inset-0 rounded-full border",
-              v?.isSpeaking
-                ? "border-primary/70 [animation:ripple-pulse_0.9s_ease-out_infinite]"
-                : "border-primary/55 [animation:ripple-pulse_1.6s_ease-out_infinite]",
-            )} />
+            <span
+              className={cn(
+                "pointer-events-none absolute inset-0 rounded-full border",
+                v?.isSpeaking
+                  ? "border-primary/70 [animation:ripple-pulse_0.9s_ease-out_infinite]"
+                  : "border-primary/55 [animation:ripple-pulse_1.6s_ease-out_infinite]",
+              )}
+            />
           )}
           <span
             className="absolute inset-1.5 rounded-full"
@@ -131,7 +141,13 @@ export function ArtiInvoker({ onSubmit, onWake, placeholder, suggestions = [], c
           />
           <Sparkles className="relative h-5 w-5 text-white" strokeWidth={1.8} />
           <span className="pointer-events-none absolute -top-8 right-0 whitespace-nowrap rounded-full border border-border bg-surface/90 px-2.5 py-1 font-mono text-[9px] uppercase tracking-[0.25em] text-muted-foreground opacity-0 backdrop-blur transition-opacity group-hover:opacity-100">
-            {napping ? "Arti is napping · tap to wake" : v?.isSpeaking ? "Arti speaking" : listening ? "Listening · tap to pause" : "Tap to wake Arti"}
+            {napping
+              ? "Arti is napping · tap to wake"
+              : v?.isSpeaking
+                ? "Arti speaking"
+                : listening
+                  ? "Listening · tap to pause"
+                  : "Tap to wake Arti"}
           </span>
         </button>
 
@@ -171,7 +187,10 @@ export function ArtiInvoker({ onSubmit, onWake, placeholder, suggestions = [], c
           )}
 
           <form
-            onSubmit={(e) => { e.preventDefault(); submit(value); }}
+            onSubmit={(e) => {
+              e.preventDefault();
+              submit(value);
+            }}
             style={{
               opacity: open ? 1 : 0,
               transform: open ? "translateY(0)" : "translateY(6px)",
@@ -199,7 +218,10 @@ export function ArtiInvoker({ onSubmit, onWake, placeholder, suggestions = [], c
             <input
               ref={inputRef}
               value={value}
-              onChange={(e) => { setValue(e.target.value); resetCloseTimer(); }}
+              onChange={(e) => {
+                setValue(e.target.value);
+                resetCloseTimer();
+              }}
               placeholder={listening ? "Listening…" : (placeholder ?? "Ask Arti…")}
               className="min-w-0 flex-1 bg-transparent px-1 text-sm font-light text-foreground placeholder:text-muted-foreground/60 focus:outline-none"
             />

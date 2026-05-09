@@ -21,7 +21,11 @@ export const SCRUB_LIGHTBOX_IMAGES: LightboxImage[] = [
 ];
 
 const INITIAL: Record<string, number> = {
-  raytec: 20, lap: 9, needle: 14, blade: 3, clamps: 12,
+  raytec: 20,
+  lap: 9,
+  needle: 14,
+  blade: 3,
+  clamps: 12,
 };
 
 const INSTRUMENT_DEFS = [
@@ -76,7 +80,14 @@ function PanelLabel({
   );
 }
 
-export function ScrubTechPanel({ activeCase, counts, onAdjust, onOpenLightbox, openingChecklist, onToggleChecklistItem }: Props) {
+export function ScrubTechPanel({
+  activeCase,
+  counts,
+  onAdjust,
+  onOpenLightbox,
+  openingChecklist,
+  onToggleChecklistItem,
+}: Props) {
   const checklistDone = openingChecklist.size;
   const procedureShort = activeCase?.procedureShort ?? "RSA";
 
@@ -86,9 +97,7 @@ export function ScrubTechPanel({ activeCase, counts, onAdjust, onOpenLightbox, o
       <div className="space-y-4 xl:col-span-2">
         {/* Instrument counts — large numerals readable at distance from sterile field */}
         <div className="rounded-2xl border border-border/60 bg-surface/60 p-5 backdrop-blur-sm">
-          <PanelLabel icon={Package}>
-            Instrument Counts · {procedureShort}
-          </PanelLabel>
+          <PanelLabel icon={Package}>Instrument Counts · {procedureShort}</PanelLabel>
           <div className="grid grid-cols-2 gap-3 sm:grid-cols-3 md:grid-cols-5">
             {INSTRUMENT_DEFS.map(({ id, label, sub }) => {
               const current = counts[id] ?? 0;
@@ -116,9 +125,7 @@ export function ScrubTechPanel({ activeCase, counts, onAdjust, onOpenLightbox, o
                   >
                     {current}
                   </div>
-                  <p className="text-[9px] text-muted-foreground/50">
-                    / {initial}
-                  </p>
+                  <p className="text-[9px] text-muted-foreground/50">/ {initial}</p>
                   {discrepancy && (
                     <span className="rounded-full border border-warning/30 bg-warning/10 px-2 py-0.5 font-mono text-[9px] text-warning">
                       {current > initial ? `+${current - initial}` : current - initial}
@@ -140,7 +147,9 @@ export function ScrubTechPanel({ activeCase, counts, onAdjust, onOpenLightbox, o
                       +
                     </button>
                   </div>
-                  <p className="text-center text-[9px] font-light text-muted-foreground/40">{sub}</p>
+                  <p className="text-center text-[9px] font-light text-muted-foreground/40">
+                    {sub}
+                  </p>
                 </div>
               );
             })}

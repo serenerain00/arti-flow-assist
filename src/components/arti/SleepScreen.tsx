@@ -140,9 +140,7 @@ export function SleepScreen({
       {/* Orb is visible during sleep so the user can click it to arm the mic.
           Once clicked, startListening fires with a real user gesture. */}
       {phase === "sleep" ? (
-        <ArtiInvoker
-          onSubmit={onPrompt}
-        />
+        <ArtiInvoker onSubmit={onPrompt} />
       ) : phase === "greeting" ? (
         <ArtiInvoker
           placeholder="Ask Arti anything…"

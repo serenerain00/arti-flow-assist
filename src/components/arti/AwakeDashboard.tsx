@@ -52,6 +52,9 @@ interface Props {
   onOpenLightbox: (images: LightboxImage[], index?: number, title?: string) => void;
   /** Transition to the intraoperative ("case active") view. */
   onStartCase?: () => void;
+  /** Time-out checklist state — lifted to the route so the start-case modal shares it. */
+  timeOutChecked: Set<TimeOutId>;
+  onToggleTimeOutItem: (id: TimeOutId) => ArtiToolResult;
 }
 
 export type TimeOutId = "patient" | "site" | "procedure" | "allergies";
@@ -91,10 +94,11 @@ export function AwakeDashboard({
   onSidebarNavigate,
   onOpenLightbox,
   onStartCase,
+  timeOutChecked,
+  onToggleTimeOutItem,
 }: Props) {
   const patientVideoModalRef = useRef<PatientVideoHandle | null>(null);
   const xraysModalRef = useRef<PatientXraysHandle | null>(null);
-  const [timeOutChecked, setTimeOutChecked] = useState<Set<TimeOutId>>(new Set());
   const [counts, setCounts] = useState<Record<InstrumentId, number>>({
     raytec: 20,
     lap: 9,
@@ -300,15 +304,13 @@ export function AwakeDashboard({
     dashboardContextRef,
   ]);
 
-  const toggleTimeOutItem = useCallback((id: TimeOutId): ArtiToolResult => {
-    setTimeOutChecked((prev) => {
-      const next = new Set(prev);
-      if (next.has(id)) next.delete(id);
-      else next.add(id);
-      return next;
-    });
-    return { ok: true };
-  }, []);
+  // Time-out toggling is owned by the route now (so the start-case modal
+  // and the nurse panel share state). This is a thin alias kept stable
+  // so the actions-ref signature doesn't change.
+  const toggleTimeOutItem = useCallback(
+    (id: TimeOutId): ArtiToolResult => onToggleTimeOutItem(id),
+    [onToggleTimeOutItem],
+  );
 
   const adjustInstrumentCount = useCallback((item: InstrumentId, delta: number): ArtiToolResult => {
     setCounts((prev) => ({ ...prev, [item]: Math.max(0, prev[item] + delta) }));
@@ -631,10 +633,15 @@ export function AwakeDashboard({
 
   return (
     <div className="flex h-screen w-full overflow-hidden bg-background">
-      <Sidebar onSleep={onSleep} onLogout={onLogout} activeKey="patients" onNavigate={onSidebarNavigate} />
+      <Sidebar
+        onSleep={onSleep}
+        onLogout={onLogout}
+        activeKey="patients"
+        onNavigate={onSidebarNavigate}
+      />
 
       <div className="flex min-w-0 flex-1 flex-col overflow-hidden">
-        <TopBar staffName={staffName} staffRole={staffRole} initials={initials} />
+        <TopBar staffName={staffName} staffRole={staffRole} initials={initials} onSleep={onSleep} />
 
         <RoleSwitcherBar activeRole={activeRole} onRoleChange={setActiveRole} />
 
@@ -714,16 +721,18 @@ export function AwakeDashboard({
           </div>
         </main>
 
-        {activeRole === "nurse" && (
-          <button
-            onClick={openQuadView}
-            className="absolute right-8 top-36 z-30 flex h-11 w-11 items-center justify-center rounded-full border border-border bg-surface-2 text-muted-foreground transition-colors hover:border-primary/40 hover:text-foreground"
-            aria-label="Open quad view"
-            title="Quad view"
-          >
-            <LayoutGrid className="h-5 w-5" />
-          </button>
-        )}
+        {/* Quad-view toggle — visible on every role view so any team member
+            can flip into the 4-quadrant layout (also reachable by voice). The
+            QuadView overlay has its own X button to exit. */}
+        <button
+          onClick={openQuadView}
+          className="absolute right-8 top-36 z-30 flex h-11 items-center gap-2 rounded-full border border-border bg-surface-2 px-4 text-xs font-light uppercase tracking-wider text-muted-foreground transition-colors hover:border-primary/40 hover:text-foreground"
+          aria-label="Open quad view"
+          title="Open quad view (or say 'open quad view')"
+        >
+          <LayoutGrid className="h-4 w-4" strokeWidth={1.7} />
+          Quad View
+        </button>
       </div>
 
       <PatientDetailsModal

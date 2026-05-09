@@ -118,10 +118,15 @@ export function VideoLibraryScreen({
 
   return (
     <div className="flex h-screen w-full overflow-hidden bg-background">
-      <Sidebar onSleep={onSleep} onLogout={onLogout} activeKey="library" onNavigate={onSidebarNavigate} />
+      <Sidebar
+        onSleep={onSleep}
+        onLogout={onLogout}
+        activeKey="library"
+        onNavigate={onSidebarNavigate}
+      />
 
       <div className="flex min-w-0 flex-1 flex-col overflow-hidden">
-        <TopBar staffName={staffName} staffRole={staffRole} initials={initials} />
+        <TopBar staffName={staffName} staffRole={staffRole} initials={initials} onSleep={onSleep} />
 
         <main data-scroll className="min-h-0 flex-1 overflow-y-auto px-8 py-6 animate-fade-in">
           {/* ── Header ─────────────────────────────────────────────── */}
@@ -277,7 +282,7 @@ export function VideoLibraryScreen({
               </div>
               <div className="max-w-md text-sm font-light text-muted-foreground">
                 {savedOnly && savedIds.size === 0
-                  ? "Open a video and tap Save (or say \"save this video\") to bookmark it."
+                  ? 'Open a video and tap Save (or say "save this video") to bookmark it.'
                   : "Try a broader search term, or clear the filters above."}
               </div>
             </div>
@@ -378,11 +383,7 @@ function VideoCard({
               : "border-white/30 bg-black/50 text-white/85 hover:border-primary/60 hover:text-white",
           )}
         >
-          {saved ? (
-            <BookmarkCheck className="h-4 w-4" />
-          ) : (
-            <BookmarkPlus className="h-4 w-4" />
-          )}
+          {saved ? <BookmarkCheck className="h-4 w-4" /> : <BookmarkPlus className="h-4 w-4" />}
         </button>
         {/* Top-right badges */}
         <div className="pointer-events-none absolute right-2 top-2 flex items-center gap-1.5">

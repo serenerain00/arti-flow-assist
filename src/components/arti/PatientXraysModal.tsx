@@ -108,9 +108,7 @@ export const PatientXraysModal = forwardRef<PatientXraysHandle, Props>(function 
   const [pan, setPan] = useState({ x: 0, y: 0 });
 
   // Drag state — kept in refs so re-renders during drag don't restart it.
-  const dragStartRef = useRef<{ x: number; y: number; pan: { x: number; y: number } } | null>(
-    null,
-  );
+  const dragStartRef = useRef<{ x: number; y: number; pan: { x: number; y: number } } | null>(null);
 
   const activeView = study.views[activeIndex] ?? study.views[0];
 
@@ -341,9 +339,7 @@ export const PatientXraysModal = forwardRef<PatientXraysHandle, Props>(function 
                     <ChevronLeft className="h-4 w-4" />
                   </button>
                   <button
-                    onClick={() =>
-                      setActiveIndex((i) => Math.min(i + 1, study.views.length - 1))
-                    }
+                    onClick={() => setActiveIndex((i) => Math.min(i + 1, study.views.length - 1))}
                     disabled={activeIndex === study.views.length - 1}
                     className="flex h-10 w-10 items-center justify-center rounded-full border border-border text-muted-foreground transition-colors hover:border-primary/50 hover:text-foreground disabled:opacity-30"
                     title="Next view"

@@ -5,7 +5,16 @@ import {
   DialogTitle,
   DialogDescription,
 } from "@/components/ui/dialog";
-import { User, AlertTriangle, Heart, Pill, FileText, Droplets, Scale, Activity } from "lucide-react";
+import {
+  User,
+  AlertTriangle,
+  Heart,
+  Pill,
+  FileText,
+  Droplets,
+  Scale,
+  Activity,
+} from "lucide-react";
 import type { CaseItem } from "./cases";
 import { PATIENT_CLINICAL } from "./cases";
 
@@ -23,7 +32,9 @@ const SeverityBadge = ({ severity }: { severity: string }) => {
         ? "bg-warning/15 text-warning border-warning/30"
         : "bg-muted text-muted-foreground border-border";
   return (
-    <span className={`ml-2 rounded-full border px-2 py-0.5 text-[10px] font-semibold uppercase ${cls}`}>
+    <span
+      className={`ml-2 rounded-full border px-2 py-0.5 text-[10px] font-semibold uppercase ${cls}`}
+    >
       {severity}
     </span>
   );
@@ -66,7 +77,8 @@ export function PatientDetailsModal({ open, onClose, activeCase }: Props) {
             </div>
           </DialogTitle>
           <DialogDescription className="mt-3 text-sm">
-            {procedureDisplay} · {activeCase?.surgeon ?? "Dr. Anika Patel"} · {activeCase?.time ?? "07:30"} AM
+            {procedureDisplay} · {activeCase?.surgeon ?? "Dr. Anika Patel"} ·{" "}
+            {activeCase?.time ?? "07:30"} AM
           </DialogDescription>
         </DialogHeader>
 
@@ -77,11 +89,16 @@ export function PatientDetailsModal({ open, onClose, activeCase }: Props) {
               <div>
                 <SectionTitle icon={User} title="Demographics" />
                 <div className="grid grid-cols-2 gap-x-6 gap-y-2.5 text-sm">
-                  <span className="text-muted-foreground">DOB</span><span>{c.dob}</span>
-                  <span className="text-muted-foreground">Sex</span><span>{c.sex}</span>
-                  <span className="text-muted-foreground">Height</span><span>{c.height}</span>
-                  <span className="text-muted-foreground">Weight</span><span>{c.weight}</span>
-                  <span className="text-muted-foreground">BMI</span><span>{c.bmi}</span>
+                  <span className="text-muted-foreground">DOB</span>
+                  <span>{c.dob}</span>
+                  <span className="text-muted-foreground">Sex</span>
+                  <span>{c.sex}</span>
+                  <span className="text-muted-foreground">Height</span>
+                  <span>{c.height}</span>
+                  <span className="text-muted-foreground">Weight</span>
+                  <span>{c.weight}</span>
+                  <span className="text-muted-foreground">BMI</span>
+                  <span>{c.bmi}</span>
                 </div>
               </div>
 
@@ -169,7 +186,9 @@ export function PatientDetailsModal({ open, onClose, activeCase }: Props) {
                     <div
                       key={l.label}
                       className={`rounded-xl border px-4 py-3 text-sm ${
-                        l.flag ? "border-warning/30 bg-warning/5" : "border-border/40 bg-surface-2/50"
+                        l.flag
+                          ? "border-warning/30 bg-warning/5"
+                          : "border-border/40 bg-surface-2/50"
                       }`}
                     >
                       <div className="text-[10px] font-semibold uppercase tracking-wider text-muted-foreground">

@@ -1,7 +1,7 @@
-import { forwardRef, useCallback, useEffect, useImperativeHandle, useState } from "react";
+import { forwardRef, useCallback, useEffect, useImperativeHandle, useRef, useState } from "react";
 import useEmblaCarousel from "embla-carousel-react";
 import { AnimatePresence, motion } from "framer-motion";
-import { ChevronLeft, ChevronRight, X, ZoomIn, ZoomOut } from "lucide-react";
+import { ChevronLeft, ChevronRight, Upload, X, ZoomIn, ZoomOut } from "lucide-react";
 import { cn } from "@/lib/utils";
 
 export interface LightboxImage {
@@ -26,12 +26,15 @@ interface Props {
   images: LightboxImage[];
   initialIndex?: number;
   title?: string;
+  /** When provided, an Upload button is shown in the header. Receives selected files. */
+  onUpload?: (files: File[]) => void;
 }
 
 export const ImageLightboxModal = forwardRef<LightboxHandle, Props>(function ImageLightboxModal(
-  { open, onClose, images, initialIndex = 0, title }: Props,
+  { open, onClose, images, initialIndex = 0, title, onUpload }: Props,
   ref,
 ) {
+  const fileInputRef = useRef<HTMLInputElement>(null);
   const [emblaRef, emblaApi] = useEmblaCarousel({
     startIndex: initialIndex,
     loop: images.length > 1,
@@ -45,6 +48,22 @@ export const ImageLightboxModal = forwardRef<LightboxHandle, Props>(function Ima
     setSelectedIndex(initialIndex);
     setZoomed(false);
   }, [emblaApi, initialIndex, open]);
+
+  // When the slide list grows (e.g., after upload), re-init embla and jump to
+  // the newest slide so the user immediately sees what they uploaded.
+  const prevCountRef = useRef(images.length);
+  useEffect(() => {
+    if (!emblaApi) return;
+    const prev = prevCountRef.current;
+    if (images.length !== prev) {
+      emblaApi.reInit();
+      if (images.length > prev) {
+        emblaApi.scrollTo(images.length - 1);
+        setSelectedIndex(images.length - 1);
+      }
+      prevCountRef.current = images.length;
+    }
+  }, [emblaApi, images.length]);
 
   const onSelect = useCallback(() => {
     if (!emblaApi) return;
@@ -111,6 +130,30 @@ export const ImageLightboxModal = forwardRef<LightboxHandle, Props>(function Ima
               </p>
             </div>
             <div className="flex items-center gap-2">
+              {onUpload && (
+                <>
+                  <input
+                    ref={fileInputRef}
+                    type="file"
+                    accept="image/*"
+                    multiple
+                    className="hidden"
+                    onChange={(e) => {
+                      const files = Array.from(e.target.files ?? []);
+                      if (files.length) onUpload(files);
+                      if (fileInputRef.current) fileInputRef.current.value = "";
+                    }}
+                  />
+                  <button
+                    onClick={() => fileInputRef.current?.click()}
+                    className="flex h-11 items-center gap-2 rounded-full border border-white/10 px-4 text-xs font-medium uppercase tracking-wider text-white/60 transition-all hover:border-primary/40 hover:text-primary"
+                    aria-label="Upload images"
+                  >
+                    <Upload className="h-4 w-4" />
+                    Upload
+                  </button>
+                </>
+              )}
               <button
                 onClick={() => setZoomed((z) => !z)}
                 className="flex h-11 w-11 items-center justify-center rounded-full border border-white/10 text-white/50 transition-all hover:border-white/30 hover:text-white"

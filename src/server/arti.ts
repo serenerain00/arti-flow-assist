@@ -146,6 +146,116 @@ const TOOLS: Anthropic.Tool[] = [
     input_schema: { type: "object" as const, properties: {}, required: [] },
   },
   {
+    name: "navigate_settings",
+    description:
+      "Open the Settings landing screen (Preferences). Use for: 'open settings', 'open preferences', 'show me settings', 'go to settings'. From there the user can drill into General or Admin Settings. Do NOT use for direct admin / smart-device requests — for those, jump to navigate_admin_settings or navigate_smart_settings respectively.",
+    input_schema: { type: "object" as const, properties: {}, required: [] },
+  },
+  {
+    name: "navigate_admin_settings",
+    description:
+      "Open the Admin Settings page (password-gated landing for Software Updates, Support Logging, and Smart Settings). Use for: 'open admin settings', 'show admin settings', 'pull up admin', 'open system settings', 'are there any software updates' (lands here, then user can tap Software Updates), 'open support logs'. The user must enter any text on the password gate before the cards appear — that's a UI step, not a tool call.",
+    input_schema: { type: "object" as const, properties: {}, required: [] },
+  },
+  {
+    name: "navigate_smart_settings",
+    description:
+      "Open the Smart Settings screen (Admin → Smart Settings) — device control for OR 326. Lights, displays, environment, audio, and door access. Use for: 'open smart settings', 'open device controls', 'open the smart room controls', 'show me the smart devices', 'open the lights' (lands here with Lighting category expanded), 'open boom 1' (lands here and selects Boom 1 — pair with select_smart_device after), 'control the OR room', 'pull up room controls'. NOTE: this opens the SCREEN. To actually change a device, follow up with set_smart_property or toggle_smart_device.",
+    input_schema: { type: "object" as const, properties: {}, required: [] },
+  },
+  {
+    name: "select_smart_device",
+    description:
+      "Focus a specific smart device on the Smart Settings screen so its controls are visible. Auto-navigates to Smart Settings if not already there. Use for: 'open boom 1', 'show me the x-ray viewer controls', 'select ambient lights', 'open the surgeon monitor'. The route fuzzy-matches the spoken phrase against device names + ids — pass whatever the user said. Available devices appear in the live context block when the screen is open.",
+    input_schema: {
+      type: "object" as const,
+      properties: {
+        device: {
+          type: "string",
+          description:
+            "Device name or keyword (e.g. 'boom 1', 'x-ray viewer', 'ambient', 'wall display', 'thermostat').",
+        },
+      },
+      required: ["device"],
+    },
+  },
+  {
+    name: "set_smart_property",
+    description:
+      "Set a numeric or string property on a smart device. Works whether the user is on Smart Settings or not — the route writes to localStorage and the Mock OR widget updates live if visible. " +
+      "Use for: 'dim boom 1 to 60', 'set Boom 2 brightness to 80%', 'set ambient color temp to 4000K', 'change the wall display layout to multi-view', 'set thermostat to 22°C', 'set music volume to 30', 'set the surgeon monitor input to MRI'. " +
+      "Pass a property keyword the route can fuzzy-match against the device's spec keys + labels: 'brightness', 'color temp' / 'color temperature' / 'kelvin', 'spot' / 'spot size', 'volume', 'setpoint' / 'temperature', 'target' / 'humidity', 'exchanges' / 'airflow', 'layout', 'input', 'playlist'. " +
+      "For percent / kelvin / temperature properties, pass `value` as a number. For select properties, pass the option value (e.g. 'mri', 'multiview', 'ambient'). " +
+      "When the user is on Smart Settings and says 'set brightness to 50' WITHOUT naming a device, omit `device` — the route uses the currently-selected device.",
+    input_schema: {
+      type: "object" as const,
+      properties: {
+        device: {
+          type: "string",
+          description:
+            "Optional. Device name/keyword. Omit to target the currently-selected device on Smart Settings.",
+        },
+        property: {
+          type: "string",
+          description:
+            "Property name/keyword (brightness, color_temp, spot_size, volume, setpoint, layout, input, playlist, target, exchanges, locked, on, etc.).",
+        },
+        value: {
+          description:
+            "New value. Numeric for percent/kelvin/temperature properties; string for select; boolean for toggle. Pass percentages WITHOUT the % sign (e.g. 60 not '60%').",
+        },
+      },
+      required: ["property", "value"],
+    },
+  },
+  {
+    name: "reset_all_smart_devices",
+    description:
+      "Bulk-reset every smart device (lights, displays, environment, audio, doors) back to its built-in defaults. " +
+      "TWO-STEP CONFIRMATION: " +
+      "  • If the user says 'reset all smart devices' / 'reset everything' / 'reset the room' / 'restore defaults' WITHOUT a clear yes/confirm, call this with confirmed=false (or omit) — the route opens an 'Are you sure?' modal. " +
+      "  • When that modal is OPEN and the user says 'yes' / 'confirm' / 'do it' / 'reset' / 'go ahead' / 'I'm sure', call this AGAIN with confirmed=true to actually execute the reset and close the modal. " +
+      "  • If the user says 'no' / 'cancel' / 'never mind' while the modal is open, use close_topmost_modal instead. " +
+      "Live context surfaces the modal state so you know which path applies.",
+    input_schema: {
+      type: "object" as const,
+      properties: {
+        confirmed: {
+          type: "boolean",
+          description:
+            "True ONLY when the confirm modal is already open and the user has just said yes. Default false.",
+        },
+      },
+      required: [],
+    },
+  },
+  {
+    name: "toggle_smart_device",
+    description:
+      "Toggle a boolean property on a smart device — power, lock, etc. Convenience over set_smart_property when the user said 'turn on/off' or 'lock/unlock'. " +
+      "Use for: 'turn off the x-ray viewer', 'turn on the wall display', 'turn off Boom 2', 'lock the OR door', 'unlock the door', 'turn on the music', 'open the intercom'. " +
+      "If the user said 'lock the door', pass property='locked' on=true; for the door 'unlock', on=false. For everything else default to property='on'.",
+    input_schema: {
+      type: "object" as const,
+      properties: {
+        device: {
+          type: "string",
+          description: "Device name/keyword (e.g. 'x-ray viewer', 'boom 2', 'door', 'music').",
+        },
+        property: {
+          type: "string",
+          description:
+            "Optional. Boolean property key (defaults to 'on'; use 'locked' for the door).",
+        },
+        on: {
+          type: "boolean",
+          description: "Target state — true to enable / lock / power on; false otherwise.",
+        },
+      },
+      required: ["device", "on"],
+    },
+  },
+  {
     name: "library_filter_category",
     description:
       "Filter the Video Library to a specific anatomic region. " +
@@ -408,7 +518,10 @@ const TOOLS: Anthropic.Tool[] = [
   {
     name: "show_person_schedule",
     description:
-      "Open a focused modal showing one person's case schedule (vertical card list, soonest-first). Use for: 'show me Dr. Patel's schedule', 'what's Marcus Webb's day look like', 'pull up Dr. Shah's week', 'show me the anesthesiologist's schedule', 'now show me Dr. Foster' (when modal already open — switches person). Resolve the spoken reference to a CANONICAL name from the Team roster in the cached system prompt — pass the full string as it appears (e.g. 'Dr. Anika Patel', 'Marcus Webb, CST', 'Dr. Priya Shah', 'Melissa Quinn, RN'). Always include `role` so the modal knows which schedule field to filter on.",
+      "Open a focused modal showing one person's CASE SCHEDULE / CALENDAR (vertical card list, soonest-first). Fire ONLY when the user explicitly references the schedule, calendar, day, week, or month for that person — phrases must contain a temporal/calendar word. Examples: 'show me Dr. Patel's schedule', 'what's Marcus Webb's day look like', 'pull up Dr. Shah's week', 'show me the anesthesiologist's calendar', 'when is Dr. Foster operating next', 'now show me Dr. Foster' (only when this modal is ALREADY open — switches person). " +
+      "DO NOT fire for bare 'open/show me Dr. X' / 'pull up Dr. X' / 'open Patel's preference cards' — those go to open_surgeon_profile (the procedure-preferences screen). " +
+      "For non-surgeon roles (anesthesiologist, scrub tech, circulating nurse) this is the correct tool whenever the user wants their day/week/month. " +
+      "Resolve the spoken reference to a CANONICAL name from the Team roster in the cached system prompt — pass the full string as it appears (e.g. 'Dr. Anika Patel', 'Marcus Webb, CST', 'Dr. Priya Shah', 'Melissa Quinn, RN'). Always include `role` so the modal knows which schedule field to filter on.",
     input_schema: {
       type: "object" as const,
       properties: {
@@ -447,6 +560,143 @@ const TOOLS: Anthropic.Tool[] = [
     description:
       "Close the Person Schedule modal. Use only when the modal is open AND the user wants to close JUST that modal (not navigate away). Phrases: 'close', 'close that', 'close the modal', 'close the schedule', 'dismiss', 'go back'.",
     input_schema: { type: "object" as const, properties: {}, required: [] },
+  },
+  {
+    name: "open_surgeon_profile",
+    description:
+      "Open a surgeon's procedure-preferences profile screen — the source of truth for their preference cards, procedure-by-procedure details, and uploaded images. " +
+      "DEFAULT for any unqualified 'open/show me/pull up Dr. X' or last-name reference WHEN X is a surgeon and the user did NOT say 'schedule', 'calendar', 'day', 'week', or 'month'. Examples that fire here: " +
+      "  • 'Open Dr. Patel' / 'Open Patel' / 'Pull up Dr. Foster' / 'Show me Vasquez' " +
+      "  • 'Open Dr. Patel's preference cards' / 'show me Dr. Foster's procedures' / 'pull up Patel's profile' " +
+      "  • 'Show me Dr. Patel's RSA' (also pass `procedure: \"rsa\"`) " +
+      "DO NOT fire when the user said 'schedule', 'calendar', 'day', 'week', 'month', or 'when' — those go to show_person_schedule. " +
+      "The profile screen is NOT the case-level layout images (those live on the case preop view) — it is the surgeon's own per-procedure card. The optional `procedure` arg expands a specific procedure by name or slug ('rsa', 'rcr', 'acl', 'cabg', 'fess', etc.) on landing.",
+    input_schema: {
+      type: "object" as const,
+      properties: {
+        surgeon: {
+          type: "string",
+          description:
+            "Surgeon name as it appears in the team roster (e.g. 'Dr. Anika Patel'). Last-name-only ('Patel') is also acceptable.",
+        },
+        procedure: {
+          type: "string",
+          description:
+            "Optional. Procedure slug or name to expand on landing (e.g. 'rsa', 'rotator cuff', 'fess'). Omit to land on the first procedure.",
+        },
+      },
+      required: ["surgeon"],
+    },
+  },
+  {
+    name: "expand_procedure",
+    description:
+      "ON THE SURGEON-PROFILE SCREEN: EXPAND (open / show / pull up / focus) a specific procedure card so its details + preference-card images are visible. " +
+      "FIRE for any of: 'open RSA', 'open RCR', 'open ACL', 'show RSA', 'pull up CABG', 'expand rotator cuff', 'open the rotator cuff one', 'show me lumbar fusion', 'open coronary artery bypass'. " +
+      "Match the user's phrase against BOTH the procedure `slug` (e.g. 'rsa', 'rcr', 'acl', 'cabg', 'fess') AND the `name` (e.g. 'Reverse Total Shoulder Arthroplasty', 'Arthroscopic Rotator Cuff Repair'). The live context lists every procedure on the active surgeon's profile with both fields — pass whatever the user said and the route fuzzy-matches by slug → exact name → substring → word-bag. " +
+      "If the user said an acronym (RSA, RCR, ACL, etc.) just pass the acronym lowercased; the route resolves. " +
+      "Idempotent — calling on an already-expanded procedure is fine (re-scrolls into view). " +
+      "ONLY valid on the surgeon-profile screen.",
+    input_schema: {
+      type: "object" as const,
+      properties: {
+        procedure: {
+          type: "string",
+          description:
+            "Procedure slug (rsa/rcr/acl/cabg/fess/lumbar-fusion/etc.) OR full/partial name. Both work.",
+        },
+      },
+      required: ["procedure"],
+    },
+  },
+  {
+    name: "collapse_procedure",
+    description:
+      "ON THE SURGEON-PROFILE SCREEN: COLLAPSE (close / hide / shut) a procedure card. " +
+      "FIRE for any of these phrases when the user is on the surgeon profile and a procedure is currently expanded: 'close', 'close it', 'close that', 'close panel', 'close procedure', 'close procedure panel', 'close the procedure', 'collapse', 'collapse it', 'collapse RSA', 'hide RSA', 'shut it', 'close RSA'. " +
+      "DO NOT use close_topmost_modal for these phrases on this screen — collapse_procedure owns generic 'close' verbs here. " +
+      "If the user names a specific procedure, pass it; if they say a bare 'close' / 'collapse' / 'close it' with no target, OMIT `procedure` and the route collapses whichever is currently expanded. " +
+      "Only valid on the surgeon-profile screen.",
+    input_schema: {
+      type: "object" as const,
+      properties: {
+        procedure: {
+          type: "string",
+          description:
+            "Optional. Procedure slug or name to collapse. Omit when the user said a bare 'close' / 'collapse' — the route closes whichever card is currently expanded.",
+        },
+      },
+      required: [],
+    },
+  },
+  {
+    name: "next_procedure",
+    description:
+      "ON THE SURGEON-PROFILE SCREEN: expand the NEXT procedure in the list (the one after whichever is currently expanded; wraps to first after the last). " +
+      "FIRE for: 'next', 'next procedure', 'next one', 'show me the next procedure', 'go to the next one', 'next card', 'show next', 'arti next'. " +
+      "If nothing is expanded yet, this expands the first procedure. " +
+      "DO NOT use open_case here — on this screen 'next' refers to the next procedure card, NOT the next case on the OR board.",
+    input_schema: { type: "object" as const, properties: {}, required: [] },
+  },
+  {
+    name: "previous_procedure",
+    description:
+      "ON THE SURGEON-PROFILE SCREEN: expand the PREVIOUS procedure in the list (wraps to last after the first). " +
+      "FIRE for: 'previous', 'previous procedure', 'previous one', 'go back', 'go back one', 'prior procedure', 'show me the previous procedure', 'back one'. " +
+      "If nothing is expanded yet, this expands the last procedure. " +
+      "DO NOT use open_case here — on this screen 'previous' refers to the previous procedure card, NOT a case on the OR board.",
+    input_schema: { type: "object" as const, properties: {}, required: [] },
+  },
+  {
+    name: "rename_pref_card_image",
+    description:
+      "Rename a preference-card image inside the currently-expanded procedure of the surgeon-profile screen. Use for: 'rename back table to layout 1', 'rename image 2 to mayo stand setup', 'change the label on the first image to RSA back table'. Identify the image by its current label or its 1-based index as shown in live context.",
+    input_schema: {
+      type: "object" as const,
+      properties: {
+        image: {
+          type: "string",
+          description:
+            "Current label of the image, or its 1-based index ('1', '2', ...). The route fuzzy-matches the label.",
+        },
+        new_label: { type: "string", description: "New label to display." },
+      },
+      required: ["image", "new_label"],
+    },
+  },
+  {
+    name: "remove_pref_card_image",
+    description:
+      "Remove (soft-delete) a preference-card image from the currently-expanded procedure. Use for: 'remove the mayo stand image', 'delete image 2', 'take that one off the card'. Identify the image by current label or 1-based index.",
+    input_schema: {
+      type: "object" as const,
+      properties: {
+        image: {
+          type: "string",
+          description: "Current label of the image, or its 1-based index.",
+        },
+      },
+      required: ["image"],
+    },
+  },
+  {
+    name: "prompt_pref_card_upload",
+    description:
+      "ON THE SURGEON-PROFILE SCREEN: open the system file-picker so the user can upload new preference-card image(s) into a procedure. " +
+      "FIRE for: 'upload an image', 'upload images', 'upload a picture for RCR', 'upload images for RSA', 'add a picture', 'add images to lumbar fusion', 'attach a layout photo'. " +
+      "If the user names a procedure (slug or full/partial name), pass it as `procedure` — the route will EXPAND that procedure if not already expanded, then open the upload dialog on its card. If the user does NOT name a procedure, omit it and the route uses whichever is currently expanded. " +
+      "The actual file selection is a click-only OS dialog. Confirm verbally with 'Pick a file.' (≤5 words). Browsers may block the dialog if the voice command isn't a direct user gesture — note that to the user only if it visibly fails.",
+    input_schema: {
+      type: "object" as const,
+      properties: {
+        procedure: {
+          type: "string",
+          description:
+            "Optional. Procedure slug or name to upload INTO. The route auto-expands that procedure first. Omit to upload into whichever is currently expanded.",
+        },
+      },
+      required: [],
+    },
   },
   {
     name: "greet_person",
@@ -535,14 +785,21 @@ const TOOLS: Anthropic.Tool[] = [
   {
     name: "start_case",
     description:
-      "Enter the intraop ('case active') view. NARRATION REQUIRED: in the same turn as the tool call, return ONE short text sentence using the resolved patient's name — e.g. 'Starting Marcus Chen's case.' Never empty.",
+      "Open the pre-incision time-out checklist (when on pre-op) OR — when the time-out modal is already open and all 4 items are confirmed — advance INTO the intraop ('case active') view. " +
+      "FIRE for: 'start case', 'start the case', 'start', 'start it', 'go', 'begin', 'let's go', 'continue', 'ready to start', 'we're ready', 'start now'. " +
+      "Behavior depends on live context: " +
+      "  • Pre-op (modal CLOSED) → opens the time-out modal (the user must check four items before the case actually starts). " +
+      "  • Time-out modal OPEN with 4/4 confirmed → starts the case (transitions to intraop). DO NOT respond 'already started' here — the route returns ok:true with state.continued. " +
+      "  • Time-out modal OPEN with <4 checked → the route returns ok:false with the count; respond by naming the remaining items so the user can confirm them. NEVER say 'already started' just because the modal is open. " +
+      "  • Already on intraop → the route returns ok:true with state.already; respond 'Already in progress.' " +
+      "NARRATION REQUIRED: in the same turn as the tool call, return ONE short sentence — e.g. 'Starting Marcus Chen's case.' on transition, or 'Patient and site are still pending.' when items remain. Never empty.",
     input_schema: {
       type: "object" as const,
       properties: {
         query: {
           type: "string",
           description:
-            "Optional patient name / 'next' / procedure keyword. Omit on pre-op screen to use the active case.",
+            "Optional patient name / 'next' / procedure keyword. Omit on pre-op screen to use the active case, and ALWAYS omit when responding to a bare 'start' / 'continue' from inside the open time-out modal.",
         },
       },
       required: [],
@@ -609,13 +866,20 @@ const TOOLS: Anthropic.Tool[] = [
   {
     name: "intraop_show_imaging",
     description:
-      "Swap the surgeon's primary view tile (multi-view) or spotlight the imaging tile (standard intraop) to a chosen modality. PREFER THIS OVER open_xrays whenever live context says 'Phase: intraop' or 'Multi-view: case ACTIVE'. Trigger phrases: 'show me the MRI', 'show MRI', 'show MRI scans', 'pull up the MRI', 'show fluoroscopy', 'show the fluoro', 'show the live feed' (→ arthroscopy), 'show the arthroscope', 'back to live', 'side by side'. Modality 'arthroscopy' returns the surgeon tile to the live arthroscope feed; 'mri' shows the patient's MRI study; 'fluoroscopy' shows fluoro; 'side_by_side' splits.",
+      "Swap the surgeon's primary view tile (multi-view) or spotlight the imaging tile (standard intraop) to a chosen modality. PREFER THIS OVER open_xrays whenever live context says 'Phase: intraop' or 'Multi-view: case ACTIVE'. " +
+      "Trigger phrases: " +
+      "  • 'show me the MRI' / 'show MRI' / 'show MRI scans' / 'pull up the MRI' / 'open MRI' → modality='mri' " +
+      "  • 'show me the CT' / 'show the CT' / 'show CT scans' / 'pull up the CT' / 'open CT' / 'show the CAT scan' → modality='ct' " +
+      "  • 'show fluoroscopy' / 'show the fluoro' / 'pull up fluoro' → modality='fluoroscopy' " +
+      "  • 'show the live feed' / 'show the arthroscope' / 'back to live' / 'show the scope' → modality='arthroscopy' " +
+      "  • 'side by side' → modality='side_by_side' " +
+      "Modality 'arthroscopy' returns the surgeon tile to the live arthroscope feed; 'mri' shows the patient's MRI study; 'ct' shows the patient's CT scans (axial/coronal); 'fluoroscopy' shows fluoro; 'side_by_side' splits.",
     input_schema: {
       type: "object" as const,
       properties: {
         modality: {
           type: "string",
-          enum: ["arthroscopy", "fluoroscopy", "mri", "side_by_side"],
+          enum: ["arthroscopy", "fluoroscopy", "mri", "ct", "side_by_side"],
         },
       },
       required: ["modality"],

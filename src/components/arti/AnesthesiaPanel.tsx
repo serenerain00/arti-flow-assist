@@ -42,7 +42,12 @@ function PanelLabel({
   color?: string;
 }) {
   return (
-    <div className={cn("mb-3 flex items-center gap-2 text-[10px] font-semibold uppercase tracking-[0.22em]", color)}>
+    <div
+      className={cn(
+        "mb-3 flex items-center gap-2 text-[10px] font-semibold uppercase tracking-[0.22em]",
+        color,
+      )}
+    >
       <Icon className="h-3.5 w-3.5" strokeWidth={1.8} />
       {children}
     </div>
@@ -51,7 +56,12 @@ function PanelLabel({
 
 function Panel({ children, className }: { children: React.ReactNode; className?: string }) {
   return (
-    <div className={cn("rounded-2xl border border-border/60 bg-surface/60 p-5 backdrop-blur-sm", className)}>
+    <div
+      className={cn(
+        "rounded-2xl border border-border/60 bg-surface/60 p-5 backdrop-blur-sm",
+        className,
+      )}
+    >
       {children}
     </div>
   );
@@ -65,11 +75,7 @@ interface Props {
   onToggleMachineCheck?: (index: number) => void;
 }
 
-export function AnesthesiaPanel({
-  activeCase,
-  machineCheckDone,
-  onToggleMachineCheck,
-}: Props) {
+export function AnesthesiaPanel({ activeCase, machineCheckDone, onToggleMachineCheck }: Props) {
   const clinical = activeCase ? PATIENT_CLINICAL[activeCase.id] : PATIENT_CLINICAL["c-002"];
   const c = clinical ?? PATIENT_CLINICAL["c-002"];
 
@@ -149,7 +155,9 @@ export function AnesthesiaPanel({
               ["Blood type", c.bloodType],
             ].map(([label, val]) => (
               <div key={label}>
-                <p className="text-[10px] uppercase tracking-wider text-muted-foreground">{label}</p>
+                <p className="text-[10px] uppercase tracking-wider text-muted-foreground">
+                  {label}
+                </p>
                 <p className="font-light text-foreground/85">{val}</p>
               </div>
             ))}
@@ -164,12 +172,18 @@ export function AnesthesiaPanel({
           <PanelLabel icon={Wind}>Airway Assessment</PanelLabel>
           <div className="grid grid-cols-2 gap-3 text-sm">
             <div>
-              <p className="text-[10px] uppercase tracking-wider text-muted-foreground">Mallampati</p>
+              <p className="text-[10px] uppercase tracking-wider text-muted-foreground">
+                Mallampati
+              </p>
               <p className="font-light text-foreground/85">{c.airway.mallampati}</p>
             </div>
             <div>
-              <p className="text-[10px] uppercase tracking-wider text-muted-foreground">Classification</p>
-              <p className="font-light text-foreground/85">{c.airway.difficult ? "Difficult" : "Standard"}</p>
+              <p className="text-[10px] uppercase tracking-wider text-muted-foreground">
+                Classification
+              </p>
+              <p className="font-light text-foreground/85">
+                {c.airway.difficult ? "Difficult" : "Standard"}
+              </p>
             </div>
           </div>
           <div
@@ -201,7 +215,12 @@ export function AnesthesiaPanel({
                 )}
               >
                 <span className="w-18 shrink-0 text-xs text-muted-foreground">{lab.label}</span>
-                <span className={cn("flex-1 font-mono font-semibold", lab.flag ? "text-warning" : "text-foreground/85")}>
+                <span
+                  className={cn(
+                    "flex-1 font-mono font-semibold",
+                    lab.flag ? "text-warning" : "text-foreground/85",
+                  )}
+                >
                   {lab.value}
                 </span>
                 {lab.flag && <AlertTriangle className="h-3 w-3 shrink-0 text-warning" />}
@@ -230,10 +249,7 @@ export function AnesthesiaPanel({
                   )}
                 >
                   {isDone ? (
-                    <CheckCircle
-                      className="h-4 w-4 shrink-0 text-success"
-                      strokeWidth={1.8}
-                    />
+                    <CheckCircle className="h-4 w-4 shrink-0 text-success" strokeWidth={1.8} />
                   ) : (
                     <Circle
                       className="h-4 w-4 shrink-0 text-muted-foreground/30"
@@ -241,9 +257,7 @@ export function AnesthesiaPanel({
                     />
                   )}
                   <span
-                    className={
-                      isDone ? "text-foreground/55 line-through" : "text-foreground/90"
-                    }
+                    className={isDone ? "text-foreground/55 line-through" : "text-foreground/90"}
                   >
                     {label}
                   </span>
