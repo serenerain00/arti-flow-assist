@@ -17,6 +17,11 @@ export type WidgetId =
   | "home-cases-per-day"
   | "home-procedure-mix"
   | "home-quick-actions"
+  // ── Circulating-nurse pre-case readiness widgets (home) ──────────────
+  | "supply-status"
+  | "or-status"
+  | "task-checklist"
+  | "comms-feed"
   // ── Case-context widgets (preview-friendly on home, live in pre-op) ──
   | "preference-card"
   | "anatomy-3d"

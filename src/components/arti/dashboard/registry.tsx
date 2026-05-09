@@ -9,6 +9,9 @@ import {
   Hash,
   Home,
   Image as ImageIcon,
+  ListChecks,
+  MessagesSquare,
+  Package,
   PieChart,
   Sparkles,
   Stethoscope,
@@ -17,6 +20,7 @@ import {
   Users,
   UserCog,
   Wind,
+  Wrench,
 } from "lucide-react";
 import type { WidgetContext, WidgetDef, WidgetId } from "./types";
 import type { InstrumentId } from "../AwakeDashboard";
@@ -31,10 +35,14 @@ import { AnesthesiaPanel } from "../AnesthesiaPanel";
 import { AnatomyModel3D } from "../AnatomyModel3D";
 import {
   HomeCasesPerDayWidget,
+  HomeCommsFeedWidget,
   HomeHeroWidget,
+  HomeORStatusWidget,
   HomeProcedureMixWidget,
   HomeQuickActionsWidget,
   HomeRoomVitalsWidget,
+  HomeSupplyStatusWidget,
+  HomeTaskChecklistWidget,
   HomeUpNextWidget,
 } from "./homeWidgets";
 
@@ -87,6 +95,43 @@ export const WIDGET_DEFS: Record<WidgetId, WidgetDef> = {
     surfaces: ["home"],
   },
 
+  // ── Circulating-nurse pre-case readiness widgets ─────────────────────
+  "supply-status": {
+    id: "supply-status",
+    title: "Supply Status",
+    blurb:
+      "Implants, sutures, sterile trays, disposables, blood products — ready / pending / missing.",
+    defaultSpan: 2,
+    surfaces: ["home"],
+    naturalRoles: ["nurse"],
+  },
+  "or-status": {
+    id: "or-status",
+    title: "OR Readiness",
+    blurb:
+      "Instruments staged, table configured, imaging displays live, sterile field, equipment power.",
+    defaultSpan: 2,
+    surfaces: ["home"],
+    naturalRoles: ["nurse", "scrub"],
+  },
+  "task-checklist": {
+    id: "task-checklist",
+    title: "Wrap-up Checklist",
+    blurb:
+      "Tap to check off her remaining pre-incision tasks — consent, count, block, family update.",
+    defaultSpan: 1,
+    surfaces: ["home"],
+    naturalRoles: ["nurse"],
+  },
+  "comms-feed": {
+    id: "comms-feed",
+    title: "Communications",
+    blurb: "Messages from PACU, family, anesthesia, sub-sterile, charge RN. Unread badge.",
+    defaultSpan: 2,
+    surfaces: ["home"],
+    naturalRoles: ["nurse"],
+  },
+
   // ── Procedure-context widgets (work on Home + Pre-op) ────────────────
   "preference-card": {
     id: "preference-card",
@@ -132,9 +177,9 @@ export const WIDGET_DEFS: Record<WidgetId, WidgetDef> = {
   alerts: {
     id: "alerts",
     title: "Advisory Alerts",
-    blurb: "Tier-tagged advisories with dismiss rules.",
+    blurb: "Tier-tagged advisories — equipment issues, allergies, timing reminders.",
     defaultSpan: 1,
-    surfaces: ["preop"],
+    surfaces: ["home", "preop"],
     naturalRoles: ["nurse"],
   },
   "team-roster": {
@@ -181,6 +226,10 @@ export const WIDGET_ICON: Record<
   "home-cases-per-day": BarChart3,
   "home-procedure-mix": PieChart,
   "home-quick-actions": Sparkles,
+  "supply-status": Package,
+  "or-status": Wrench,
+  "task-checklist": ListChecks,
+  "comms-feed": MessagesSquare,
   "preference-card": ImageIcon,
   "anatomy-3d": Box,
   "case-summary": Syringe,
@@ -213,6 +262,10 @@ export const WIDGET_RENDERERS: Record<WidgetId, (ctx: WidgetContext) => ReactEle
   "home-cases-per-day": (ctx) => <HomeCasesPerDayWidget ctx={ctx} />,
   "home-procedure-mix": (ctx) => <HomeProcedureMixWidget ctx={ctx} />,
   "home-quick-actions": (ctx) => <HomeQuickActionsWidget ctx={ctx} />,
+  "supply-status": (ctx) => <HomeSupplyStatusWidget ctx={ctx} />,
+  "or-status": (ctx) => <HomeORStatusWidget ctx={ctx} />,
+  "task-checklist": (ctx) => <HomeTaskChecklistWidget ctx={ctx} />,
+  "comms-feed": (ctx) => <HomeCommsFeedWidget ctx={ctx} />,
   "time-out": (ctx) => (
     <TimeOutPanel
       checked={(ctx.timeOutChecked ?? new Set()) as Set<string>}
