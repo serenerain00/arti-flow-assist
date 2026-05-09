@@ -697,12 +697,24 @@ export function useArtiVoice(callbacks: ArtiVoiceCallbacks) {
   // spoken before the user cut in (for history continuity).
   const currentNarrationRef = useRef<string>("");
 
-  // Safely restart recognition after TTS — clears dead ref instead of silent swallow.
+  // Safely restart recognition after TTS. Now that we keep SR running
+  // through the entire speak() lifecycle so the user can interrupt mid-
+  // narration, `rec.start()` on an already-running recognizer throws an
+  // InvalidStateError. That's expected and harmless — the rec is fine,
+  // we just don't need to do anything. Only genuine failures (rec is
+  // dead / closed) should clear the ref and force startListening to
+  // build a fresh one.
   const restartRecognition = useCallback(() => {
-    if (!recognitionRef.current) return;
+    const rec = recognitionRef.current;
+    if (!rec) return;
     try {
-      recognitionRef.current.start();
-    } catch {
+      rec.start();
+    } catch (err) {
+      const msg = err instanceof Error ? err.message : String(err);
+      if (/already|InvalidState/i.test(msg)) {
+        // rec is already running — exactly what we want. No-op.
+        return;
+      }
       // rec is unrecoverable — clear it so startListening creates a fresh instance.
       recognitionRef.current = null;
       setListening(false);
@@ -1117,12 +1129,17 @@ export function useArtiVoice(callbacks: ArtiVoiceCallbacks) {
         setListening(false);
         return;
       }
-      // If TTS is playing, Chrome can't restart the mic yet.
-      // speak() will restart recognition once audio finishes.
+      // If TTS is playing, don't try to (re)start — speak() / playAudio
+      // already keep SR running through TTS so we can hear interrupts.
       if (isSpeakingRef.current) return;
       try {
         rec.start();
-      } catch {
+      } catch (err) {
+        const msg = err instanceof Error ? err.message : String(err);
+        if (/already|InvalidState/i.test(msg)) {
+          // rec is already running — fine.
+          return;
+        }
         // rec entered a broken/unrecoverable state — clear the dead reference
         // so the next startListening() call creates a fresh instance instead
         // of seeing a non-null ref and returning early.
