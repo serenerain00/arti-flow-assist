@@ -1,17 +1,33 @@
 import type { DashboardConfig } from "./types";
 
 /**
- * "My Dashboard" — what the circulating nurse sees on Home before any
- * customization. Mirrors the legacy hard-coded HomeDashboard layout so
- * existing users don't perceive a regression.
+ * "My Dashboard" — the circulating nurse's pre-case readiness view.
+ *
+ * Order is deliberate, prioritized for what she actually scans in the
+ * minutes before incision:
+ *   1. Welcome / day stats         — orient + glance the day
+ *   2. Up-next case                — patient ID, procedure, time, side
+ *      Room vitals                 — environmental snapshot adjacent to up-next
+ *   3. Supply status               — implants/sutures/trays/disposables/blood
+ *      Active alerts               — equipment + safety + timing reminders
+ *   4. OR readiness                — instruments staged, table, imaging, sterile field
+ *      Wrap-up checklist           — her remaining tasks
+ *   5. Communications              — PACU, family, anesthesia, sub-sterile, charge
+ *   6. Quick actions               — case list / pre-op / surgeon prefs
+ *
+ * Charts (cases-per-day, procedure-mix) stay in the palette but are
+ * dropped from the default — they're analytics, not in-the-moment work.
  */
 export const DEFAULT_MY_DASHBOARD: DashboardConfig = {
   items: [
     { id: "home-hero" },
     { id: "home-up-next" },
     { id: "home-room-vitals" },
-    { id: "home-cases-per-day" },
-    { id: "home-procedure-mix" },
+    { id: "supply-status" },
+    { id: "alerts" },
+    { id: "or-status" },
+    { id: "task-checklist" },
+    { id: "comms-feed" },
     { id: "home-quick-actions" },
   ],
 };

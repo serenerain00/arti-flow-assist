@@ -1,4 +1,4 @@
-import { useEffect, useState } from "react";
+import { useEffect, useMemo, useState } from "react";
 import {
   Activity,
   Calendar,
@@ -506,5 +506,458 @@ function ChartTooltipBox({
       </div>
       <div className="mt-0.5 font-mono text-sm tabular-nums text-foreground">{item.value}</div>
     </div>
+  );
+}
+
+// ─────────────────────────────────────────────────────────────────────────
+// Circulating-nurse readiness widgets — designed around what a circulator
+// actually needs to scan in the minutes before her case starts. Status
+// lights tell her at a glance: what's covered, what's pending, what's
+// missing. Seeded with realistic items for the up-next case so the demo
+// reads as live OR data, not abstract placeholders.
+// ─────────────────────────────────────────────────────────────────────────
+
+type ReadinessStatus = "ready" | "pending" | "issue";
+
+const STATUS_PIP: Record<ReadinessStatus, { dotClass: string; ringClass: string; label: string }> =
+  {
+    ready: {
+      dotClass: "bg-success",
+      ringClass: "border-success/40 bg-success/10 text-success",
+      label: "Ready",
+    },
+    pending: {
+      dotClass: "bg-warning",
+      ringClass: "border-warning/40 bg-warning/10 text-warning",
+      label: "Pending",
+    },
+    issue: {
+      dotClass: "bg-destructive",
+      ringClass: "border-destructive/40 bg-destructive/10 text-destructive",
+      label: "Missing",
+    },
+  };
+
+function StatusPip({ status }: { status: ReadinessStatus }) {
+  const meta = STATUS_PIP[status];
+  return (
+    <span
+      className={cn(
+        "inline-flex shrink-0 items-center gap-1.5 rounded-full border px-2 py-0.5 font-mono text-[9px] uppercase tracking-wider",
+        meta.ringClass,
+      )}
+    >
+      <span className={cn("h-1.5 w-1.5 rounded-full", meta.dotClass)} />
+      {meta.label}
+    </span>
+  );
+}
+
+function WidgetShell({
+  eyebrow,
+  title,
+  trailing,
+  children,
+}: {
+  eyebrow: string;
+  title: string;
+  trailing?: React.ReactNode;
+  children: React.ReactNode;
+}) {
+  return (
+    <section className="glass h-full rounded-2xl p-5">
+      <header className="mb-4 flex items-start justify-between gap-3">
+        <div>
+          <div className="font-mono text-[10px] uppercase tracking-[0.35em] text-primary">
+            {eyebrow}
+          </div>
+          <h3 className="mt-1.5 text-base font-light tracking-tight text-foreground">{title}</h3>
+        </div>
+        {trailing}
+      </header>
+      {children}
+    </section>
+  );
+}
+
+// ─── Supply status ─────────────────────────────────────────────────────
+
+const SUPPLY_GROUPS: Array<{
+  category: string;
+  items: Array<{ label: string; status: ReadinessStatus; detail?: string }>;
+}> = [
+  {
+    category: "Implants",
+    items: [
+      { label: "Glenosphere 38 mm", status: "ready", detail: "On back table" },
+      { label: "Humeral stem · size 8", status: "ready", detail: "Press-fit" },
+      { label: "Backup cemented stem", status: "pending", detail: "Vendor ETA 8 min" },
+    ],
+  },
+  {
+    category: "Sutures & Anchors",
+    items: [
+      { label: "FiberWire #2 × 4", status: "ready" },
+      { label: "SwiveLock 4.75 mm × 2", status: "ready" },
+    ],
+  },
+  {
+    category: "Sterile Trays",
+    items: [
+      { label: "Medtronix RSA tray", status: "ready", detail: "Sterilized 06:42" },
+      { label: "Mayo / opening set", status: "ready", detail: "On rack 2" },
+    ],
+  },
+  {
+    category: "Disposables",
+    items: [
+      { label: "ChloraPrep × 3", status: "ready" },
+      { label: "Raytec 4×4 × 20", status: "ready" },
+      { label: "Lap sponges × 10", status: "ready" },
+      { label: "Hemovac drain 10 Fr", status: "ready" },
+    ],
+  },
+  {
+    category: "Blood Products",
+    items: [
+      { label: "T&S complete", status: "ready", detail: "Posted 06:18" },
+      { label: "2u PRBC available", status: "ready", detail: "On standby" },
+    ],
+  },
+];
+
+export function HomeSupplyStatusWidget({ ctx }: { ctx: WidgetContext }) {
+  void ctx;
+  const counts = useMemo(() => {
+    let ready = 0;
+    let pending = 0;
+    let issue = 0;
+    for (const g of SUPPLY_GROUPS) {
+      for (const it of g.items) {
+        if (it.status === "ready") ready++;
+        else if (it.status === "pending") pending++;
+        else issue++;
+      }
+    }
+    return { ready, pending, issue };
+  }, []);
+  return (
+    <WidgetShell
+      eyebrow="Pre-incision · supply"
+      title="Supply status"
+      trailing={
+        <div className="flex items-center gap-1.5 font-mono text-[10px] tabular-nums">
+          <span className="rounded-full border border-success/40 bg-success/10 px-2 py-0.5 text-success">
+            {counts.ready} ready
+          </span>
+          {counts.pending > 0 && (
+            <span className="rounded-full border border-warning/40 bg-warning/10 px-2 py-0.5 text-warning">
+              {counts.pending} pending
+            </span>
+          )}
+          {counts.issue > 0 && (
+            <span className="rounded-full border border-destructive/40 bg-destructive/10 px-2 py-0.5 text-destructive">
+              {counts.issue} missing
+            </span>
+          )}
+        </div>
+      }
+    >
+      <div className="grid grid-cols-1 gap-4 md:grid-cols-2">
+        {SUPPLY_GROUPS.map((g) => (
+          <div key={g.category}>
+            <div className="font-mono text-[9px] uppercase tracking-wider text-muted-foreground/70">
+              {g.category}
+            </div>
+            <ul className="mt-1.5 space-y-1.5">
+              {g.items.map((it) => (
+                <li
+                  key={it.label}
+                  className="flex items-center justify-between gap-3 text-sm font-light"
+                >
+                  <div className="min-w-0 flex-1">
+                    <div className="truncate text-foreground/90">{it.label}</div>
+                    {it.detail && (
+                      <div className="mt-0.5 truncate font-mono text-[10px] uppercase tracking-wider text-muted-foreground/70">
+                        {it.detail}
+                      </div>
+                    )}
+                  </div>
+                  <StatusPip status={it.status} />
+                </li>
+              ))}
+            </ul>
+          </div>
+        ))}
+      </div>
+    </WidgetShell>
+  );
+}
+
+// ─── OR status ─────────────────────────────────────────────────────────
+
+const OR_STATUS_GROUPS: Array<{
+  category: string;
+  items: Array<{ label: string; status: ReadinessStatus; detail?: string }>;
+}> = [
+  {
+    category: "Instruments",
+    items: [
+      { label: "Mayo stand staged", status: "ready", detail: "Per Patel pref card" },
+      { label: "Back table set", status: "ready" },
+      { label: "Power reamer & drill", status: "ready", detail: "Battery 96%" },
+    ],
+  },
+  {
+    category: "OR Table",
+    items: [
+      { label: "Beach chair · 60–70°", status: "ready" },
+      { label: "Spider arm holder", status: "ready", detail: "Mounted, locked" },
+      { label: "Padding · axillary roll", status: "ready" },
+    ],
+  },
+  {
+    category: "Imaging Displays",
+    items: [
+      { label: "Wall display", status: "ready", detail: "Live · Arti Wall" },
+      { label: "Surgeon monitor", status: "ready", detail: "30° scope input" },
+      { label: "Anesthesia mirror", status: "ready" },
+    ],
+  },
+  {
+    category: "Sterile Field & Equipment",
+    items: [
+      { label: "Sterile field calibrated", status: "ready", detail: "06:42" },
+      { label: "Bovie · blend 30/30", status: "ready" },
+      { label: "Arthroscopy pump", status: "pending", detail: "Priming · 3 min" },
+      { label: "Suction × 2", status: "ready" },
+    ],
+  },
+];
+
+export function HomeORStatusWidget({ ctx }: { ctx: WidgetContext }) {
+  void ctx;
+  return (
+    <WidgetShell eyebrow="Pre-incision · room" title="OR readiness">
+      <div className="grid grid-cols-1 gap-4 md:grid-cols-2">
+        {OR_STATUS_GROUPS.map((g) => (
+          <div key={g.category}>
+            <div className="font-mono text-[9px] uppercase tracking-wider text-muted-foreground/70">
+              {g.category}
+            </div>
+            <ul className="mt-1.5 space-y-1.5">
+              {g.items.map((it) => (
+                <li
+                  key={it.label}
+                  className="flex items-center justify-between gap-3 text-sm font-light"
+                >
+                  <div className="min-w-0 flex-1">
+                    <div className="truncate text-foreground/90">{it.label}</div>
+                    {it.detail && (
+                      <div className="mt-0.5 truncate font-mono text-[10px] uppercase tracking-wider text-muted-foreground/70">
+                        {it.detail}
+                      </div>
+                    )}
+                  </div>
+                  <StatusPip status={it.status} />
+                </li>
+              ))}
+            </ul>
+          </div>
+        ))}
+      </div>
+    </WidgetShell>
+  );
+}
+
+// ─── Task checklist ────────────────────────────────────────────────────
+
+const SEED_TASKS: Array<{ id: string; label: string; done: boolean; detail?: string }> = [
+  { id: "consent", label: "Verify consent signed in EMR", done: true, detail: "Signed 06:31" },
+  { id: "prior-count", label: "Confirm prior case count complete", done: true },
+  {
+    id: "block",
+    label: "Confirm interscalene block w/ anesthesia",
+    done: false,
+    detail: "Due 09:25",
+  },
+  { id: "raytec", label: "Stock raytec for room turnover", done: false },
+  { id: "timeout", label: "Schedule final time-out", done: false, detail: "09:42 target" },
+  { id: "family", label: "Update Mrs. Chen — 09:30 check-in", done: false },
+];
+
+export function HomeTaskChecklistWidget({ ctx }: { ctx: WidgetContext }) {
+  void ctx;
+  // Local toggle so the checklist feels live without depending on
+  // route-level state. Persistence isn't relevant for the demo.
+  const [tasks, setTasks] = useState(SEED_TASKS);
+  const remaining = tasks.filter((t) => !t.done).length;
+  return (
+    <WidgetShell
+      eyebrow="My remaining tasks"
+      title="Wrap-up checklist"
+      trailing={
+        <span
+          className={cn(
+            "rounded-full border px-2 py-0.5 font-mono text-[10px] uppercase tracking-wider",
+            remaining === 0
+              ? "border-success/40 bg-success/10 text-success"
+              : "border-warning/40 bg-warning/10 text-warning",
+          )}
+        >
+          {remaining === 0 ? "All done" : `${remaining} left`}
+        </span>
+      }
+    >
+      <ul className="space-y-1.5">
+        {tasks.map((t) => (
+          <li key={t.id}>
+            <button
+              type="button"
+              onClick={() =>
+                setTasks((prev) => prev.map((x) => (x.id === t.id ? { ...x, done: !x.done } : x)))
+              }
+              className="flex w-full items-start gap-3 rounded-lg px-2 py-1.5 text-left transition-colors hover:bg-surface-2/60"
+            >
+              <span
+                className={cn(
+                  "mt-0.5 flex h-4 w-4 shrink-0 items-center justify-center rounded-sm border transition-colors",
+                  t.done ? "border-success bg-success" : "border-muted-foreground/40",
+                )}
+              >
+                {t.done && (
+                  <svg viewBox="0 0 12 12" className="h-3 w-3 text-success-foreground">
+                    <path
+                      d="M2 6l2.5 2.5L10 3"
+                      fill="none"
+                      stroke="currentColor"
+                      strokeWidth="2"
+                      strokeLinecap="round"
+                      strokeLinejoin="round"
+                    />
+                  </svg>
+                )}
+              </span>
+              <div className="min-w-0 flex-1">
+                <div
+                  className={cn(
+                    "text-sm font-light leading-snug",
+                    t.done ? "text-muted-foreground line-through" : "text-foreground/90",
+                  )}
+                >
+                  {t.label}
+                </div>
+                {t.detail && (
+                  <div className="mt-0.5 font-mono text-[10px] uppercase tracking-wider text-muted-foreground/70">
+                    {t.detail}
+                  </div>
+                )}
+              </div>
+            </button>
+          </li>
+        ))}
+      </ul>
+    </WidgetShell>
+  );
+}
+
+// ─── Comms feed ────────────────────────────────────────────────────────
+
+type CommSource = "PACU" | "Family" | "Anesthesia" | "Sub-sterile" | "Charge RN";
+
+const COMM_TONE: Record<CommSource, string> = {
+  PACU: "border-primary/40 bg-primary/10 text-primary",
+  Family: "border-accent/40 bg-accent/10 text-accent",
+  Anesthesia: "border-warning/40 bg-warning/10 text-warning",
+  "Sub-sterile": "border-success/40 bg-success/10 text-success",
+  "Charge RN": "border-border/60 bg-surface-2 text-foreground/85",
+};
+
+const SEED_COMMS: Array<{
+  id: string;
+  source: CommSource;
+  time: string;
+  message: string;
+  unread?: boolean;
+}> = [
+  {
+    id: "pacu-1",
+    source: "PACU",
+    time: "06:48",
+    message: "Bay 3 ready when you are. Send patient anytime after 09:50.",
+    unread: true,
+  },
+  {
+    id: "family-1",
+    source: "Family",
+    time: "07:15",
+    message: "Mrs. Chen requested an update at 09:30 — please call waiting room ext 4408.",
+    unread: true,
+  },
+  {
+    id: "anesth-1",
+    source: "Anesthesia",
+    time: "06:55",
+    message: "Pre-op interscalene block complete, patient stable. Bringing back at 09:25.",
+  },
+  {
+    id: "subster-1",
+    source: "Sub-sterile",
+    time: "07:02",
+    message: "RSA tray on rack 2, glenosphere 38 mm verified.",
+  },
+  {
+    id: "charge-1",
+    source: "Charge RN",
+    time: "06:30",
+    message: "OR 327 turnover delayed ~15 min — heads up if you need the boom.",
+  },
+];
+
+export function HomeCommsFeedWidget({ ctx }: { ctx: WidgetContext }) {
+  void ctx;
+  const unread = SEED_COMMS.filter((c) => c.unread).length;
+  return (
+    <WidgetShell
+      eyebrow="Inbound · last 30 min"
+      title="Communications"
+      trailing={
+        unread > 0 ? (
+          <span className="rounded-full border border-primary/50 bg-primary/15 px-2 py-0.5 font-mono text-[10px] uppercase tracking-wider text-primary">
+            {unread} unread
+          </span>
+        ) : null
+      }
+    >
+      <ul className="space-y-2.5">
+        {SEED_COMMS.map((c) => (
+          <li
+            key={c.id}
+            className={cn(
+              "rounded-xl border p-3 transition-colors",
+              c.unread ? "border-primary/30 bg-primary/[0.04]" : "border-border/60 bg-surface-2/30",
+            )}
+          >
+            <div className="mb-1.5 flex items-center gap-2">
+              <span
+                className={cn(
+                  "rounded-full border px-2 py-0.5 font-mono text-[9px] uppercase tracking-wider",
+                  COMM_TONE[c.source],
+                )}
+              >
+                {c.source}
+              </span>
+              <span className="font-mono text-[10px] tabular-nums text-muted-foreground/70">
+                {c.time}
+              </span>
+              {c.unread && (
+                <span className="ml-auto h-1.5 w-1.5 rounded-full bg-primary" aria-label="Unread" />
+              )}
+            </div>
+            <p className="text-sm font-light leading-snug text-foreground/90">{c.message}</p>
+          </li>
+        ))}
+      </ul>
+    </WidgetShell>
   );
 }
