@@ -1,6 +1,7 @@
-import { useEffect, useState } from "react";
+import { useEffect, useMemo, useState } from "react";
 import { RippleCanvas } from "./RippleCanvas";
 import { ArtiInvoker } from "./ArtiInvoker";
+import { TODAY_CASES } from "./cases";
 
 function getGreeting(d?: Date | null) {
   if (!d) return "Hello";
@@ -53,6 +54,29 @@ export function SleepScreen({
 
   const greeting = getGreeting(time ?? undefined);
   const timeStr = time ? time.toLocaleTimeString([], { hour: "numeric", minute: "2-digit" }) : "";
+
+  // Live countdown to the next case so the greeting tagline reads
+  // accurately. Picks the case with status="next"; falls back to the
+  // first case on today's board. If we can't compute a sensible delta
+  // (no upcoming case, or the time is in the past), we drop the line.
+  const upcomingTagline = useMemo(() => {
+    if (!time) return null;
+    const next = TODAY_CASES.find((c) => c.status === "next") ?? TODAY_CASES[0];
+    if (!next) return null;
+    const [h, m] = next.time.split(":").map((n) => Number(n));
+    if (!Number.isFinite(h) || !Number.isFinite(m)) return null;
+    const target = new Date(time);
+    target.setHours(h, m, 0, 0);
+    const diffMin = Math.round((target.getTime() - time.getTime()) / 60_000);
+    if (diffMin <= 0) {
+      return `Today's first case is about to begin. What can I get you?`;
+    }
+    if (diffMin >= 90) {
+      const hours = Math.round(diffMin / 60);
+      return `Today's first case begins in about ${hours} hour${hours === 1 ? "" : "s"}. What can I get you?`;
+    }
+    return `Today's first case begins in ${diffMin} minute${diffMin === 1 ? "" : "s"}. What can I get you?`;
+  }, [time]);
 
   return (
     <div
@@ -129,7 +153,7 @@ export function SleepScreen({
                   className="animate-greet mt-4 max-w-md text-balance text-sm font-light text-muted-foreground"
                   style={{ animationDelay: "0.58s" }}
                 >
-                  Today's first case begins in 32 minutes. What can I get you?
+                  {upcomingTagline ?? "What can I get you?"}
                 </p>
               </div>
             )}

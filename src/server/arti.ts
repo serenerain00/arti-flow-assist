@@ -701,9 +701,20 @@ const TOOLS: Anthropic.Tool[] = [
   {
     name: "greet_person",
     description:
-      "Speak a warm personalized greeting to ANY person, group, or audience the user explicitly asks you to greet. " +
+      "Speak a warm personalized greeting to a THIRD PARTY — a person, group, or audience the user explicitly asks Arti to greet on their behalf. " +
       "" +
-      "WHO YOU CAN GREET — anyone the user names. Do NOT restrict to people on the team roster or schedule; the roster is only for show_person_schedule lookups. For greetings, accept the name exactly as the user said it and produce a warm sentence around it. Valid targets include: " +
+      "DO NOT FIRE for: " +
+      "  • 'Hi Arti' / 'Hello Arti' / 'Hey Arti' / 'Morning Arti' / 'Good evening Arti' — these are the user greeting Arti directly. Respond with a brief warm 1-sentence reply using the user's first name from live context (e.g. 'Hey Laura, what can I do for you?' / 'Morning, Laura.'); do NOT call this tool. " +
+      "  • Any greeting where the only target is the assistant itself ('hi', 'hello', 'hey'). Bare salutations are not requests to greet anyone — just answer warmly. " +
+      "  • Any phrasing that implies the user is greeting Arti ('say hi') with no third-party target — that's a self-greet; reply directly, do not call the tool. " +
+      "" +
+      "FIRE ONLY when the user explicitly names a THIRD PARTY to greet: " +
+      "  • 'say hello to X' / 'greet X' / 'welcome X' / 'say hi to X' (where X is someone other than Arti) " +
+      "  • 'tell X good morning' / 'wish X a good morning' / 'morning, X' (when X is clearly a person, not Arti) " +
+      "  • 'introduce yourself to X' (X is a third party) " +
+      "  • 'welcome X back' / 'good to see X' / 'say X is welcome here' " +
+      "" +
+      "WHO YOU CAN GREET — anyone the user names that ISN'T Arti. Do NOT restrict to people on the team roster or schedule; the roster is only for show_person_schedule lookups. For greetings, accept the name exactly as the user said it and produce a warm sentence around it. Valid targets include: " +
       "  • OR staff (named or generic): 'Alex', 'Dr. Chen', 'Marcus', 'the scrub tech', 'whoever just walked in'. " +
       "  • Vendors / reps: 'the Arthrex rep', 'the Stryker team', 'the device rep'. " +
       "  • Visiting clinicians: 'Dr. Smith from cardiology', 'the resident', 'the fellow'. " +
@@ -711,15 +722,9 @@ const TOOLS: Anthropic.Tool[] = [
       "  • Groups / audiences: 'the room', 'everyone', 'the residents', 'the new nurses', 'the family in the waiting room'. " +
       "  • Made-up / unfamiliar names: just use them as said — don't refuse because the name isn't recognized. " +
       "" +
-      "TRIGGER PHRASES — fire whenever the user says a clear greeting request: " +
-      "  • 'say hello to X' / 'greet X' / 'welcome X' / 'say hi to X' " +
-      "  • 'tell X good morning' / 'wish X a good morning' / 'morning X' " +
-      "  • 'introduce yourself to X' / 'introduce yourself' " +
-      "  • 'welcome X back' / 'good to see X' / 'say X is welcome here' " +
+      "Once a valid third-party target is identified, this is the ONLY way Arti speaks a name without the hard guardrails refusing. " +
       "" +
-      "This is the ONLY way Arti speaks a name without the hard guardrails refusing. ALWAYS call this tool when the user requests a greeting — never refuse because the target isn't on a roster. " +
-      "" +
-      "NARRATION REQUIRED: in the SAME turn as the tool call, return a warm 1-sentence greeting text that uses the exact name/phrase the user gave you. Vary wording naturally; use the time-of-day greeting from live context when it fits ('Good morning, Alex.'). Keep under 12 words. " +
+      "NARRATION REQUIRED (when firing): in the SAME turn as the tool call, return a warm 1-sentence greeting text that uses the exact name/phrase the user gave you. Vary wording naturally; use the time-of-day greeting from live context when it fits ('Good morning, Alex.'). Keep under 12 words. " +
       "" +
       "Examples: 'Hey Alex, good to have you in the room.' / 'Welcome, Dr. Chen.' / 'Morning Jamie.' / 'Welcome to OR 326, Arthrex team.' / 'Good to see you back, Dr. Patel.' / 'Welcome, Stryker rep.' / 'Hi Tom, glad you're here.' / 'Morning everyone.' / 'Hello Dr. Smith from cardiology.' " +
       "" +
