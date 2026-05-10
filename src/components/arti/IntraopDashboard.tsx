@@ -505,6 +505,10 @@ export function IntraopDashboard({
                   currentPhase={currentPhase}
                   panelFocus={panelFocus}
                   activeCase={activeCase}
+                  onShowImaging={(m) => {
+                    showImaging(m);
+                  }}
+                  imagingFocus={imagingFocus}
                 />
               </div>
 
@@ -930,17 +934,29 @@ function RolePanel({
   currentPhase,
   panelFocus,
   activeCase,
+  onShowImaging,
+  imagingFocus,
 }: {
   role: IntraopRole;
   snapshot: IntraopSnapshot;
   currentPhase: IntraopPhaseId;
   panelFocus: "implants" | "supplies" | "antibiotic" | "vitals" | "activity" | "phase" | null;
   activeCase?: CaseItem;
+  onShowImaging: (modality: "arthroscopy" | "fluoroscopy" | "mri" | "ct" | "side_by_side") => void;
+  imagingFocus: "arthroscopy" | "fluoroscopy" | "mri" | "ct" | "side_by_side" | null;
 }) {
   if (role === "nurse") return <NursePanel snapshot={snapshot} panelFocus={panelFocus} />;
   if (role === "scrub") return <ScrubPanel snapshot={snapshot} />;
   if (role === "surgeon")
-    return <SurgeonPanel snapshot={snapshot} currentPhase={currentPhase} activeCase={activeCase} />;
+    return (
+      <SurgeonPanel
+        snapshot={snapshot}
+        currentPhase={currentPhase}
+        activeCase={activeCase}
+        onShowImaging={onShowImaging}
+        imagingFocus={imagingFocus}
+      />
+    );
   return <AnesthesiaPanel snapshot={snapshot} activeCase={activeCase} />;
 }
 
@@ -1496,10 +1512,14 @@ function SurgeonPanel({
   snapshot,
   currentPhase,
   activeCase,
+  onShowImaging,
+  imagingFocus,
 }: {
   snapshot: IntraopSnapshot;
   currentPhase: IntraopPhaseId;
   activeCase?: CaseItem;
+  onShowImaging: (modality: "arthroscopy" | "fluoroscopy" | "mri" | "ct" | "side_by_side") => void;
+  imagingFocus: "arthroscopy" | "fluoroscopy" | "mri" | "ct" | "side_by_side" | null;
 }) {
   return (
     <div className="grid grid-cols-1 gap-5 lg:grid-cols-2">
@@ -1577,30 +1597,78 @@ function SurgeonPanel({
 
         <PanelShell
           title="Imaging access"
-          kicker="One word away"
+          kicker="Voice or tap"
           icon={ScanLine}
           iconTone="text-accent"
           trailing={
             <span className="font-mono text-[10px] uppercase tracking-wider text-muted-foreground">
-              Voice
+              Live · spotlights tile
             </span>
           }
         >
-          <div className="grid grid-cols-2 gap-3">
-            {[
-              { label: "Show fluoroscopy", desc: "Last AP — 5m ago", icon: ScanLine },
-              { label: "Open arthroscopy", desc: "Live · 30° scope", icon: Camera },
-              { label: "Open MRI", desc: "Pre-op shoulder", icon: ImageIcon },
-              { label: "Side-by-side", desc: "AP + last image", icon: ImageIcon },
-            ].map((c) => (
-              <div key={c.label} className="rounded-xl border border-border/40 bg-surface-2/30 p-3">
-                <c.icon className="mb-2 h-4 w-4 text-accent" strokeWidth={1.8} />
-                <div className="text-sm font-light text-foreground/90">"{c.label}"</div>
-                <div className="font-mono text-[10px] uppercase tracking-wider text-muted-foreground">
-                  {c.desc}
-                </div>
-              </div>
-            ))}
+          <div className="grid grid-cols-2 gap-3 md:grid-cols-3">
+            {(
+              [
+                {
+                  modality: "arthroscopy",
+                  label: "Live Scope",
+                  desc: "30° arthroscope · live",
+                  icon: Camera,
+                },
+                {
+                  modality: "fluoroscopy",
+                  label: "X-Ray (Fluoro)",
+                  desc: "Last AP · 5m ago",
+                  icon: ScanLine,
+                },
+                {
+                  modality: "mri",
+                  label: "MRI",
+                  desc: "Pre-op shoulder",
+                  icon: ImageIcon,
+                },
+                {
+                  modality: "ct",
+                  label: "CT",
+                  desc: "Axial + Coronal",
+                  icon: ImageIcon,
+                },
+                {
+                  modality: "side_by_side",
+                  label: "Side-by-side",
+                  desc: "AP + last frame",
+                  icon: Layers,
+                },
+              ] as const
+            ).map((c) => {
+              const isActive = imagingFocus === c.modality;
+              return (
+                <button
+                  key={c.modality}
+                  type="button"
+                  onClick={() => onShowImaging(c.modality)}
+                  className={cn(
+                    "rounded-xl border p-3 text-left transition-all",
+                    isActive
+                      ? "border-accent/60 bg-accent/10"
+                      : "border-border/40 bg-surface-2/30 hover:border-accent/40 hover:bg-surface-2/60",
+                  )}
+                  title={`Spotlight ${c.label} on the imaging tile`}
+                >
+                  <c.icon
+                    className={cn(
+                      "mb-2 h-4 w-4 transition-colors",
+                      isActive ? "text-accent" : "text-accent/70",
+                    )}
+                    strokeWidth={1.8}
+                  />
+                  <div className="text-sm font-light text-foreground/90">{c.label}</div>
+                  <div className="font-mono text-[10px] uppercase tracking-wider text-muted-foreground">
+                    {c.desc}
+                  </div>
+                </button>
+              );
+            })}
           </div>
         </PanelShell>
 
