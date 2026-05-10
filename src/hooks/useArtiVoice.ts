@@ -50,6 +50,12 @@ export interface ArtiVoiceCallbacks {
   onShowAdminSettings?: () => void;
   /** Navigate to Smart Settings (device controls). */
   onShowSmartSettings?: () => void;
+  /**
+   * Switch the Home dashboard between "My Dashboard" (personal day overview)
+   * and "Procedure Dashboard" (per-procedure preview). Auto-navigates to home
+   * if the user isn't there. Returns ok:false when the dashboard is in edit mode.
+   */
+  onSetHomeDashboardMode?: (mode: "my" | "procedure") => ArtiToolResult;
   /** Focus a smart device on the Smart Settings screen. Auto-navigates if needed. */
   onSelectSmartDevice?: (device: string) => ArtiToolResult;
   /** Set a numeric/string property on a smart device. */
@@ -308,6 +314,13 @@ function executeToolCall(call: ArtiToolCall, cb: ArtiVoiceCallbacks): void {
     case "navigate_smart_settings":
       cb.onShowSmartSettings?.();
       break;
+    case "set_home_dashboard_mode": {
+      const m = String(inp.mode ?? "").toLowerCase();
+      if (m === "my" || m === "procedure") {
+        cb.onSetHomeDashboardMode?.(m);
+      }
+      break;
+    }
     case "select_smart_device":
       cb.onSelectSmartDevice?.(String(inp.device ?? ""));
       break;

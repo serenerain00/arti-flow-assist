@@ -44,7 +44,7 @@ const ITEMS: Array<{ key: SidebarKey; icon: typeof Home; label: string }> = [
   { key: "consoles", icon: Cpu, label: "Consoles" },
   { key: "library", icon: BookOpen, label: "Library" },
   { key: "calm", icon: Sun, label: "Calm" },
-  { key: "preferences", icon: Settings, label: "Preferences" },
+  { key: "preferences", icon: Settings, label: "Settings" },
 ];
 
 export function Sidebar({ onSleep, onLogout, activeKey, onNavigate }: Props) {

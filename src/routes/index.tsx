@@ -172,6 +172,19 @@ export interface SmartSettingsActions {
 export type SmartSettingsActionsRef = React.MutableRefObject<SmartSettingsActions | null>;
 
 /**
+ * Home-dashboard ref bridge — populated by HomeDashboard while it is mounted
+ * so the voice tool `set_home_dashboard_mode` can flip the user between the
+ * "My Dashboard" and "Procedure Dashboard" presets without a full screen
+ * change. When the screen isn't mounted, the route navigates home first
+ * and stashes the requested mode for HomeDashboard to apply on mount.
+ */
+export interface HomeDashboardActions {
+  /** Flip the dashboard mode. Returns ok:false when in edit mode. */
+  setMode: (mode: "my" | "procedure") => ArtiToolResult;
+}
+export type HomeDashboardActionsRef = React.MutableRefObject<HomeDashboardActions | null>;
+
+/**
  * Root that wires the shared voice session in once. We use refs to bridge
  * the agent's tool callbacks (registered up here in the provider) to the
  * actual state setters living inside the dashboard components — that way
@@ -206,6 +219,7 @@ function ArtiWallAuthenticated({ onLogout }: { onLogout: () => void }) {
       | "onShowSettings"
       | "onShowAdminSettings"
       | "onShowSmartSettings"
+      | "onSetHomeDashboardMode"
       | "onSelectSmartDevice"
       | "onSetSmartProperty"
       | "onToggleSmartDevice"
@@ -288,6 +302,7 @@ function ArtiWallAuthenticated({ onLogout }: { onLogout: () => void }) {
     onShowSettings: () => {},
     onShowAdminSettings: () => {},
     onShowSmartSettings: () => {},
+    onSetHomeDashboardMode: () => notAvailable(),
     onSelectSmartDevice: () => notAvailable(),
     onSetSmartProperty: () => notAvailable(),
     onToggleSmartDevice: () => notAvailable(),
@@ -368,6 +383,14 @@ function ArtiWallAuthenticated({ onLogout }: { onLogout: () => void }) {
   // Intraop-only tool bridge. Populated while the IntraopDashboard is on screen.
   const intraopActionsRef = useRef<IntraopActions | null>(null);
 
+  // Home-dashboard tool bridge — populated while HomeDashboard is mounted.
+  // Voice can flip between "My Dashboard" and "Procedure Dashboard" via this.
+  const homeDashboardActionsRef = useRef<HomeDashboardActions | null>(null);
+  // Pending mode to apply on next HomeDashboard mount — used when voice fires
+  // while the user is on a different screen, so we navigate home and the
+  // freshly-mounted dashboard picks up the desired mode immediately.
+  const pendingHomeDashboardModeRef = useRef<"my" | "procedure" | null>(null);
+
   // Live context builder — always returns fresh state, referenced via ref
   // so stableCallbacks never needs to change.
   const contextRef = useRef<() => string>(() => "Phase: sleep");
@@ -410,6 +433,8 @@ function ArtiWallAuthenticated({ onLogout }: { onLogout: () => void }) {
       onShowSettings: () => navCallbacksRef.current.onShowSettings?.(),
       onShowAdminSettings: () => navCallbacksRef.current.onShowAdminSettings?.(),
       onShowSmartSettings: () => navCallbacksRef.current.onShowSmartSettings?.(),
+      onSetHomeDashboardMode: (m) =>
+        navCallbacksRef.current.onSetHomeDashboardMode?.(m) ?? notAvailable(),
       onSelectSmartDevice: (d) =>
         navCallbacksRef.current.onSelectSmartDevice?.(d) ?? notAvailable(),
       onSetSmartProperty: (d, p, v) =>
@@ -579,6 +604,8 @@ function ArtiWallAuthenticated({ onLogout }: { onLogout: () => void }) {
         dashboardActionsRef={dashboardActionsRef}
         smartSettingsActionsRef={smartSettingsActionsRef}
         intraopActionsRef={intraopActionsRef}
+        homeDashboardActionsRef={homeDashboardActionsRef}
+        pendingHomeDashboardModeRef={pendingHomeDashboardModeRef}
         dashboardContextRef={dashboardContextRef}
         contextRef={contextRef}
         scrollActionsRef={scrollActionsRef}
@@ -639,6 +666,7 @@ interface ArtiWallProps {
       | "onShowSettings"
       | "onShowAdminSettings"
       | "onShowSmartSettings"
+      | "onSetHomeDashboardMode"
       | "onSelectSmartDevice"
       | "onSetSmartProperty"
       | "onToggleSmartDevice"
@@ -710,6 +738,8 @@ interface ArtiWallProps {
   dashboardActionsRef: DashboardActionsRef;
   smartSettingsActionsRef: SmartSettingsActionsRef;
   intraopActionsRef: IntraopActionsRef;
+  homeDashboardActionsRef: HomeDashboardActionsRef;
+  pendingHomeDashboardModeRef: React.MutableRefObject<"my" | "procedure" | null>;
   dashboardContextRef: React.MutableRefObject<() => string>;
   contextRef: React.MutableRefObject<() => string>;
   scrollActionsRef: React.MutableRefObject<{
@@ -766,6 +796,8 @@ function ArtiWall({
   dashboardActionsRef,
   smartSettingsActionsRef,
   intraopActionsRef,
+  homeDashboardActionsRef,
+  pendingHomeDashboardModeRef,
   dashboardContextRef,
   contextRef,
   scrollActionsRef,
@@ -1693,6 +1725,9 @@ function ArtiWall({
 
     // Schedule-specific context (only relevant when on the schedule screen).
     if (phase === "schedule") {
+      lines.push(
+        `Schedule routing rule: when the user references a surgeon by name (e.g. "show me Dr. Patel", "Patel's cases", "filter by Foster"), call schedule_set_surgeon to filter the calendar IN PLACE. Do NOT open show_person_schedule modal or open_surgeon_profile from here unless they explicitly say "her schedule modal", "her week", "preference cards", "profile", or "procedures".`,
+      );
       if (selectedScheduleDate) {
         const dayCases = getCasesForDate(selectedScheduleDate);
         const sum = summarizeDay(selectedScheduleDate);
@@ -2427,6 +2462,23 @@ function ArtiWall({
       closeOverlays();
       setPhase("smart-settings");
     },
+    onSetHomeDashboardMode: (mode: "my" | "procedure"): ArtiToolResult => {
+      // If HomeDashboard is mounted, flip in place.
+      if (homeDashboardActionsRef.current) {
+        const result = homeDashboardActionsRef.current.setMode(mode);
+        if (result.ok && phase !== "home") {
+          closeOverlays();
+          setPhase("home");
+        }
+        return result;
+      }
+      // Otherwise stash the desired mode and navigate home — the freshly
+      // mounted HomeDashboard reads the pending mode and applies it.
+      pendingHomeDashboardModeRef.current = mode;
+      closeOverlays();
+      setPhase("home");
+      return { ok: true, state: { mode, deferred: true } };
+    },
     onSelectSmartDevice: (devicePhrase: string): ArtiToolResult => {
       const device = resolveSmartDevice(devicePhrase);
       if (!device) return { ok: false, reason: "device not found" };
@@ -3053,6 +3105,8 @@ function ArtiWall({
         onLogout={onLogout}
         onPrompt={handlePrompt}
         onSidebarNavigate={handleSidebarNavigate}
+        actionsRef={homeDashboardActionsRef}
+        pendingModeRef={pendingHomeDashboardModeRef}
       />
     );
   } else if (phase === "settings") {

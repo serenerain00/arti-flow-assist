@@ -16,6 +16,15 @@ import {
 } from "./dashboard/storage";
 import type { DashboardConfig, WidgetContext } from "./dashboard/types";
 
+/**
+ * Live mutators the route can drive via voice while Home is mounted.
+ * Mirrors DashboardActions / IntraopActions ref bridges.
+ */
+export interface HomeDashboardActions {
+  /** Flip dashboard mode. Returns ok:false while in edit mode. */
+  setMode: (mode: "my" | "procedure") => { ok: boolean; reason?: string };
+}
+
 interface Props {
   staffName: string;
   staffRole: string;
@@ -24,6 +33,10 @@ interface Props {
   onLogout: () => void;
   onPrompt: (text: string) => void;
   onSidebarNavigate?: (key: SidebarKey) => void;
+  /** Route-owned ref — HomeDashboard registers actions on mount. */
+  actionsRef?: React.MutableRefObject<HomeDashboardActions | null>;
+  /** A mode the route stashed before navigating home — applied on mount and cleared. */
+  pendingModeRef?: React.MutableRefObject<"my" | "procedure" | null>;
 }
 
 /**
@@ -43,6 +56,8 @@ export function HomeDashboard({
   onLogout,
   onPrompt,
   onSidebarNavigate,
+  actionsRef,
+  pendingModeRef,
 }: Props) {
   // ── Dashboard mode + edit state ──────────────────────────────────────
   const [dashboardMode, setDashboardMode] = useState<"my" | "procedure">("my");
@@ -113,6 +128,31 @@ export function HomeDashboard({
     setEditing(false);
     setEditConfig(null);
   }, [dashboardMode]);
+
+  // Pick up a pending mode the route stashed (voice fired while we were on
+  // a different screen). Apply once, then clear so it doesn't repeat.
+  useEffect(() => {
+    const pending = pendingModeRef?.current;
+    if (!pending) return;
+    setDashboardMode(pending);
+    pendingModeRef.current = null;
+  }, [pendingModeRef]);
+
+  // Register the actions object so the route's voice tools can flip mode.
+  useEffect(() => {
+    if (!actionsRef) return;
+    const actions: HomeDashboardActions = {
+      setMode: (mode) => {
+        if (editing) return { ok: false, reason: "dashboard is in edit mode" };
+        setDashboardMode(mode);
+        return { ok: true };
+      },
+    };
+    actionsRef.current = actions;
+    return () => {
+      if (actionsRef.current === actions) actionsRef.current = null;
+    };
+  }, [actionsRef, editing]);
 
   const widgetContext: WidgetContext = useMemo(
     () => ({

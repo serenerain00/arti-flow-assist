@@ -146,6 +146,25 @@ const TOOLS: Anthropic.Tool[] = [
     input_schema: { type: "object" as const, properties: {}, required: [] },
   },
   {
+    name: "set_home_dashboard_mode",
+    description:
+      "Switch the Home dashboard between its two modes: 'my' (My Dashboard — the user's personal day overview) and 'procedure' (Procedure Dashboard — per-procedure preview cards for the up-next case). Auto-navigates to home if the user is elsewhere. " +
+      "Use for: 'show me the procedure dashboard' / 'open procedure dashboard' / 'switch to procedure view' / 'flip to procedure mode' → mode='procedure'. " +
+      "And: 'show me my dashboard' / 'switch back to my dashboard' / 'go back to my view' / 'show my home' → mode='my'. " +
+      "Bare 'show me the dashboard' / 'open home' goes to navigate_home, NOT here — only fire when the user names one of the two modes (procedure/personal/my) explicitly. Cannot fire while the user is editing the dashboard layout (route returns ok:false).",
+    input_schema: {
+      type: "object" as const,
+      properties: {
+        mode: {
+          type: "string",
+          enum: ["my", "procedure"],
+          description: "'my' = personal day overview · 'procedure' = per-procedure preview.",
+        },
+      },
+      required: ["mode"],
+    },
+  },
+  {
     name: "navigate_settings",
     description:
       "Open the Settings landing screen (Preferences). Use for: 'open settings', 'open preferences', 'show me settings', 'go to settings'. From there the user can drill into General or Admin Settings. Do NOT use for direct admin / smart-device requests — for those, jump to navigate_admin_settings or navigate_smart_settings respectively.",
@@ -497,7 +516,15 @@ const TOOLS: Anthropic.Tool[] = [
   {
     name: "schedule_set_surgeon",
     description:
-      "Filter the Schedule screen to one surgeon's cases. Resolve the user's reference ('Patel', 'Dr. Foster', 'the spine surgeon') to a full surgeon name from the Schedule / Full OR schedule context. Pass an empty string to clear the surgeon filter (show all surgeons). Examples: 'filter by Dr. Patel' → 'Dr. Anika Patel'. 'show Foster's cases' → 'Dr. Jamal Foster'. 'clear the surgeon filter' → ''.",
+      "Filter the Schedule (calendar) screen to ONE surgeon's cases — applies in-place to the calendar grid, no modal. " +
+      "DEFAULT for any surgeon-name reference WHEN the live context shows 'Current screen: schedule / calendar'. Triggers include: " +
+      "  • 'show me Dr. Patel' / 'show Dr. Foster' / 'pull up Patel' (no temporal word required — being on the schedule already implies filter intent) " +
+      "  • 'show me Dr. Patel's cases' / 'Dr. Foster's cases' / 'just Patel's cases' " +
+      "  • 'filter by Dr. Patel' / 'only Dr. Foster' / 'narrow to Patel' " +
+      "  • 'show me the spine surgeon' (resolve from team roster) " +
+      "Pass an empty string to clear the surgeon filter (show all). 'clear the surgeon filter' / 'show all surgeons' / 'show everyone' → surgeon=''. " +
+      "Resolve the user's spoken reference to a full surgeon name from the Team roster in the cached system prompt (e.g. 'Patel' → 'Dr. Anika Patel'). " +
+      "DO NOT use show_person_schedule when on the calendar — that opens a modal. The user already SEES the calendar; filter it in place.",
     input_schema: {
       type: "object" as const,
       properties: {
@@ -520,6 +547,7 @@ const TOOLS: Anthropic.Tool[] = [
     description:
       "Open a focused modal showing one person's CASE SCHEDULE / CALENDAR (vertical card list, soonest-first). Fire ONLY when the user explicitly references the schedule, calendar, day, week, or month for that person — phrases must contain a temporal/calendar word. Examples: 'show me Dr. Patel's schedule', 'what's Marcus Webb's day look like', 'pull up Dr. Shah's week', 'show me the anesthesiologist's calendar', 'when is Dr. Foster operating next', 'now show me Dr. Foster' (only when this modal is ALREADY open — switches person). " +
       "DO NOT fire for bare 'open/show me Dr. X' / 'pull up Dr. X' / 'open Patel's preference cards' — those go to open_surgeon_profile (the procedure-preferences screen). " +
+      "DO NOT fire when the live context shows 'Current screen: schedule / calendar'. On the calendar, surgeon-name phrases ('show me Dr. Patel', 'Dr. Patel's cases') filter the calendar IN PLACE via schedule_set_surgeon — opening a modal on top of the calendar would cover what the user is already looking at. The ONLY exception is when the user explicitly says 'open her schedule modal' / 'pull up her week' (clear modal-open intent). " +
       "For non-surgeon roles (anesthesiologist, scrub tech, circulating nurse) this is the correct tool whenever the user wants their day/week/month. " +
       "Resolve the spoken reference to a CANONICAL name from the Team roster in the cached system prompt — pass the full string as it appears (e.g. 'Dr. Anika Patel', 'Marcus Webb, CST', 'Dr. Priya Shah', 'Melissa Quinn, RN'). Always include `role` so the modal knows which schedule field to filter on.",
     input_schema: {
@@ -570,6 +598,7 @@ const TOOLS: Anthropic.Tool[] = [
       "  • 'Open Dr. Patel's preference cards' / 'show me Dr. Foster's procedures' / 'pull up Patel's profile' " +
       "  • 'Show me Dr. Patel's RSA' (also pass `procedure: \"rsa\"`) " +
       "DO NOT fire when the user said 'schedule', 'calendar', 'day', 'week', 'month', or 'when' — those go to show_person_schedule. " +
+      "DO NOT fire when the live context shows 'Current screen: schedule / calendar' AND the user said only a surgeon name (e.g. 'show me Dr. Patel'). On the calendar that filters in-place via schedule_set_surgeon. Profile-specific verbs ('preference cards', 'profile', 'procedures', 'pref card') still route here even from the schedule. " +
       "The profile screen is NOT the case-level layout images (those live on the case preop view) — it is the surgeon's own per-procedure card. The optional `procedure` arg expands a specific procedure by name or slug ('rsa', 'rcr', 'acl', 'cabg', 'fess', etc.) on landing.",
     input_schema: {
       type: "object" as const,
