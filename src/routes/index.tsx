@@ -2334,16 +2334,32 @@ function ArtiWall({
           setActiveCase(match);
           setPhase("preop");
           setTimeOutModalOpen(true);
-          return { ok: true, state: { timeoutOpen: true } };
+          return { ok: true, state: { timeoutOpen: true, case: match.id } };
         }
         return { ok: false, reason: "no matching case" };
       }
       if (phase === "preop") {
         closeOverlays();
         setTimeOutModalOpen(true);
-        return { ok: true, state: { timeoutOpen: true } };
+        return { ok: true, state: { timeoutOpen: true, case: activeCase.id } };
       }
-      return { ok: false, reason: "ambiguous — ask which case" };
+      // Bare "start checklist" / "start case" from Home (or any other
+      // non-preop screen) — auto-load the up-next case, navigate to its
+      // pre-op, and open the time-out modal. This is the most common
+      // path: Laura on the home dashboard, says "start checklist", and
+      // expects the next case's checklist to appear.
+      const upNext =
+        TODAY_CASES.find((c) => c.status === "next") ??
+        TODAY_CASES.find((c) => c.status !== "completed" && c.status !== "cancelled") ??
+        TODAY_CASES[0];
+      if (upNext) {
+        closeOverlays();
+        setActiveCase(upNext);
+        setPhase("preop");
+        setTimeOutModalOpen(true);
+        return { ok: true, state: { timeoutOpen: true, case: upNext.id, autoSelected: true } };
+      }
+      return { ok: false, reason: "no upcoming case on the board" };
     },
     onEndCase: (): ArtiToolResult => {
       if (phase !== "intraop") return { ok: false, reason: "not in intraop" };

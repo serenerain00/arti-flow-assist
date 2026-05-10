@@ -790,21 +790,26 @@ const TOOLS: Anthropic.Tool[] = [
   {
     name: "start_case",
     description:
-      "Open the pre-incision time-out checklist (when on pre-op) OR — when the time-out modal is already open and all 4 items are confirmed — advance INTO the intraop ('case active') view. " +
-      "FIRE for: 'start case', 'start the case', 'start', 'start it', 'go', 'begin', 'let's go', 'continue', 'ready to start', 'we're ready', 'start now'. " +
+      "Open the pre-incision time-out checklist OR — when the time-out modal is already open and all 4 items are confirmed — advance INTO the intraop ('case active') view. " +
+      "FIRE for any of these phrases: " +
+      "  • 'start case' / 'start the case' / 'start' / 'start it' / 'go' / 'begin' / 'let's go' / 'start now' " +
+      "  • 'start checklist' / 'start the checklist' / 'open the checklist' / 'start time-out' / 'start the time-out' / 'open time-out' / 'time out' " +
+      "  • 'continue' / 'ready to start' / 'we're ready' (when the modal is already open) " +
+      "Treat 'start checklist' / 'start time-out' as IDENTICAL to 'start case' — the checklist IS the case-start gate. " +
       "Behavior depends on live context: " +
-      "  • Pre-op (modal CLOSED) → opens the time-out modal (the user must check four items before the case actually starts). " +
-      "  • Time-out modal OPEN with 4/4 confirmed → starts the case (transitions to intraop). DO NOT respond 'already started' here — the route returns ok:true with state.continued. " +
-      "  • Time-out modal OPEN with <4 checked → the route returns ok:false with the count; respond by naming the remaining items so the user can confirm them. NEVER say 'already started' just because the modal is open. " +
-      "  • Already on intraop → the route returns ok:true with state.already; respond 'Already in progress.' " +
-      "NARRATION REQUIRED: in the same turn as the tool call, return ONE short sentence — e.g. 'Starting Marcus Chen's case.' on transition, or 'Patient and site are still pending.' when items remain. Never empty.",
+      "  • On HOME (modal closed) → the route auto-loads the up-next case and opens the time-out modal. Respond e.g. 'Starting Marcus Chen's checklist.' " +
+      "  • On PRE-OP (modal closed) → opens the time-out modal for the active case. Respond e.g. 'Starting the time-out.' " +
+      "  • Time-out modal OPEN with 4/4 confirmed → starts the case (transitions to intraop). Respond e.g. 'Starting Marcus Chen's case.' DO NOT say 'already started' or 'already open'. " +
+      "  • Time-out modal OPEN with <4 checked → the route returns ok:false with the count; respond by naming the pending items so the user can confirm them. NEVER say 'already started' or 'already open' just because the modal is open. " +
+      "  • Already on intraop → respond 'Already in progress.' (route returns state.already=true). " +
+      "NARRATION REQUIRED: in the same turn as the tool call, return ONE short sentence using the resolved patient's name when known. Never empty. NEVER respond 'it's already open' / 'the checklist is already up' when the modal is in fact closed — fire the tool and let the route open it.",
     input_schema: {
       type: "object" as const,
       properties: {
         query: {
           type: "string",
           description:
-            "Optional patient name / 'next' / procedure keyword. Omit on pre-op screen to use the active case, and ALWAYS omit when responding to a bare 'start' / 'continue' from inside the open time-out modal.",
+            "Optional patient name / 'next' / procedure keyword. Omit when triggering from Home or Pre-op without a specific case override, and ALWAYS omit for a bare 'start' / 'continue' / 'start checklist' from inside the open time-out modal.",
         },
       },
       required: [],
