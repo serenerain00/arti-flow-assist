@@ -161,7 +161,11 @@
   --vision-color-secondary-hover: var(--vision-gray-500);
   --vision-color-on-secondary: var(--vision-white);
 
-  --vision-color-accent: #5518ff;
+  /* Accent — baby-blue tint of the brand palette so accents complement
+     the primary blue (#0575d6) instead of clashing. The original Vision
+     spec called this purple #5518ff, but in this product it reads as
+     off-brand against the OR's clinical-blue cues. */
+  --vision-color-accent: var(--vision-blue-100);
 
   /* Status */
   --vision-color-success: var(--vision-success-600);
