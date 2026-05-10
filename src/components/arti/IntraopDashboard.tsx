@@ -2159,6 +2159,30 @@ function AiPromptsCard({ prompts }: { prompts: AiPrompt[] }) {
   );
 }
 
+// Single source of truth for the activity-stream legend so the header
+// chips, the per-event label chips, and the dot tones never drift.
+const KIND_META: Record<
+  ActivityEvent["kind"],
+  { label: string; dot: string; chip: string }
+> = {
+  med: { label: "Med", dot: "bg-warning", chip: "bg-warning/15 text-warning" },
+  imaging: { label: "Imaging", dot: "bg-accent", chip: "bg-accent/15 text-accent" },
+  implant: { label: "Implant", dot: "bg-primary", chip: "bg-primary/15 text-primary" },
+  doc: { label: "Doc", dot: "bg-success", chip: "bg-success/15 text-success" },
+  ai: {
+    label: "AI",
+    dot: "bg-gradient-to-br from-primary to-accent",
+    chip: "bg-gradient-to-br from-primary/15 to-accent/15 text-foreground",
+  },
+  room: {
+    label: "Room",
+    dot: "bg-muted-foreground/60",
+    chip: "bg-muted-foreground/15 text-muted-foreground",
+  },
+};
+
+const KIND_ORDER: ActivityEvent["kind"][] = ["med", "imaging", "implant", "doc", "ai", "room"];
+
 function ActivityStream({ events, highlight }: { events: ActivityEvent[]; highlight?: boolean }) {
   return (
     <section
@@ -2167,7 +2191,7 @@ function ActivityStream({ events, highlight }: { events: ActivityEvent[]; highli
         highlight && "ring-1 ring-accent/40 shadow-[0_0_30px_-10px_var(--accent)]",
       )}
     >
-      <div className="mb-4 flex items-end justify-between">
+      <div className="mb-3 flex items-end justify-between">
         <div>
           <div className="font-mono text-[10px] uppercase tracking-[0.3em] text-accent">
             Activity
@@ -2179,48 +2203,63 @@ function ActivityStream({ events, highlight }: { events: ActivityEvent[]; highli
         </span>
       </div>
 
-      <ol className="relative space-y-3 border-l border-border/40 pl-5">
-        {events.map((e, i) => (
-          <li key={`${e.title}-${i}`} className="relative">
-            <span
-              aria-hidden
-              className={cn(
-                "absolute -left-[26px] top-1.5 flex h-3 w-3 items-center justify-center rounded-full ring-4 ring-background",
-                kindDotTone(e.kind),
-              )}
-            />
-            <div className="flex items-baseline justify-between gap-3">
-              <div className="text-sm font-light text-foreground/90">{e.title}</div>
-              <span className="shrink-0 font-mono text-[10px] uppercase tracking-wider text-muted-foreground">
-                {e.minutesAgo}m
-              </span>
-            </div>
-            {e.detail && (
-              <p className="mt-0.5 font-mono text-[10px] uppercase tracking-wider text-muted-foreground">
-                {e.detail}
-              </p>
-            )}
-          </li>
+      {/* Legend — decodes the dot + chip color system. */}
+      <div className="mb-4 flex flex-wrap items-center gap-x-3 gap-y-1.5">
+        {KIND_ORDER.map((k) => (
+          <span
+            key={k}
+            className="inline-flex items-center gap-1.5 font-mono text-[9px] uppercase tracking-wider text-muted-foreground"
+          >
+            <span aria-hidden className={cn("h-2 w-2 rounded-full", KIND_META[k].dot)} />
+            {KIND_META[k].label}
+          </span>
         ))}
+      </div>
+
+      <ol className="relative space-y-3 pl-5">
+        {events.map((e, i) => {
+          const meta = KIND_META[e.kind];
+          const isLast = i === events.length - 1;
+          return (
+            <li key={`${e.title}-${i}`} className="relative">
+              {!isLast && (
+                <span
+                  aria-hidden
+                  className="absolute -left-5 top-3 -bottom-6 w-px bg-border/40"
+                />
+              )}
+              <span
+                aria-hidden
+                className={cn(
+                  "absolute -left-[26px] top-1.5 flex h-3 w-3 items-center justify-center rounded-full ring-4 ring-background",
+                  meta.dot,
+                )}
+              />
+              <div className="flex items-baseline justify-between gap-3">
+                <div className="flex items-baseline gap-2 min-w-0">
+                  <span
+                    className={cn(
+                      "shrink-0 rounded-full px-1.5 py-0.5 font-mono text-[9px] font-medium uppercase tracking-wider",
+                      meta.chip,
+                    )}
+                  >
+                    {meta.label}
+                  </span>
+                  <div className="text-sm font-light text-foreground/90">{e.title}</div>
+                </div>
+                <span className="shrink-0 font-mono text-[10px] uppercase tracking-wider text-muted-foreground">
+                  {e.minutesAgo}m
+                </span>
+              </div>
+              {e.detail && (
+                <p className="mt-0.5 font-mono text-[10px] uppercase tracking-wider text-muted-foreground">
+                  {e.detail}
+                </p>
+              )}
+            </li>
+          );
+        })}
       </ol>
     </section>
   );
-}
-
-function kindDotTone(kind: ActivityEvent["kind"]): string {
-  switch (kind) {
-    case "med":
-      return "bg-warning";
-    case "imaging":
-      return "bg-accent";
-    case "implant":
-      return "bg-primary";
-    case "doc":
-      return "bg-success";
-    case "ai":
-      return "bg-gradient-to-br from-primary to-accent";
-    case "room":
-    default:
-      return "bg-muted-foreground/60";
-  }
 }
