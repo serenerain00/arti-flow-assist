@@ -84,7 +84,7 @@ export const CATEGORY_META: Record<DeviceCategory, { label: string; blurb: strin
   },
   doors: {
     label: "Access",
-    blurb: "Door locks and sterile-cockpit access controls.",
+    blurb: "Door locks and sterile Live Case access controls.",
   },
 };
 
@@ -351,11 +351,11 @@ export const DEVICES: SmartDevice[] = [
   {
     id: "doors.main",
     name: "Main OR Door",
-    description: "Auto-lock during sterile cockpit / time-out.",
+    description: "Auto-lock during Live Case / time-out.",
     category: "doors",
     propertySpecs: [
       { kind: "toggle", key: "locked", label: "Locked" },
-      { kind: "toggle", key: "auto_sterile", label: "Auto-lock during cockpit" },
+      { kind: "toggle", key: "auto_sterile", label: "Auto-lock during Live Case" },
     ],
     defaults: { locked: false, auto_sterile: true },
   },

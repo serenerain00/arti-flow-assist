@@ -10,6 +10,7 @@ import {
   Droplet,
   Heart,
   Layers,
+  LogOut,
   Maximize2,
   Package,
   Pill,
@@ -60,6 +61,8 @@ interface Props {
   initials: string;
   activeCase?: CaseItem;
   onExitMultiView: () => void;
+  /** Optional one-tap end-case from multi-view. Same destination as voice 'end case'. */
+  onEndCase?: () => void;
   onPrompt: (text: string) => void;
   /** Same ref the IntraopDashboard registers to — multi-view fills it in while mounted. */
   actionsRef?: IntraopActionsRef;
@@ -120,6 +123,7 @@ export function MultiViewScreen({
   initials,
   activeCase,
   onExitMultiView,
+  onEndCase,
   onPrompt,
   actionsRef,
 }: Props) {
@@ -286,6 +290,17 @@ export function MultiViewScreen({
             <X className="h-3 w-3" strokeWidth={2} />
             Exit Multi-view
           </button>
+          {onEndCase && (
+            <button
+              type="button"
+              onClick={onEndCase}
+              className="inline-flex items-center gap-1.5 rounded-full border border-destructive/40 bg-destructive/10 px-3 py-1.5 font-mono text-[10px] uppercase tracking-[0.25em] text-destructive transition-colors hover:border-destructive/60 hover:bg-destructive/15"
+              title="End case and start turnover (or say 'Arti, end case')"
+            >
+              <LogOut className="h-3 w-3" strokeWidth={2} />
+              End Case
+            </button>
+          )}
           <div className="flex items-center gap-2 pl-2">
             <div className="flex h-7 w-7 items-center justify-center rounded-full border border-border bg-surface-3 font-mono text-[10px] text-foreground">
               {initials}

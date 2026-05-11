@@ -33,6 +33,7 @@ interface Props {
   staffRole: string;
   initials: string;
   onSleep: () => void;
+  onOpenPacu?: () => void;
   onLogout: () => void;
   onPrompt: (text: string) => void;
   onSidebarNavigate?: (key: SidebarKey) => void;
@@ -61,6 +62,7 @@ export function SurgeonProfileScreen({
   staffRole,
   initials,
   onSleep,
+  onOpenPacu,
   onLogout,
   onPrompt,
   onSidebarNavigate,
@@ -134,7 +136,13 @@ export function SurgeonProfileScreen({
       />
 
       <div className="flex min-w-0 flex-1 flex-col overflow-hidden">
-        <TopBar staffName={staffName} staffRole={staffRole} initials={initials} onSleep={onSleep} />
+        <TopBar
+          staffName={staffName}
+          staffRole={staffRole}
+          initials={initials}
+          onSleep={onSleep}
+          onOpenPacu={onOpenPacu}
+        />
 
         <main
           data-scroll

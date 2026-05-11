@@ -757,7 +757,7 @@ const TOOLS: Anthropic.Tool[] = [
       "" +
       "Examples: 'Hey Alex, good to have you in the room.' / 'Welcome, Dr. Chen.' / 'Morning Jamie.' / 'Welcome to OR 326, Arthrex team.' / 'Good to see you back, Dr. Patel.' / 'Welcome, Stryker rep.' / 'Hi Tom, glad you're here.' / 'Morning everyone.' / 'Hello Dr. Smith from cardiology.' " +
       "" +
-      "If sterile cockpit mode is on (see live context), use neutral phrasing only — 'Hello, Dr. Chen.' / 'Welcome, Stryker rep.' — no banter.",
+      "If Live Case mode is on (see live context), use neutral phrasing only — 'Hello, Dr. Chen.' / 'Welcome, Stryker rep.' — no banter.",
     input_schema: {
       type: "object" as const,
       properties: {
@@ -1258,6 +1258,157 @@ const TOOLS: Anthropic.Tool[] = [
     input_schema: { type: "object" as const, properties: {}, required: [] },
   },
   {
+    name: "show_procedure_overview",
+    description:
+      "Open the procedure overview modal — a quick orientation reference for staff unfamiliar with the procedure. Shows estimated duration, required equipment (instruments + supplies), positioning guide, and implant summary for the active case. Trigger phrases: 'show procedure overview', 'open procedure overview', 'orient me to this procedure', 'show me the procedure', 'what's the procedure', 'walk me through this procedure', 'I'm new to this procedure', 'orientation', 'show me the equipment and positioning'. Requires an active case.",
+    input_schema: { type: "object" as const, properties: {}, required: [] },
+  },
+  {
+    name: "close_procedure_overview",
+    description:
+      "Close the procedure overview modal. Use when user says 'close', 'close that', 'close overview', 'go back', or 'dismiss' while the procedure overview is open.",
+    input_schema: { type: "object" as const, properties: {}, required: [] },
+  },
+  {
+    name: "simulate_equipment_failure",
+    description:
+      "Trigger the Equipment Failure workflow — pops a route-level modal showing the failed device, troubleshooting steps, and backup availability. Use ONLY when the user explicitly asks to simulate or demonstrate a failure (this is a prototype demo trigger, not a real fault). Trigger phrases: 'simulate equipment failure', 'simulate a camera failure', 'demo the equipment failure workflow', 'simulate the pump going down', 'trigger equipment failure', 'simulate disconnect'. " +
+      "NARRATION REQUIRED: in the SAME turn as the tool call, return a brief clinical alert text that names the device — e.g. 'Synergy camera signal lost.' / 'DualWave pump disconnected.' / 'APS shaver console signal lost.' Keep it under 6 words, no banter, no preamble. " +
+      "The optional `console` arg lets the user pick a specific device by free-text name ('camera', 'fluid pump', 'shaver', 'RF console', 'light source', 'image management'); defaults to the camera console if omitted.",
+    input_schema: {
+      type: "object" as const,
+      properties: {
+        console: {
+          type: "string",
+          description:
+            "Free-text device name (e.g. 'camera', 'pump', 'shaver', 'rf', 'light'). Resolved server-side via tag matching. Omit for the default (camera) when the user doesn't name a specific device.",
+        },
+      },
+      required: [],
+    },
+  },
+  {
+    name: "close_equipment_failure",
+    description:
+      "Close the Equipment Failure modal. Use when user says 'close', 'close the alert', 'dismiss', 'got it', 'understood', 'we're handling it' while the equipment failure modal is open. Prefer close_topmost_modal when the user just says 'close'.",
+    input_schema: { type: "object" as const, properties: {}, required: [] },
+  },
+  {
+    name: "open_vip_planning",
+    description:
+      "Open the VIP 3D Planning Reference modal — a full-screen view of the pre-op 3D implant plan (interactive 3D model + planned orientation values + implant checklist). Use during implant placement so the surgeon can reference the plan intraoperatively without leaving the wall. Trigger phrases: 'open VIP planning model', 'open VIP planning', 'show VIP plan', 'show me the pre-op plan', 'show the planning model', 'open the 3D plan', 'open the planning reference', 'pull up the VIP plan', 'show the implant plan in 3D', 'open the surgical plan'. Requires an active case.",
+    input_schema: { type: "object" as const, properties: {}, required: [] },
+  },
+  {
+    name: "close_vip_planning",
+    description:
+      "Close the VIP Planning Reference modal. Use when user says 'close', 'close the plan', 'close planning', 'close the model', 'dismiss', 'go back' while the VIP planning modal is open. Prefer close_topmost_modal when the user just says 'close'.",
+    input_schema: { type: "object" as const, properties: {}, required: [] },
+  },
+  {
+    name: "enter_ambient_recovery",
+    description:
+      "Enter Ambient Recovery mode — a calm, low-attention between-cases display with a large room clock, soft ambient visuals, no patient identifiers, and rotating procedural-prep reminders. Use when the room is between cases and the team wants the wall dialed back. Trigger phrases: 'ambient mode', 'ambient recovery', 'calm mode', 'recovery mode', 'between cases mode', 'dim the wall', 'rest the wall', 'quiet mode'. Often follows a Turnover phase.",
+    input_schema: { type: "object" as const, properties: {}, required: [] },
+  },
+  {
+    name: "exit_ambient_recovery",
+    description:
+      "Exit Ambient Recovery mode and return to the home dashboard. Trigger phrases: 'exit ambient mode', 'exit calm mode', 'wake the wall', 'back to home', 'leave ambient', 'turn off ambient', 'I'm done with ambient'. Only valid while Ambient Recovery is the current screen (live context will say 'Phase: ambient').",
+    input_schema: { type: "object" as const, properties: {}, required: [] },
+  },
+  {
+    name: "show_pacu_feed",
+    description:
+      "Open the PACU (Post-Anesthesia Care Unit) feed modal — a scrollable list of recent messages from the recovery unit (bed availability, patient handoffs, family-update requests, etc). Trigger phrases when the user wants to SEE the feed: 'show PACU', 'show PACU feed', 'open PACU', 'open the PACU messages', 'pull up PACU', 'show me the recovery messages', 'show recovery feed'. " +
+      "DO NOT use this tool when the user only wants to KNOW the latest message ('what's the latest from PACU', 'any PACU updates', 'what did PACU say', 'anything from PACU') — for those, read the top message from the live context block as a one-sentence spoken answer without firing this tool. The live context always carries the top-3 PACU messages so the answer is available from any screen.",
+    input_schema: { type: "object" as const, properties: {}, required: [] },
+  },
+  {
+    name: "close_pacu_feed",
+    description:
+      "Close the PACU feed modal. Use when user says 'close', 'close PACU', 'dismiss', 'go back' while the PACU feed is open. Prefer close_topmost_modal when the user just says 'close'.",
+    input_schema: { type: "object" as const, properties: {}, required: [] },
+  },
+  {
+    name: "show_pref_card_checklist",
+    description:
+      "Open the annotated preference-card table checklist modal. Shows the back table or Mayo stand image with numbered pins on each tool, and a side checklist where the circulating nurse / scrub tech can mark each tool accounted for or document a sterility breach. Trigger phrases: 'show pref card checklist', 'open the table checklist', 'pull up the back table', 'show me the Mayo stand', 'open the instrument layout', 'show me the table layout with checklist', 'show what's accounted for on the back table'. Optional `table` arg picks which side opens first.",
+    input_schema: {
+      type: "object" as const,
+      properties: {
+        table: {
+          type: "string",
+          description:
+            "Which table to show first — free text. Accepts 'back', 'back table', 'mayo', 'mayo stand'. Defaults to back table.",
+        },
+      },
+      required: [],
+    },
+  },
+  {
+    name: "close_pref_card_checklist",
+    description:
+      "Close the preference-card checklist modal. Use when user says 'close', 'close checklist', 'dismiss', 'go back' while the modal is open. Prefer close_topmost_modal when the user just says 'close'.",
+    input_schema: { type: "object" as const, properties: {}, required: [] },
+  },
+  {
+    name: "set_cleaning_item_status",
+    description:
+      "Mark an item on the OR Turnover cleaning checklist done or pending. The checklist has these items (the user names them in casual language): drapes & single-use disposal, OR table wipe-down, equipment tower disinfection, spot-clean walls/floor, linens + sharps, restock supplies, final readiness check. " +
+      "Trigger phrases for status:'done' — 'drapes are off', 'table wiped down', 'tower disinfected', 'sharps emptied', 'we're stocked', 'final check done', 'mark drapes done', 'check off table'. " +
+      "Trigger phrases for status:'pending' — 'undo drapes', 'mark table not done', 'unmark final check'. " +
+      "NARRATION REQUIRED: in the SAME turn as the tool call, return a brief confirmation — e.g. 'Drapes marked done.' / 'Table wipe-down pending.' Keep it under 6 words. " +
+      "The checklist auto-resets when a new case ends, so don't worry about stale state across cases.",
+    input_schema: {
+      type: "object" as const,
+      properties: {
+        item: {
+          type: "string",
+          description:
+            "Free-text item name as the user said it (e.g. 'drapes', 'wipe down table', 'tower', 'sharps', 'restock', 'final check').",
+        },
+        status: {
+          type: "string",
+          enum: ["done", "pending"],
+          description: "'done' to check off, 'pending' to un-check. Default 'done'.",
+        },
+      },
+      required: ["item"],
+    },
+  },
+  {
+    name: "set_pref_card_tool_status",
+    description:
+      "Update the status of a specific tool on the back table or Mayo stand checklist. Use for: " +
+      "(a) accounted-for confirmations — 'mark the Mayo scissors accounted for', 'Adson forceps is on the table', 'we have the curettes'; " +
+      "(b) missing notes — 'mark needle driver missing', 'we don't have the bone hook'; " +
+      "(c) STERILITY BREACHES — 'the scalpel dropped', 'X became unsterile', 'X is contaminated', 'X broke sterility', 'X touched the field', 'X needs to be re-sterilized'. " +
+      "`table` is free-text ('back', 'mayo', 'mayo stand'). `tool` is free-text matched against the tool labels on that table (e.g. 'mayo scissors', 'adson', 'needle driver', 'glenoid reamer'). " +
+      "NARRATION REQUIRED: in the SAME turn as the tool call, return a brief clinical confirmation — e.g. 'Mayo scissors marked contaminated.' / 'Adson forceps accounted for.' Keep under 7 words.",
+    input_schema: {
+      type: "object" as const,
+      properties: {
+        table: {
+          type: "string",
+          description: "Free-text table name — 'back', 'back table', 'mayo', 'mayo stand'.",
+        },
+        tool: {
+          type: "string",
+          description:
+            "Free-text tool name as the user said it (e.g. 'mayo scissors', 'adson forceps', 'needle driver', 'curettes').",
+        },
+        status: {
+          type: "string",
+          enum: ["accounted", "missing", "contaminated"],
+          description:
+            "New status. 'accounted' = on the table / verified. 'missing' = not yet on the table. 'contaminated' = sterility breach (dropped, touched non-sterile field, etc).",
+        },
+      },
+      required: ["table", "tool", "status"],
+    },
+  },
+  {
     name: "open_patient_video",
     description:
       "Open the patient's pre-op video message on the surgeon panel. The patient records this short clip before surgery; the modal shows the video with closed captions, a synced transcript, and AI-extracted insights so the team can scan it quickly. Trigger phrases: 'open patient video', 'show me the patient video', 'play the patient video', 'pull up the patient's pre-op video', 'show me what the patient said', 'open the patient message', 'show the pre-op video'. Auto-switches to the surgeon role view if the user is on a different panel. Requires an active case.",
@@ -1563,6 +1714,23 @@ export const processVoiceCommand = createServerFn({ method: "POST" })
       // Modals & overlays
       "open_patient_details",
       "close_patient_details",
+      "show_procedure_overview",
+      "close_procedure_overview",
+      // simulate_equipment_failure is intentionally NOT silent — Claude
+      // narrates the device's failure ("Synergy camera signal lost.") so the
+      // OR team hears the alert in addition to seeing the modal.
+      "close_equipment_failure",
+      "open_vip_planning",
+      "close_vip_planning",
+      "enter_ambient_recovery",
+      "exit_ambient_recovery",
+      "show_pacu_feed",
+      "close_pacu_feed",
+      "show_pref_card_checklist",
+      "close_pref_card_checklist",
+      // set_pref_card_tool_status is intentionally NOT silent — Claude
+      // narrates the change ("Mayo scissors marked contaminated.") so the
+      // OR team hears the confirmation without watching the screen.
       "open_patient_video",
       "close_patient_video",
       "play_patient_video",

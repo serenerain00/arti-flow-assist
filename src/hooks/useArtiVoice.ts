@@ -186,6 +186,42 @@ export interface ArtiVoiceCallbacks {
   onSwitchRole?: (role: ActiveRole) => ArtiToolResult;
   onOpenPatientDetails?: () => ArtiToolResult;
   onClosePatientDetails?: () => ArtiToolResult;
+  /** Open the procedure-overview modal (orientation reference for new staff). */
+  onOpenProcedureOverview?: () => ArtiToolResult;
+  onCloseProcedureOverview?: () => ArtiToolResult;
+  /**
+   * Trigger the Equipment Failure workflow. Optional `query` resolves a
+   * specific console (e.g. "camera", "pump"); defaults to the camera console
+   * to match the spec ("Synergy camera signal lost").
+   */
+  onSimulateEquipmentFailure?: (query?: string) => ArtiToolResult;
+  onCloseEquipmentFailure?: () => ArtiToolResult;
+  /** Open the VIP 3D Planning Reference modal (pre-op implant plan in 3D). */
+  onOpenVipPlanning?: () => ArtiToolResult;
+  onCloseVipPlanning?: () => ArtiToolResult;
+  /** Enter / exit Ambient Recovery (between-cases calm-mode display). */
+  onEnterAmbientRecovery?: () => ArtiToolResult;
+  onExitAmbientRecovery?: () => ArtiToolResult;
+  /** Open / close the PACU feed modal (recent recovery-unit messages). */
+  onShowPacuFeed?: () => ArtiToolResult;
+  onClosePacuFeed?: () => ArtiToolResult;
+  /**
+   * Open the annotated preference-card checklist modal. Optional `table`
+   * free-text ("back", "mayo", "mayo stand") selects which one shows first.
+   */
+  onShowPrefCardChecklist?: (table?: string) => ArtiToolResult;
+  onClosePrefCardChecklist?: () => ArtiToolResult;
+  /**
+   * Mark a specific tool as accounted for, missing, or contaminated.
+   * `table` and `tool` are free-text (resolved server/client side).
+   */
+  onSetPrefCardToolStatus?: (
+    table: string,
+    tool: string,
+    status: "accounted" | "missing" | "contaminated",
+  ) => ArtiToolResult;
+  /** Mark a turnover cleaning checklist item done or pending (by free-text label). */
+  onSetCleaningItemStatus?: (item: string, status: "done" | "pending") => ArtiToolResult;
   /** Open the pre-op patient video modal on the surgeon panel. */
   onOpenPatientVideo?: () => ArtiToolResult;
   onClosePatientVideo?: () => ArtiToolResult;
@@ -610,6 +646,61 @@ function executeToolCall(call: ArtiToolCall, cb: ArtiVoiceCallbacks): void {
     case "close_patient_details":
       cb.onClosePatientDetails?.();
       break;
+    case "show_procedure_overview":
+      cb.onOpenProcedureOverview?.();
+      break;
+    case "close_procedure_overview":
+      cb.onCloseProcedureOverview?.();
+      break;
+    case "simulate_equipment_failure":
+      cb.onSimulateEquipmentFailure?.(typeof inp.console === "string" ? inp.console : undefined);
+      break;
+    case "close_equipment_failure":
+      cb.onCloseEquipmentFailure?.();
+      break;
+    case "open_vip_planning":
+      cb.onOpenVipPlanning?.();
+      break;
+    case "close_vip_planning":
+      cb.onCloseVipPlanning?.();
+      break;
+    case "enter_ambient_recovery":
+      cb.onEnterAmbientRecovery?.();
+      break;
+    case "exit_ambient_recovery":
+      cb.onExitAmbientRecovery?.();
+      break;
+    case "show_pacu_feed":
+      cb.onShowPacuFeed?.();
+      break;
+    case "close_pacu_feed":
+      cb.onClosePacuFeed?.();
+      break;
+    case "show_pref_card_checklist":
+      cb.onShowPrefCardChecklist?.(typeof inp.table === "string" ? inp.table : undefined);
+      break;
+    case "close_pref_card_checklist":
+      cb.onClosePrefCardChecklist?.();
+      break;
+    case "set_cleaning_item_status": {
+      const status = String(inp.status ?? "done");
+      const s = status === "pending" ? "pending" : "done";
+      cb.onSetCleaningItemStatus?.(String(inp.item ?? ""), s);
+      break;
+    }
+    case "set_pref_card_tool_status": {
+      const status = String(inp.status ?? "");
+      const valid: Array<"accounted" | "missing" | "contaminated"> = [
+        "accounted",
+        "missing",
+        "contaminated",
+      ];
+      const s = (valid as string[]).includes(status)
+        ? (status as "accounted" | "missing" | "contaminated")
+        : "missing";
+      cb.onSetPrefCardToolStatus?.(String(inp.table ?? ""), String(inp.tool ?? ""), s);
+      break;
+    }
     case "toggle_opening_checklist_item":
       cb.onToggleOpeningChecklistItem?.(Number(inp.index));
       break;

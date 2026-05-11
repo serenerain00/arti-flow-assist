@@ -15,6 +15,7 @@ import {
   type PatientVideoSession,
 } from "./PatientVideoModal";
 import { PatientXraysModal, type PatientXraysHandle } from "./PatientXraysModal";
+import { ProcedureOverviewModal } from "./ProcedureOverviewModal";
 import { ArtiInvoker } from "./ArtiInvoker";
 import { type LightboxImage } from "./ImageLightboxModal";
 import { RoleSwitcherBar, type ActiveRole } from "./RoleSwitcherBar";
@@ -28,6 +29,7 @@ import {
   OPENING_CHECKLIST_ITEMS,
   OPENING_CHECKLIST_INITIAL_DONE,
 } from "./ScrubTechPanel";
+import { CirculatingNurseChecklist, NURSE_CHECKLIST } from "./CirculatingNurseChecklist";
 import { SurgeonPanel } from "./SurgeonPanel";
 import { ArrowLeft, LayoutGrid } from "lucide-react";
 import type { CaseItem } from "./cases";
@@ -40,6 +42,7 @@ interface Props {
   staffRole: string;
   initials: string;
   onSleep: () => void;
+  onOpenPacu?: () => void;
   onLogout: () => void;
   activeCase?: CaseItem;
   onBackToCases?: () => void;
@@ -50,6 +53,10 @@ interface Props {
   onSidebarNavigate?: (key: SidebarKey) => void;
   /** Route-level lightbox opener. Used by panel thumbnail clicks. */
   onOpenLightbox: (images: LightboxImage[], index?: number, title?: string) => void;
+  /** Open the annotated preference-card table checklist. Route-level modal. */
+  onOpenPrefCardChecklist?: (tableId?: "back-table" | "mayo-stand") => void;
+  /** Open the VIP 3D planning reference. Route-level modal. */
+  onOpenVipPlanning?: () => void;
   /** Transition to the intraoperative ("case active") view. */
   onStartCase?: () => void;
   /** Time-out checklist state — lifted to the route so the start-case modal shares it. */
@@ -85,6 +92,7 @@ export function AwakeDashboard({
   staffRole,
   initials,
   onSleep,
+  onOpenPacu,
   onLogout,
   activeCase,
   onBackToCases,
@@ -93,6 +101,8 @@ export function AwakeDashboard({
   dashboardContextRef,
   onSidebarNavigate,
   onOpenLightbox,
+  onOpenPrefCardChecklist,
+  onOpenVipPlanning,
   onStartCase,
   timeOutChecked,
   onToggleTimeOutItem,
@@ -112,6 +122,7 @@ export function AwakeDashboard({
   const [patientDetailsOpen, setPatientDetailsOpen] = useState(false);
   const [patientVideoOpen, setPatientVideoOpen] = useState(false);
   const [xraysOpen, setXraysOpen] = useState(false);
+  const [procedureOverviewOpen, setProcedureOverviewOpen] = useState(false);
   /**
    * Per-case viewing log for patient pre-op videos. Keyed by case id so the
    * log survives role-switches and case navigation. Each entry holds the
@@ -172,6 +183,18 @@ export function AwakeDashboard({
   const [machineCheck, setMachineCheck] = useState<Set<number>>(
     () => new Set(MACHINE_CHECK_INITIAL_DONE),
   );
+  // Circulating-nurse checklist — phase-banded (pre-incision / intra-op /
+  // closing). Tracked here so the route's context builder can read tallies
+  // and Arti can answer "what's left on the nurse checklist" anywhere.
+  const [nurseChecklistChecked, setNurseChecklistChecked] = useState<Set<string>>(() => new Set());
+  const toggleNurseChecklistItem = useCallback((id: string) => {
+    setNurseChecklistChecked((prev) => {
+      const next = new Set(prev);
+      if (next.has(id)) next.delete(id);
+      else next.add(id);
+      return next;
+    });
+  }, []);
 
   // Keep the route-level context builder updated with live dashboard state.
   useEffect(() => {
@@ -232,9 +255,37 @@ export function AwakeDashboard({
         })(),
         `Opening checklist (scrub tech): ${openingChecklist.size}/${OPENING_CHECKLIST_ITEMS.length} done. Items by index: ${OPENING_CHECKLIST_ITEMS.map((label, i) => `${i}=${label}${openingChecklist.has(i) ? " ✓" : ""}`).join(" · ")}`,
         `Machine check (anesthesia): ${machineCheck.size}/${MACHINE_CHECK_ITEMS.length} done. Items by index: ${MACHINE_CHECK_ITEMS.map((label, i) => `${i}=${label}${machineCheck.has(i) ? " ✓" : ""}`).join(" · ")}`,
+        (() => {
+          // Circulating-nurse checklist — phase-banded tallies + pending items so
+          // Arti can answer "what's left on the nurse checklist / pre-incision /
+          // closing" from anywhere.
+          const lines: string[] = [];
+          for (const phase of NURSE_CHECKLIST) {
+            const done = phase.items.filter((i) => nurseChecklistChecked.has(i.id));
+            const pending = phase.items.filter((i) => !nurseChecklistChecked.has(i.id));
+            lines.push(
+              `  ${phase.label}: ${done.length}/${phase.items.length}${
+                pending.length
+                  ? ` · pending: ${pending
+                      .slice(0, 4)
+                      .map((p) => p.label)
+                      .join(", ")}${pending.length > 4 ? "…" : ""}`
+                  : " · ALL DONE"
+              }`,
+            );
+          }
+          return [
+            `── Circulating-nurse checklist ──`,
+            ...lines,
+            `READ-BACK GUIDANCE: when the user asks "what's left on the nurse checklist / circulating nurse / pre-incision / intra-op / closing checklist", read the matching phase's pending items aloud (one short sentence, list first 3–4 names). For "overall nurse checklist status", give a one-liner like "Pre-incision 7 of 10, intra-op 2 of 6, closing not started."`,
+          ].join("\n");
+        })(),
         patientDetailsOpen
           ? `Patient details modal: OPEN — "close" / "close modal" / "close patient info" → close_patient_details`
           : `Patient details modal: closed`,
+        procedureOverviewOpen
+          ? `Procedure overview modal: OPEN — "close" / "close overview" → close_procedure_overview`
+          : `Procedure overview modal: closed`,
         patientVideoOpen
           ? `Patient video modal: OPEN — transport tools available: play_patient_video, pause_patient_video, restart_patient_video, toggle_patient_video_captions, mute_patient_video, unmute_patient_video, close_patient_video. Generic "play"/"pause"/"restart"/"show captions"/"unmute"/"mute"/"close" all map to these (NOT to the how-to-video tools). The video DEFAULTS TO MUTED — staff routinely say "unmute" right after open to enable audio.`
           : `Patient video modal: closed`,
@@ -294,7 +345,9 @@ export function AwakeDashboard({
     dismissedAlerts,
     openingChecklist,
     machineCheck,
+    nurseChecklistChecked,
     patientDetailsOpen,
+    procedureOverviewOpen,
     patientVideoOpen,
     patientVideoSessions,
     xraysOpen,
@@ -384,6 +437,16 @@ export function AwakeDashboard({
 
   const closePatientDetails = useCallback((): ArtiToolResult => {
     setPatientDetailsOpen(false);
+    return { ok: true };
+  }, []);
+
+  const openProcedureOverview = useCallback((): ArtiToolResult => {
+    setProcedureOverviewOpen(true);
+    return { ok: true };
+  }, []);
+
+  const closeProcedureOverview = useCallback((): ArtiToolResult => {
+    setProcedureOverviewOpen(false);
     return { ok: true };
   }, []);
 
@@ -516,6 +579,10 @@ export function AwakeDashboard({
       setPatientVideoOpen(false);
       return "patient video";
     }
+    if (procedureOverviewOpen) {
+      setProcedureOverviewOpen(false);
+      return "procedure overview";
+    }
     if (patientDetailsOpen) {
       setPatientDetailsOpen(false);
       return "patient details";
@@ -526,7 +593,7 @@ export function AwakeDashboard({
       return "quad view";
     }
     return null;
-  }, [xraysOpen, patientVideoOpen, patientDetailsOpen, quadOpen]);
+  }, [xraysOpen, patientVideoOpen, procedureOverviewOpen, patientDetailsOpen, quadOpen]);
 
   const toggleOpeningChecklistItem = useCallback((index: number): ArtiToolResult => {
     if (index < 0 || index >= OPENING_CHECKLIST_ITEMS.length) {
@@ -586,6 +653,8 @@ export function AwakeDashboard({
       xraysResetZoom,
       toggleOpeningChecklistItem,
       toggleMachineCheckItem,
+      openProcedureOverview,
+      closeProcedureOverview,
       closeTopmostDashboardOverlay,
     }),
     [
@@ -618,6 +687,8 @@ export function AwakeDashboard({
       xraysResetZoom,
       toggleOpeningChecklistItem,
       toggleMachineCheckItem,
+      openProcedureOverview,
+      closeProcedureOverview,
       closeTopmostDashboardOverlay,
     ],
   );
@@ -641,7 +712,13 @@ export function AwakeDashboard({
       />
 
       <div className="flex min-w-0 flex-1 flex-col overflow-hidden">
-        <TopBar staffName={staffName} staffRole={staffRole} initials={initials} onSleep={onSleep} />
+        <TopBar
+          staffName={staffName}
+          staffRole={staffRole}
+          initials={initials}
+          onSleep={onSleep}
+          onOpenPacu={onOpenPacu}
+        />
 
         <RoleSwitcherBar activeRole={activeRole} onRoleChange={setActiveRole} />
 
@@ -660,6 +737,7 @@ export function AwakeDashboard({
               activeCase={activeCase}
               onOpenPatientDetails={() => setPatientDetailsOpen(true)}
               onStartCase={onStartCase}
+              onOpenProcedureOverview={() => setProcedureOverviewOpen(true)}
             />
 
             {/* ── Nurse view (default) ── */}
@@ -677,11 +755,18 @@ export function AwakeDashboard({
                     />
                   </div>
                   <div className="space-y-5">
+                    <CirculatingNurseChecklist
+                      checked={nurseChecklistChecked}
+                      onToggle={toggleNurseChecklistItem}
+                    />
                     <AlertStack dismissed={dismissedAlerts} onDismiss={dismissAlert} />
                     <TeamRoster />
                   </div>
                 </div>
-                <PreferenceCard onOpenLightbox={onOpenLightbox} />
+                <PreferenceCard
+                  onOpenLightbox={onOpenLightbox}
+                  onOpenChecklist={onOpenPrefCardChecklist}
+                />
               </>
             )}
 
@@ -705,6 +790,7 @@ export function AwakeDashboard({
                 videoSession={activeCase ? patientVideoSessions[activeCase.id] : undefined}
                 onOpenPatientVideo={() => openPatientVideo()}
                 onOpenXrays={() => openXrays()}
+                onOpenVipPlanning={onOpenVipPlanning}
               />
             )}
 
@@ -738,6 +824,12 @@ export function AwakeDashboard({
       <PatientDetailsModal
         open={patientDetailsOpen}
         onClose={() => setPatientDetailsOpen(false)}
+        activeCase={activeCase}
+      />
+
+      <ProcedureOverviewModal
+        open={procedureOverviewOpen}
+        onClose={() => setProcedureOverviewOpen(false)}
         activeCase={activeCase}
       />
 

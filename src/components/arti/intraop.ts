@@ -143,7 +143,7 @@ export const ACTIVITY_SEED: ActivityEvent[] = [
   {
     minutesAgo: 22,
     kind: "room",
-    title: "Sterile cockpit enabled",
+    title: "Live Case enabled",
     detail: "Voice quiet mode active",
   },
   { minutesAgo: 28, kind: "doc", title: "Time-out completed", detail: "All four items verified" },

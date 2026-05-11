@@ -58,6 +58,23 @@ import {
 import { ReminderToast, type FiredReminder } from "@/components/arti/ReminderToast";
 import { PersonScheduleModal } from "@/components/arti/PersonScheduleModal";
 import { HowToVideoModal, type HowToVideoHandle } from "@/components/arti/HowToVideoModal";
+import { EquipmentFailureModal } from "@/components/arti/EquipmentFailureModal";
+import { TurnoverScreen, CLEANING_ITEMS, findCleaningItem } from "@/components/arti/TurnoverScreen";
+import { VipPlanningModal } from "@/components/arti/VipPlanningModal";
+import { AmbientRecoveryScreen } from "@/components/arti/AmbientRecoveryScreen";
+import { PacuFeedModal } from "@/components/arti/PacuFeedModal";
+import { PACU_MESSAGES, formatRelative as formatPacuRelative } from "@/components/arti/pacu";
+import { PrefCardChecklistModal } from "@/components/arti/PrefCardChecklistModal";
+import {
+  PREF_CARD_TABLES,
+  findTable,
+  findTool,
+  resolveTableId,
+  toolKey,
+  type PrefCardTableId,
+  type PrefCardToolState,
+  type ToolStatus,
+} from "@/components/arti/prefCardTables";
 import {
   ImageLightboxModal,
   type LightboxHandle,
@@ -143,6 +160,8 @@ export interface DashboardActions {
   xraysResetZoom: () => ArtiToolResult;
   toggleOpeningChecklistItem: (index: number) => ArtiToolResult;
   toggleMachineCheckItem: (index: number) => ArtiToolResult;
+  openProcedureOverview: () => ArtiToolResult;
+  closeProcedureOverview: () => ArtiToolResult;
   /**
    * Close whichever dashboard-scoped overlay is currently topmost
    * (patient details > quad view). Returns the name of what was closed,
@@ -286,6 +305,18 @@ function ArtiWallAuthenticated({ onLogout }: { onLogout: () => void }) {
       | "onEndCase"
       | "onShowMultiView"
       | "onCloseMultiView"
+      | "onSimulateEquipmentFailure"
+      | "onCloseEquipmentFailure"
+      | "onOpenVipPlanning"
+      | "onCloseVipPlanning"
+      | "onEnterAmbientRecovery"
+      | "onExitAmbientRecovery"
+      | "onShowPacuFeed"
+      | "onClosePacuFeed"
+      | "onShowPrefCardChecklist"
+      | "onClosePrefCardChecklist"
+      | "onSetPrefCardToolStatus"
+      | "onSetCleaningItemStatus"
     >
   >({
     onWake: () => {},
@@ -369,6 +400,18 @@ function ArtiWallAuthenticated({ onLogout }: { onLogout: () => void }) {
     onEndCase: () => notAvailable(),
     onShowMultiView: () => notAvailable(),
     onCloseMultiView: () => notAvailable(),
+    onSimulateEquipmentFailure: () => notAvailable(),
+    onCloseEquipmentFailure: () => notAvailable(),
+    onOpenVipPlanning: () => notAvailable(),
+    onCloseVipPlanning: () => notAvailable(),
+    onEnterAmbientRecovery: () => notAvailable(),
+    onExitAmbientRecovery: () => notAvailable(),
+    onShowPacuFeed: () => notAvailable(),
+    onClosePacuFeed: () => notAvailable(),
+    onShowPrefCardChecklist: () => notAvailable(),
+    onClosePrefCardChecklist: () => notAvailable(),
+    onSetPrefCardToolStatus: () => notAvailable(),
+    onSetCleaningItemStatus: () => notAvailable(),
   });
 
   // Dashboard-only tool bridge. `null` when no dashboard is mounted.
@@ -554,6 +597,10 @@ function ArtiWallAuthenticated({ onLogout }: { onLogout: () => void }) {
         dashboardActionsRef.current?.toggleOpeningChecklistItem(index) ?? notAvailable(),
       onToggleMachineCheckItem: (index) =>
         dashboardActionsRef.current?.toggleMachineCheckItem(index) ?? notAvailable(),
+      onOpenProcedureOverview: () =>
+        dashboardActionsRef.current?.openProcedureOverview() ?? notAvailable(),
+      onCloseProcedureOverview: () =>
+        dashboardActionsRef.current?.closeProcedureOverview() ?? notAvailable(),
       onShowPreferenceCardLayoutImages: (caseQuery, procedure) =>
         navCallbacksRef.current.onShowPreferenceCardLayoutImages?.(caseQuery, procedure) ??
         notAvailable(),
@@ -584,6 +631,27 @@ function ArtiWallAuthenticated({ onLogout }: { onLogout: () => void }) {
       onIntraopShowImaging: (modality) =>
         intraopActionsRef.current?.showImaging(modality) ?? notAvailable(),
       onIntraopShowPanel: (panel) => intraopActionsRef.current?.showPanel(panel) ?? notAvailable(),
+
+      onSimulateEquipmentFailure: (query) =>
+        navCallbacksRef.current.onSimulateEquipmentFailure?.(query) ?? notAvailable(),
+      onCloseEquipmentFailure: () =>
+        navCallbacksRef.current.onCloseEquipmentFailure?.() ?? notAvailable(),
+      onOpenVipPlanning: () => navCallbacksRef.current.onOpenVipPlanning?.() ?? notAvailable(),
+      onCloseVipPlanning: () => navCallbacksRef.current.onCloseVipPlanning?.() ?? notAvailable(),
+      onEnterAmbientRecovery: () =>
+        navCallbacksRef.current.onEnterAmbientRecovery?.() ?? notAvailable(),
+      onExitAmbientRecovery: () =>
+        navCallbacksRef.current.onExitAmbientRecovery?.() ?? notAvailable(),
+      onShowPacuFeed: () => navCallbacksRef.current.onShowPacuFeed?.() ?? notAvailable(),
+      onClosePacuFeed: () => navCallbacksRef.current.onClosePacuFeed?.() ?? notAvailable(),
+      onShowPrefCardChecklist: (table) =>
+        navCallbacksRef.current.onShowPrefCardChecklist?.(table) ?? notAvailable(),
+      onClosePrefCardChecklist: () =>
+        navCallbacksRef.current.onClosePrefCardChecklist?.() ?? notAvailable(),
+      onSetPrefCardToolStatus: (table, tool, status) =>
+        navCallbacksRef.current.onSetPrefCardToolStatus?.(table, tool, status) ?? notAvailable(),
+      onSetCleaningItemStatus: (item, status) =>
+        navCallbacksRef.current.onSetCleaningItemStatus?.(item, status) ?? notAvailable(),
 
       onUserTranscript: () => idleResetRef.current(),
       onAgentResponse: () => idleResetRef.current(),
@@ -636,6 +704,8 @@ type ArtiPhase =
   | "cases"
   | "preop"
   | "intraop"
+  | "turnover"
+  | "ambient"
   | "schedule"
   | "surgeons"
   | "surgeon-profile"
@@ -733,6 +803,18 @@ interface ArtiWallProps {
       | "onEndCase"
       | "onShowMultiView"
       | "onCloseMultiView"
+      | "onSimulateEquipmentFailure"
+      | "onCloseEquipmentFailure"
+      | "onOpenVipPlanning"
+      | "onCloseVipPlanning"
+      | "onEnterAmbientRecovery"
+      | "onExitAmbientRecovery"
+      | "onShowPacuFeed"
+      | "onClosePacuFeed"
+      | "onShowPrefCardChecklist"
+      | "onClosePrefCardChecklist"
+      | "onSetPrefCardToolStatus"
+      | "onSetCleaningItemStatus"
     >
   >;
   dashboardActionsRef: DashboardActionsRef;
@@ -887,6 +969,26 @@ function ArtiWall({
   // (voice) or the Start Case button (click). Continue → setPhase("intraop").
   const [timeOutModalOpen, setTimeOutModalOpen] = useState(false);
 
+  // Wall-clock the active case entered intraop. Used to compute % complete
+  // and estimated closure for the Case Progress Visibility voice answer
+  // (any screen can read this via the live context block).
+  const [caseStartedAtIso, setCaseStartedAtIso] = useState<string | null>(null);
+
+  // Cleanup checklist state for OR turnover. Lifted here so voice tools can
+  // mark items done from any screen, and so the route's context builder can
+  // expose tallies + pending items.
+  const [turnoverCleaningChecked, setTurnoverCleaningChecked] = useState<Set<string>>(
+    () => new Set(),
+  );
+  const toggleCleaningItem = useCallback((id: string) => {
+    setTurnoverCleaningChecked((prev) => {
+      const next = new Set(prev);
+      if (next.has(id)) next.delete(id);
+      else next.add(id);
+      return next;
+    });
+  }, []);
+
   // Schedule filter state — lifted up from ScheduleScreen so voice tools can
   // drive it. Service lines default to all visible; surgeon "all" = no filter.
   const [activeScheduleLines, setActiveScheduleLines] = useState<Set<ServiceLine>>(
@@ -898,6 +1000,39 @@ function ArtiWall({
   // OR by a tap on the 3D tower / detail panel. Null = no explicit focus
   // (the screen falls back to whichever console is currently 'active').
   const [focusedConsoleId, setFocusedConsoleId] = useState<ConsoleId | null>(null);
+
+  // Equipment Failure modal — surfaced on any screen when a console drops.
+  // For the prototype, triggered by the simulate_equipment_failure voice tool.
+  const [equipmentFailureConsoleId, setEquipmentFailureConsoleId] = useState<ConsoleId | null>(
+    null,
+  );
+
+  // VIP 3D Planning Reference modal — Spline-rendered implant planning view
+  // surfaced over any screen. Voice-triggered for intraoperative reference.
+  const [vipPlanningOpen, setVipPlanningOpen] = useState(false);
+
+  // PACU feed modal — recent messages from the recovery unit. Voice can
+  // answer "what's the latest from PACU" without opening it (the live
+  // context block carries the top-3 messages), but the user can also
+  // surface the full list with "show PACU".
+  const [pacuFeedOpen, setPacuFeedOpen] = useState(false);
+
+  // Annotated preference-card table checklist (back table + Mayo stand).
+  // Voice-driven open + status updates; sterility breaches surface in the
+  // live context so Arti can answer "what's missing on the back table"
+  // from anywhere.
+  const [prefCardChecklistOpen, setPrefCardChecklistOpen] = useState(false);
+  const [prefCardInitialTable, setPrefCardInitialTable] = useState<PrefCardTableId>("back-table");
+  const [prefCardToolState, setPrefCardToolState] = useState<PrefCardToolState>({});
+  const setPrefCardStatus = useCallback(
+    (tableId: PrefCardTableId, toolId: string, status: ToolStatus) => {
+      setPrefCardToolState((prev) => ({
+        ...prev,
+        [toolKey(tableId, toolId)]: { status, ts: new Date().toISOString() },
+      }));
+    },
+    [],
+  );
 
   // Video Library filter state — lifted from VideoLibraryScreen so voice
   // tools (library_search / library_filter_category / library_clear_filters)
@@ -1347,6 +1482,8 @@ function ArtiWall({
     cases: "case list",
     preop: "pre-op / surgical dashboard",
     intraop: "intraoperative · case active (live surgery)",
+    turnover: "OR turnover · between cases (patient data hidden, cleaning checklist on screen)",
+    ambient: "ambient recovery · between cases (calm visuals, room clock, no patient data)",
     schedule: "schedule / calendar",
     surgeons: "surgeons directory",
     "surgeon-profile": "surgeon procedure preferences (per-procedure preference cards + images)",
@@ -1402,12 +1539,42 @@ function ArtiWall({
         ? `Active case team — Surgeon: ${activeScheduleEntry.surgeon} · Anesthesiologist: ${activeScheduleEntry.anesthesiologist} · Scrub Tech: ${activeScheduleEntry.scrubTech} · Circulator: ${activeScheduleEntry.circulator} · Anesthesia type: ${activeScheduleEntry.anesthesiaType} · ASA ${activeScheduleEntry.asaClass}`
         : `Active case team — Surgeon: ${activeCase.surgeon} (team not on schedule)`,
       // Patient basics — full detail only on preop where the chart is
-      // visible and clinical questions are common; lean elsewhere.
+      // visible and clinical questions are common; lean elsewhere. In
+      // turnover the wall hides patient data for privacy — mirror that in
+      // the context so Claude doesn't volunteer chart info between cases.
       activeClinical
         ? phase === "preop"
           ? `Active case patient basics — Blood type: ${activeClinical.bloodType} · DOB: ${activeClinical.dob} · Sex: ${activeClinical.sex} · Height: ${activeClinical.height} · Weight: ${activeClinical.weight} · BMI: ${activeClinical.bmi} · NPO: ${activeClinical.npo} · Allergies: ${activeAllergiesLine}`
-          : `Active case patient basics — Blood type: ${activeClinical.bloodType} · NPO: ${activeClinical.npo} · Allergies: ${activeAllergiesLine}`
+          : phase === "turnover" || phase === "ambient"
+            ? `Active case patient basics — HIDDEN (room is between cases; patient identifiers are not displayed). If the user asks for clinical data, suggest resuming the case first.`
+            : `Active case patient basics — Blood type: ${activeClinical.bloodType} · NPO: ${activeClinical.npo} · Allergies: ${activeAllergiesLine}`
         : `Active case patient basics — chart not available`,
+      (() => {
+        // Case Progress Visibility — only emitted while a case is live in
+        // intraop. Charge nurses / coordinators may ask "what's the progress",
+        // "how much longer", "when will they close", "is OR 326 almost done"
+        // from any screen, so this stays in the context regardless of phase.
+        if (phase !== "intraop" || !caseStartedAtIso) {
+          return phase === "intraop"
+            ? `Case progress: case is live in intraop but start time is unknown (treat as just started).`
+            : `Case progress: no case currently in progress (intraop not active).`;
+        }
+        const startMs = Date.parse(caseStartedAtIso);
+        if (!Number.isFinite(startMs)) {
+          return `Case progress: start time invalid — treat as just started.`;
+        }
+        const totalMin = activeCase.durationMin;
+        const elapsedMin = Math.max(0, Math.round((Date.now() - startMs) / 60_000));
+        const percent = totalMin > 0 ? Math.min(100, Math.round((elapsedMin / totalMin) * 100)) : 0;
+        const remainingMin = Math.max(0, totalMin - elapsedMin);
+        const overrunMin = elapsedMin > totalMin ? elapsedMin - totalMin : 0;
+        const closure = new Date(startMs + totalMin * 60_000);
+        const closureStr = `${String(closure.getHours()).padStart(2, "0")}:${String(closure.getMinutes()).padStart(2, "0")}`;
+        const readBack = overrunMin
+          ? `Case progress: ${percent}% complete (running ${overrunMin} min past estimate) · scheduled closure was ${closureStr}. When asked "how's the case going / when will they close / how much longer", speak naturally — e.g. "Running about ${overrunMin} minutes past estimate. Closure was scheduled for ${closureStr}." Keep it under 12 words.`
+          : `Case progress: ${percent}% complete · ${elapsedMin} min in / ${totalMin} min total · ~${remainingMin} min remaining · est. closure ${closureStr}. When asked "how's the case going / what's the progress / how much longer / when will they close / is OR ${activeCase.room.replace(/^OR\s*/i, "")} almost done", speak naturally — e.g. "Procedure ${percent} percent complete. Estimated closure in ${remainingMin} minutes." Keep it under 14 words and read the percent as digits (e.g. "65 percent").`;
+        return readBack;
+      })(),
       `Today's board:\n${board}`,
       pendingReminders.length
         ? `Pending reminders (${pendingReminders.length}):\n${pendingReminders
@@ -1427,24 +1594,123 @@ function ArtiWall({
       personSchedule.open
         ? `Person schedule modal: OPEN — viewing ${personSchedule.role} ${personSchedule.name} (${personSchedule.view} view). "switch to [name]" → show_person_schedule. "show me her week/month/today" → set_person_schedule_view. "close" → close_person_schedule.`
         : `Person schedule modal: closed`,
+      equipmentFailureConsoleId
+        ? (() => {
+            const device = CONSOLES.find((c) => c.id === equipmentFailureConsoleId);
+            return `Equipment Failure modal: OPEN — ${device?.shortName ?? equipmentFailureConsoleId} disconnected. Showing troubleshooting steps + backup availability. "close" / "dismiss" / "got it" → close_equipment_failure (or close_topmost_modal).`;
+          })()
+        : `Equipment Failure modal: closed`,
+      vipPlanningOpen
+        ? `VIP Planning Reference modal: OPEN — pre-op 3D implant plan with planned orientation values and implant checklist. "close" / "close planning" / "close model" → close_vip_planning (or close_topmost_modal).`
+        : `VIP Planning Reference modal: closed`,
+      pacuFeedOpen
+        ? `PACU Feed modal: OPEN — recent recovery-unit messages on screen. "close" / "close PACU" / "dismiss" → close_pacu_feed (or close_topmost_modal).`
+        : `PACU Feed modal: closed`,
+      (() => {
+        // Pref-card table tallies — always exposed so Arti can answer
+        // "what's missing on the back table" or "any contamination" from
+        // anywhere, even before the modal is opened.
+        const lines: string[] = [];
+        for (const table of PREF_CARD_TABLES) {
+          let accounted = 0;
+          let contaminated = 0;
+          const missing: string[] = [];
+          const breaches: string[] = [];
+          for (const tool of table.tools) {
+            const entry = prefCardToolState[toolKey(table.id, tool.id)];
+            const s = entry?.status ?? "missing";
+            if (s === "accounted") accounted++;
+            else if (s === "contaminated") {
+              contaminated++;
+              breaches.push(tool.label);
+            } else missing.push(tool.label);
+          }
+          const pct = Math.round((accounted / table.tools.length) * 100);
+          lines.push(
+            `  ${table.label}: ${accounted}/${table.tools.length} accounted (${pct}%)${
+              missing.length
+                ? ` · ${missing.length} pending: ${missing.slice(0, 6).join(", ")}${missing.length > 6 ? "…" : ""}`
+                : ""
+            }${contaminated ? ` · ⚠ ${contaminated} sterility breach${contaminated === 1 ? "" : "es"}: ${breaches.join(", ")}` : ""}`,
+          );
+        }
+        return [
+          `── Preference-card table checklist ──`,
+          ...lines,
+          `Modal: ${prefCardChecklistOpen ? "OPEN" : "closed"} (initial table: ${prefCardInitialTable}).`,
+          `READ-BACK GUIDANCE: when the user asks "what's missing on the back table / Mayo / pref card", "what's accounted for", "any contamination / sterility breach", "what's still pending" — read the matching tally aloud in one short sentence (count + first 2–3 names if listing). When they say "show the pref card checklist / table layout / Mayo stand", fire show_pref_card_checklist (pass the table). To mark a tool, use set_pref_card_tool_status with table + tool free-text + status one of "accounted" / "missing" / "contaminated". Common contamination triggers: "X dropped", "X broke sterility", "X is contaminated", "X became unsterile", "X touched the field" → set_pref_card_tool_status status:"contaminated".`,
+        ].join("\n");
+      })(),
+      (() => {
+        // OR Turnover cleaning checklist — exposed always so voice can flag
+        // items done from anywhere (it's the same workflow whether the user
+        // is on the turnover screen or has navigated away).
+        const done = CLEANING_ITEMS.filter((i) => turnoverCleaningChecked.has(i.id));
+        const pending = CLEANING_ITEMS.filter((i) => !turnoverCleaningChecked.has(i.id));
+        return [
+          `── OR Turnover cleaning checklist ──`,
+          `  ${done.length}/${CLEANING_ITEMS.length} complete${
+            pending.length
+              ? ` · pending: ${pending
+                  .slice(0, 4)
+                  .map((p) => p.label)
+                  .join(", ")}${pending.length > 4 ? "…" : ""}`
+              : " · ALL DONE"
+          }`,
+          `READ-BACK GUIDANCE: when the user asks "what's left on the cleanup / turnover / cleaning checklist", "is cleanup done", "what still needs to be cleaned", read the pending count + 1–3 item names in one short sentence. To mark a step done, fire set_cleaning_item_status with item free-text + status:"done" (e.g. "drapes are off", "table wiped down", "tower disinfected", "we're stocked", "ready for next case"). To un-mark, status:"pending". The checklist resets every time a new case ends.`,
+        ].join("\n");
+      })(),
+      (() => {
+        // PACU messages — top 3 most recent are always in the context so
+        // Arti can answer "what's the latest from PACU" from ANY screen.
+        // Newest first. Times are wall-clock relative (e.g. "2 min ago").
+        if (PACU_MESSAGES.length === 0) {
+          return `── PACU feed ──\nNo messages received from PACU yet.`;
+        }
+        const recent = PACU_MESSAGES.slice(0, 3);
+        const lines = recent.map(
+          (m, i) =>
+            `  ${i + 1}. [${m.priority.toUpperCase()}] ${formatPacuRelative(m.receivedAtIso)} — ${m.from}: "${m.body}"`,
+        );
+        const latest = recent[0];
+        return [
+          `── PACU feed (${PACU_MESSAGES.length} total) ──`,
+          ...lines,
+          `READ-BACK GUIDANCE: when the user asks "what's the latest from PACU / any PACU updates / what did PACU say / latest message from recovery / anything from PACU / PACU status" or any close variation, READ message #1 aloud — one short sentence: the sender's role + the relative time + the body. Example: "PACU charge says, bed 4 ready for Voss, ${formatPacuRelative(latest.receivedAtIso)}." Keep under 18 words. If the user asks for "all" or "more PACU messages", read up to 3 in order, one per sentence. If they ask to "see" / "show" / "open" PACU, fire show_pacu_feed instead. This overrides the default "one short sentence" rule because the user is explicitly requesting a PACU update.`,
+        ].join("\n");
+      })(),
+      phase === "turnover"
+        ? `── OR Turnover · between cases ──\nThe wall is showing the cleaning checklist + next-case countdown. Patient identifiers are hidden for privacy. Do NOT volunteer the prior patient's chart info. "Arti, start next case" / "ready for next case" / "next case" / "we're ready" → start_case (advances to the next case and opens the time-out modal). "Arti, ambient mode" / "calm mode" / "recovery mode" → enter_ambient_recovery. For other commands (smart settings, schedule, etc.) act normally.`
+        : "",
+      phase === "ambient"
+        ? `── Ambient Recovery · between cases ──\nThe wall is in calm, low-attention mode: large clock, gentle visuals, no patient data, rotating procedural-prep reminders. Patient identifiers are hidden. Keep responses minimal and quiet (cockpit-like tone). "Arti, start next case" / "ready for next case" → start_case. "Arti, exit ambient mode" / "wake the wall" / "back to home" → exit_ambient_recovery (returns to home). Routine commands still work normally but skip pleasantries here.`
+        : "",
       // One-line topmost-overlay hint for close_topmost_modal disambiguation.
       (() => {
         const which =
           firedReminders.length > 0
             ? "reminder toast"
-            : resetAllConfirmOpen
-              ? "reset-all confirm modal"
-              : timeOutModalOpen
-                ? "time-out modal"
-                : personSchedule.open
-                  ? "person schedule modal"
-                  : howToOpen
-                    ? "how-to video modal"
-                    : lightboxOpen
-                      ? "image lightbox"
-                      : selectedScheduleDate && phase === "schedule"
-                        ? "schedule day drawer"
-                        : null;
+            : equipmentFailureConsoleId
+              ? "equipment failure modal"
+              : vipPlanningOpen
+                ? "VIP planning modal"
+                : pacuFeedOpen
+                  ? "PACU feed modal"
+                  : prefCardChecklistOpen
+                    ? "pref-card checklist modal"
+                    : resetAllConfirmOpen
+                      ? "reset-all confirm modal"
+                      : timeOutModalOpen
+                        ? "time-out modal"
+                        : personSchedule.open
+                          ? "person schedule modal"
+                          : howToOpen
+                            ? "how-to video modal"
+                            : lightboxOpen
+                              ? "image lightbox"
+                              : selectedScheduleDate && phase === "schedule"
+                                ? "schedule day drawer"
+                                : null;
         return which
           ? `TOPMOST: ${which} — generic 'close' → close_topmost_modal.`
           : `TOPMOST: none route-level (check dashboard block for patient details / quad view).`;
@@ -2350,6 +2616,7 @@ function ArtiWall({
       if (timeOutModalOpen) {
         if (timeOutChecked.size === 4) {
           setTimeOutModalOpen(false);
+          setCaseStartedAtIso(new Date().toISOString());
           setPhase("intraop");
           return { ok: true, state: { continued: true } };
         }
@@ -2378,6 +2645,28 @@ function ArtiWall({
         setTimeOutModalOpen(true);
         return { ok: true, state: { timeoutOpen: true, case: activeCase.id } };
       }
+      // From turnover or ambient recovery, "next case" should advance past
+      // the just-ended one — walk forward in schedule order so we don't
+      // re-load the same case (mock data's `status === "next"` is static
+      // and would point back to it).
+      if (phase === "turnover" || phase === "ambient") {
+        const idx = TODAY_CASES.findIndex((c) => c.id === activeCase.id);
+        const after =
+          idx >= 0
+            ? TODAY_CASES.slice(idx + 1).find(
+                (c) => c.status !== "completed" && c.status !== "cancelled",
+              )
+            : undefined;
+        if (after) {
+          closeOverlays();
+          setActiveCase(after);
+          setTimeOutChecked(new Set());
+          setPhase("preop");
+          setTimeOutModalOpen(true);
+          return { ok: true, state: { timeoutOpen: true, case: after.id, autoSelected: true } };
+        }
+        return { ok: false, reason: "no upcoming case after this one" };
+      }
       // Bare "start checklist" / "start case" from Home (or any other
       // non-preop screen) — auto-load the up-next case, navigate to its
       // pre-op, and open the time-out modal. This is the most common
@@ -2400,7 +2689,9 @@ function ArtiWall({
       if (phase !== "intraop") return { ok: false, reason: "not in intraop" };
       closeOverlays();
       setMultiView(false);
-      setPhase("preop");
+      setCaseStartedAtIso(null);
+      setTurnoverCleaningChecked(new Set());
+      setPhase("turnover");
       return { ok: true };
     },
     onShowMultiView: (): ArtiToolResult => {
@@ -2414,6 +2705,101 @@ function ArtiWall({
       if (!multiView) return { ok: false, reason: "multi-view not active" };
       setMultiView(false);
       return { ok: true };
+    },
+    onSimulateEquipmentFailure: (query?: string): ArtiToolResult => {
+      // Default to the camera (the spec's "Synergy camera signal lost" example)
+      // if no specific device is named.
+      const target = query ? findConsole(query) : CONSOLES.find((c) => c.id === "camera");
+      const device = target ?? CONSOLES.find((c) => c.id === "camera");
+      if (!device) return { ok: false, reason: "no console matched" };
+      setEquipmentFailureConsoleId(device.id);
+      return {
+        ok: true,
+        state: {
+          device: device.shortName,
+          fullName: device.fullName,
+          backupAvailable: device.backup?.available ?? false,
+        },
+      };
+    },
+    onCloseEquipmentFailure: (): ArtiToolResult => {
+      if (!equipmentFailureConsoleId) {
+        return { ok: false, reason: "no equipment failure showing" };
+      }
+      setEquipmentFailureConsoleId(null);
+      return { ok: true };
+    },
+    onOpenVipPlanning: (): ArtiToolResult => {
+      setVipPlanningOpen(true);
+      return { ok: true, state: { case: activeCase.id } };
+    },
+    onCloseVipPlanning: (): ArtiToolResult => {
+      if (!vipPlanningOpen) return { ok: false, reason: "vip planning not open" };
+      setVipPlanningOpen(false);
+      return { ok: true };
+    },
+    onEnterAmbientRecovery: (): ArtiToolResult => {
+      closeOverlays();
+      setPhase("ambient");
+      return { ok: true };
+    },
+    onExitAmbientRecovery: (): ArtiToolResult => {
+      if (phase !== "ambient") return { ok: false, reason: "not in ambient recovery" };
+      setPhase("home");
+      return { ok: true };
+    },
+    onShowPacuFeed: (): ArtiToolResult => {
+      setPacuFeedOpen(true);
+      return { ok: true };
+    },
+    onClosePacuFeed: (): ArtiToolResult => {
+      if (!pacuFeedOpen) return { ok: false, reason: "pacu feed not open" };
+      setPacuFeedOpen(false);
+      return { ok: true };
+    },
+    onShowPrefCardChecklist: (table?: string): ArtiToolResult => {
+      const tableId = resolveTableId(table) ?? "back-table";
+      setPrefCardInitialTable(tableId);
+      setPrefCardChecklistOpen(true);
+      return { ok: true, state: { table: tableId } };
+    },
+    onClosePrefCardChecklist: (): ArtiToolResult => {
+      if (!prefCardChecklistOpen) return { ok: false, reason: "pref card checklist not open" };
+      setPrefCardChecklistOpen(false);
+      return { ok: true };
+    },
+    onSetPrefCardToolStatus: (
+      tableQuery: string,
+      toolQuery: string,
+      status: ToolStatus,
+    ): ArtiToolResult => {
+      const tableId = resolveTableId(tableQuery);
+      if (!tableId) return { ok: false, reason: "unknown table — say 'back table' or 'Mayo'" };
+      const table = findTable(tableId);
+      if (!table) return { ok: false, reason: "table not found" };
+      const tool = findTool(table, toolQuery);
+      if (!tool) {
+        return {
+          ok: false,
+          reason: `no tool matched "${toolQuery}" on the ${table.label.toLowerCase()}`,
+        };
+      }
+      setPrefCardStatus(tableId, tool.id, status);
+      return {
+        ok: true,
+        state: { table: table.label, tool: tool.label, status },
+      };
+    },
+    onSetCleaningItemStatus: (itemQuery: string, status: "done" | "pending"): ArtiToolResult => {
+      const item = findCleaningItem(itemQuery);
+      if (!item) return { ok: false, reason: `no cleaning item matched "${itemQuery}"` };
+      setTurnoverCleaningChecked((prev) => {
+        const next = new Set(prev);
+        if (status === "done") next.add(item.id);
+        else next.delete(item.id);
+        return next;
+      });
+      return { ok: true, state: { item: item.label, status } };
     },
     onShowSchedule: () => {
       closeOverlays();
@@ -2567,6 +2953,22 @@ function ArtiWall({
     onCloseTopmostModal: () => {
       if (firedReminders.length > 0) {
         setFiredReminders([]);
+        return;
+      }
+      if (equipmentFailureConsoleId) {
+        setEquipmentFailureConsoleId(null);
+        return;
+      }
+      if (vipPlanningOpen) {
+        setVipPlanningOpen(false);
+        return;
+      }
+      if (pacuFeedOpen) {
+        setPacuFeedOpen(false);
+        return;
+      }
+      if (prefCardChecklistOpen) {
+        setPrefCardChecklistOpen(false);
         return;
       }
       if (resetAllConfirmOpen) {
@@ -2916,6 +3318,7 @@ function ArtiWall({
         staffRole={staff.role}
         initials={staff.initials}
         onSleep={handleSleep}
+        onOpenPacu={() => setPacuFeedOpen(true)}
         onLogout={onLogout}
         activeCase={activeCase}
         onBackToCases={() => setPhase("cases")}
@@ -2924,6 +3327,11 @@ function ArtiWall({
         dashboardContextRef={dashboardContextRef}
         onSidebarNavigate={handleSidebarNavigate}
         onOpenLightbox={openLightbox}
+        onOpenPrefCardChecklist={(tableId) => {
+          setPrefCardInitialTable(tableId ?? "back-table");
+          setPrefCardChecklistOpen(true);
+        }}
+        onOpenVipPlanning={() => setVipPlanningOpen(true)}
         onStartCase={() => {
           closeOverlays();
           setTimeOutModalOpen(true);
@@ -2940,6 +3348,12 @@ function ArtiWall({
         initials={staff.initials}
         activeCase={activeCase}
         onExitMultiView={() => setMultiView(false)}
+        onEndCase={() => {
+          setMultiView(false);
+          setCaseStartedAtIso(null);
+          setTurnoverCleaningChecked(new Set());
+          setPhase("turnover");
+        }}
         onPrompt={handlePrompt}
         actionsRef={intraopActionsRef}
       />
@@ -2949,16 +3363,80 @@ function ArtiWall({
         staffRole={staff.role}
         initials={staff.initials}
         onSleep={handleSleep}
+        onOpenPacu={() => setPacuFeedOpen(true)}
         onLogout={onLogout}
         activeCase={activeCase}
         onEndCase={() => {
           setMultiView(false);
-          setPhase("preop");
+          setCaseStartedAtIso(null);
+          setTurnoverCleaningChecked(new Set());
+          setPhase("turnover");
         }}
         onPrompt={handlePrompt}
         onSidebarNavigate={handleSidebarNavigate}
         onShowMultiView={() => setMultiView(true)}
         actionsRef={intraopActionsRef}
+      />
+    );
+  } else if (phase === "ambient") {
+    screen = (
+      <AmbientRecoveryScreen
+        endedCase={activeCase}
+        onExit={() => setPhase("home")}
+        onStartNextCase={() => {
+          const idx = TODAY_CASES.findIndex((c) => c.id === activeCase.id);
+          let next: CaseItem | undefined;
+          if (idx >= 0) {
+            for (let i = idx + 1; i < TODAY_CASES.length; i++) {
+              const c = TODAY_CASES[i];
+              if (c.status !== "completed" && c.status !== "cancelled") {
+                next = c;
+                break;
+              }
+            }
+          }
+          if (!next) {
+            setPhase("home");
+            return;
+          }
+          closeOverlays();
+          setActiveCase(next);
+          setTimeOutChecked(new Set());
+          setPhase("preop");
+          setTimeOutModalOpen(true);
+        }}
+      />
+    );
+  } else if (phase === "turnover") {
+    screen = (
+      <TurnoverScreen
+        endedCase={activeCase}
+        checked={turnoverCleaningChecked}
+        onToggle={toggleCleaningItem}
+        onEnterAmbient={() => setPhase("ambient")}
+        onStartNextCase={() => {
+          // Walk forward through the schedule for the next non-completed case.
+          const idx = TODAY_CASES.findIndex((c) => c.id === activeCase.id);
+          let next: CaseItem | undefined;
+          if (idx >= 0) {
+            for (let i = idx + 1; i < TODAY_CASES.length; i++) {
+              const c = TODAY_CASES[i];
+              if (c.status !== "completed" && c.status !== "cancelled") {
+                next = c;
+                break;
+              }
+            }
+          }
+          if (!next) {
+            setPhase("home");
+            return;
+          }
+          closeOverlays();
+          setActiveCase(next);
+          setTimeOutChecked(new Set());
+          setPhase("preop");
+          setTimeOutModalOpen(true);
+        }}
       />
     );
   } else if (phase === "cases") {
@@ -2968,6 +3446,7 @@ function ArtiWall({
         staffRole={staff.role}
         initials={staff.initials}
         onSleep={handleSleep}
+        onOpenPacu={() => setPacuFeedOpen(true)}
         onLogout={onLogout}
         onBackHome={() => setPhase("home")}
         onSelectCase={handleSelectCase}
@@ -2982,6 +3461,7 @@ function ArtiWall({
         staffRole={staff.role}
         initials={staff.initials}
         onSleep={handleSleep}
+        onOpenPacu={() => setPacuFeedOpen(true)}
         onLogout={onLogout}
         onPrompt={handlePrompt}
         onSidebarNavigate={handleSidebarNavigate}
@@ -2994,11 +3474,13 @@ function ArtiWall({
         staffRole={staff.role}
         initials={staff.initials}
         onSleep={handleSleep}
+        onOpenPacu={() => setPacuFeedOpen(true)}
         onLogout={onLogout}
         onPrompt={handlePrompt}
         onSidebarNavigate={handleSidebarNavigate}
         focusedId={focusedConsoleId}
         onFocusChange={setFocusedConsoleId}
+        onSimulateFailure={(consoleId) => setEquipmentFailureConsoleId(consoleId)}
       />
     );
   } else if (phase === "journey") {
@@ -3022,6 +3504,7 @@ function ArtiWall({
         staffRole={staff.role}
         initials={staff.initials}
         onSleep={handleSleep}
+        onOpenPacu={() => setPacuFeedOpen(true)}
         onLogout={onLogout}
         onPrompt={handlePrompt}
         onSidebarNavigate={handleSidebarNavigate}
@@ -3045,6 +3528,7 @@ function ArtiWall({
         staffRole={staff.role}
         initials={staff.initials}
         onSleep={handleSleep}
+        onOpenPacu={() => setPacuFeedOpen(true)}
         onLogout={onLogout}
         onPrompt={handlePrompt}
         onSidebarNavigate={handleSidebarNavigate}
@@ -3060,6 +3544,7 @@ function ArtiWall({
         staffRole={staff.role}
         initials={staff.initials}
         onSleep={handleSleep}
+        onOpenPacu={() => setPacuFeedOpen(true)}
         onLogout={onLogout}
         onPrompt={handlePrompt}
         onSidebarNavigate={handleSidebarNavigate}
@@ -3082,6 +3567,7 @@ function ArtiWall({
         staffRole={staff.role}
         initials={staff.initials}
         onSleep={handleSleep}
+        onOpenPacu={() => setPacuFeedOpen(true)}
         onLogout={onLogout}
         onBackHome={() => setPhase("home")}
         onPrompt={handlePrompt}
@@ -3102,6 +3588,7 @@ function ArtiWall({
         staffRole={staff.role}
         initials={staff.initials}
         onSleep={handleSleep}
+        onOpenPacu={() => setPacuFeedOpen(true)}
         onLogout={onLogout}
         onPrompt={handlePrompt}
         onSidebarNavigate={handleSidebarNavigate}
@@ -3116,6 +3603,7 @@ function ArtiWall({
         staffRole={staff.role}
         initials={staff.initials}
         onSleep={handleSleep}
+        onOpenPacu={() => setPacuFeedOpen(true)}
         onLogout={onLogout}
         onPrompt={handlePrompt}
         onSidebarNavigate={handleSidebarNavigate}
@@ -3129,6 +3617,7 @@ function ArtiWall({
         staffRole={staff.role}
         initials={staff.initials}
         onSleep={handleSleep}
+        onOpenPacu={() => setPacuFeedOpen(true)}
         onLogout={onLogout}
         onPrompt={handlePrompt}
         onSidebarNavigate={handleSidebarNavigate}
@@ -3145,6 +3634,7 @@ function ArtiWall({
         staffRole={staff.role}
         initials={staff.initials}
         onSleep={handleSleep}
+        onOpenPacu={() => setPacuFeedOpen(true)}
         onLogout={onLogout}
         onPrompt={handlePrompt}
         onSidebarNavigate={handleSidebarNavigate}
@@ -3219,6 +3709,28 @@ function ArtiWall({
         initialIndex={lightboxIndex}
         title={lightboxTitle}
       />
+      <EquipmentFailureModal
+        open={equipmentFailureConsoleId !== null}
+        onClose={() => setEquipmentFailureConsoleId(null)}
+        console={
+          equipmentFailureConsoleId
+            ? CONSOLES.find((c) => c.id === equipmentFailureConsoleId)
+            : undefined
+        }
+      />
+      <VipPlanningModal
+        open={vipPlanningOpen}
+        onClose={() => setVipPlanningOpen(false)}
+        activeCase={activeCase}
+      />
+      <PacuFeedModal open={pacuFeedOpen} onClose={() => setPacuFeedOpen(false)} />
+      <PrefCardChecklistModal
+        open={prefCardChecklistOpen}
+        onClose={() => setPrefCardChecklistOpen(false)}
+        initialTableId={prefCardInitialTable}
+        state={prefCardToolState}
+        onSetStatus={setPrefCardStatus}
+      />
       <TimeOutModal
         open={timeOutModalOpen}
         activeCase={activeCase}
@@ -3235,6 +3747,7 @@ function ArtiWall({
         onToggle={handleToggleTimeOutItem}
         onContinue={() => {
           setTimeOutModalOpen(false);
+          setCaseStartedAtIso(new Date().toISOString());
           setPhase("intraop");
         }}
         onCancel={() => setTimeOutModalOpen(false)}

@@ -103,9 +103,9 @@ export function parseIntent(raw: string): ArtiIntent {
     return { kind: "sleep" };
   }
 
-  /* ----- Sterile cockpit ----- */
+  /* ----- Live Case ----- */
 
-  if (/\b(sterile\s*cockpit|cockpit mode|focus mode)\b/.test(text)) {
+  if (/\b(live\s*case|sterile\s*cockpit|cockpit mode|focus mode)\b/.test(text)) {
     if (/\b(on|enable|start|engage|enter)\b/.test(text)) {
       return { kind: "toggle-cockpit", enabled: true };
     }

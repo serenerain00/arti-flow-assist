@@ -11,6 +11,7 @@ interface Props {
   staffRole: string;
   initials: string;
   onSleep: () => void;
+  onOpenPacu?: () => void;
   onLogout: () => void;
   onBackHome: () => void;
   onSelectCase: (c: CaseItem) => void;
@@ -28,6 +29,7 @@ export function CaseListScreen({
   staffRole,
   initials,
   onSleep,
+  onOpenPacu,
   onLogout,
   onBackHome,
   onSelectCase,
@@ -50,7 +52,13 @@ export function CaseListScreen({
       />
 
       <div className="flex min-w-0 flex-1 flex-col overflow-hidden">
-        <TopBar staffName={staffName} staffRole={staffRole} initials={initials} onSleep={onSleep} />
+        <TopBar
+          staffName={staffName}
+          staffRole={staffRole}
+          initials={initials}
+          onSleep={onSleep}
+          onOpenPacu={onOpenPacu}
+        />
 
         <main data-scroll className="min-h-0 flex-1 overflow-y-auto px-8 py-6 animate-fade-in">
           <div className="flex flex-col gap-5">

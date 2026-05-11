@@ -37,6 +37,7 @@ interface Props {
   staffRole: string;
   initials: string;
   onSleep: () => void;
+  onOpenPacu?: () => void;
   onLogout: () => void;
   onBackHome: () => void;
   onPrompt: (text: string) => void;
@@ -63,6 +64,7 @@ export function ScheduleScreen({
   staffRole,
   initials,
   onSleep,
+  onOpenPacu,
   onLogout,
   onPrompt,
   selectedDate,
@@ -127,7 +129,13 @@ export function ScheduleScreen({
       />
 
       <div className="flex min-w-0 flex-1 flex-col overflow-hidden">
-        <TopBar staffName={staffName} staffRole={staffRole} initials={initials} onSleep={onSleep} />
+        <TopBar
+          staffName={staffName}
+          staffRole={staffRole}
+          initials={initials}
+          onSleep={onSleep}
+          onOpenPacu={onOpenPacu}
+        />
 
         <main
           data-scroll

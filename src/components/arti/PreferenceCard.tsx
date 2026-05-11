@@ -8,11 +8,13 @@ import {
   ChevronDown,
   ChevronUp,
   LayoutGrid,
+  ClipboardCheck,
 } from "lucide-react";
 import { useState } from "react";
 import surgicalTableOverview from "@/assets/surgical-table-overview.jpg";
 import surgicalTableMayo from "@/assets/surgical-table-mayo.jpg";
 import type { LightboxImage } from "./ImageLightboxModal";
+import type { PrefCardTableId } from "./prefCardTables";
 
 export const PREF_CARD_IMAGES: LightboxImage[] = [
   {
@@ -86,9 +88,15 @@ const Section = ({
 
 interface Props {
   onOpenLightbox?: (images: LightboxImage[], index?: number) => void;
+  /**
+   * Open the annotated table-layout checklist modal. `tableId` selects which
+   * tab opens first; clicking the section button (with no id) defaults to the
+   * back table.
+   */
+  onOpenChecklist?: (tableId?: PrefCardTableId) => void;
 }
 
-export function PreferenceCard({ onOpenLightbox }: Props) {
+export function PreferenceCard({ onOpenLightbox, onOpenChecklist }: Props) {
   const [expanded, setExpanded] = useState(true);
 
   return (
@@ -117,36 +125,69 @@ export function PreferenceCard({ onOpenLightbox }: Props) {
         <CardContent className="grid gap-5 sm:grid-cols-2">
           {/* Surgical Table Layout */}
           <div id="preference-card-layout-images" className="sm:col-span-2 scroll-mt-24">
-            <Section icon={LayoutGrid} title="Surgical Table Layout">
-              <div className="grid gap-3 sm:grid-cols-2">
-                {PREF_CARD_IMAGES.map((img, i) => (
-                  <button
-                    key={img.label}
-                    onClick={() => onOpenLightbox?.(PREF_CARD_IMAGES, i)}
-                    className="group relative overflow-hidden rounded-xl border border-border/60 bg-surface-2 text-left transition-all duration-300 hover:border-primary/40 hover:shadow-[0_0_28px_-8px_var(--primary)]"
-                  >
-                    <img
-                      src={img.src}
-                      alt={img.alt}
-                      width={1024}
-                      height={640}
-                      loading="lazy"
-                      className="aspect-[16/10] w-full object-cover transition-transform duration-500 group-hover:scale-105"
-                    />
-                    <div className="absolute inset-0 flex items-end bg-gradient-to-t from-black/60 via-transparent to-transparent p-3 opacity-80 group-hover:opacity-100 transition-opacity">
-                      <figcaption className="font-mono text-[10px] uppercase tracking-wider text-white/80">
-                        {img.label}
-                      </figcaption>
-                    </div>
-                    <div className="absolute inset-0 flex items-center justify-center opacity-0 transition-opacity duration-200 group-hover:opacity-100">
-                      <div className="rounded-full border border-white/20 bg-black/60 px-3 py-1.5 text-[10px] uppercase tracking-widest text-white/80 backdrop-blur-sm">
-                        Expand
-                      </div>
-                    </div>
-                  </button>
-                ))}
+            <div className="mb-2 flex items-center justify-between">
+              <div className="flex items-center gap-2 text-xs font-semibold uppercase tracking-wider text-primary">
+                <LayoutGrid className="h-3.5 w-3.5" />
+                Surgical Table Layout
               </div>
-            </Section>
+              {onOpenChecklist ? (
+                <button
+                  type="button"
+                  onClick={() => onOpenChecklist()}
+                  className="inline-flex items-center gap-1.5 rounded-full border border-primary/30 bg-primary/10 px-3 py-1 text-[11px] font-light uppercase tracking-wider text-primary transition-colors hover:bg-primary/15"
+                  title="Open the annotated table checklist (also: 'Arti, show the pref card checklist')"
+                >
+                  <ClipboardCheck className="h-3 w-3" strokeWidth={2} />
+                  Open Checklist
+                </button>
+              ) : null}
+            </div>
+            <div className="grid gap-3 sm:grid-cols-2">
+              {PREF_CARD_IMAGES.map((img, i) => {
+                // Map the lightbox image index to a checklist tableId.
+                const tableId: PrefCardTableId = i === 0 ? "back-table" : "mayo-stand";
+                return (
+                  <div
+                    key={img.label}
+                    className="group relative overflow-hidden rounded-xl border border-border/60 bg-surface-2 transition-all duration-300 hover:border-primary/40 hover:shadow-[0_0_28px_-8px_var(--primary)]"
+                  >
+                    <button
+                      type="button"
+                      onClick={() => onOpenLightbox?.(PREF_CARD_IMAGES, i)}
+                      className="block w-full text-left"
+                    >
+                      <img
+                        src={img.src}
+                        alt={img.alt}
+                        width={1024}
+                        height={640}
+                        loading="lazy"
+                        className="aspect-[16/10] w-full object-cover transition-transform duration-500 group-hover:scale-105"
+                      />
+                      <div className="absolute inset-x-0 bottom-0 flex items-end bg-gradient-to-t from-black/60 via-transparent to-transparent p-3 opacity-80 group-hover:opacity-100 transition-opacity">
+                        <figcaption className="font-mono text-[10px] uppercase tracking-wider text-white/80">
+                          {img.label}
+                        </figcaption>
+                      </div>
+                    </button>
+                    {onOpenChecklist ? (
+                      <button
+                        type="button"
+                        onClick={(e) => {
+                          e.stopPropagation();
+                          onOpenChecklist(tableId);
+                        }}
+                        className="absolute right-2 top-2 inline-flex items-center gap-1.5 rounded-full border border-white/25 bg-black/60 px-2.5 py-1 text-[10px] uppercase tracking-wider text-white/90 backdrop-blur-sm transition-colors hover:border-primary/60 hover:bg-primary/20"
+                        title={`Open ${tableId === "back-table" ? "back table" : "Mayo stand"} checklist`}
+                      >
+                        <ClipboardCheck className="h-3 w-3" strokeWidth={2} />
+                        Checklist
+                      </button>
+                    ) : null}
+                  </div>
+                );
+              })}
+            </div>
           </div>
 
           {/* Positioning */}

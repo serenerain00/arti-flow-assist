@@ -1,6 +1,7 @@
 import { useEffect, useState } from "react";
-import { Moon, Thermometer, Volume2 } from "lucide-react";
+import { Moon, Thermometer, Volume2, MessageSquare } from "lucide-react";
 import { cn } from "@/lib/utils";
+import { PACU_MESSAGES } from "./pacu";
 
 interface Props {
   staffName: string;
@@ -12,12 +13,17 @@ interface Props {
    * the user from having to use voice or dig into the sidebar menu.
    */
   onSleep?: () => void;
+  /**
+   * Optional one-tap PACU feed opener. When provided, a PACU pill renders
+   * showing the count of recent messages — clicking opens the feed modal.
+   */
+  onOpenPacu?: () => void;
 }
 
 /**
  * Ambient OR vitals strip — noise meter, room temperature, staff identity.
  */
-export function TopBar({ staffName, staffRole, initials, onSleep }: Props) {
+export function TopBar({ staffName, staffRole, initials, onSleep, onOpenPacu }: Props) {
   const [time, setTime] = useState(new Date());
   const [noise, setNoise] = useState(42);
 
@@ -81,6 +87,23 @@ export function TopBar({ staffName, staffRole, initials, onSleep }: Props) {
           <Thermometer className="h-4 w-4 text-muted-foreground" />
           <span className="tabular-nums">21.4°C</span>
         </div>
+
+        {/* PACU feed — one tap opens recent recovery-unit messages. */}
+        {onOpenPacu && (
+          <button
+            type="button"
+            onClick={onOpenPacu}
+            className="glass group flex h-10 items-center gap-2 rounded-full px-4 text-xs font-light uppercase tracking-wider text-muted-foreground transition-all hover:border-primary/40 hover:bg-primary/10 hover:text-primary"
+            title={`Open PACU feed (or say 'arti, what's the latest from PACU') — ${PACU_MESSAGES.length} messages`}
+            aria-label="Open PACU feed"
+          >
+            <MessageSquare className="h-4 w-4" strokeWidth={1.7} />
+            PACU
+            <span className="ml-1 inline-flex h-5 min-w-5 items-center justify-center rounded-full bg-primary/15 px-1.5 font-mono text-[10px] text-primary">
+              {PACU_MESSAGES.length}
+            </span>
+          </button>
+        )}
 
         {/* Quick-sleep — one tap puts Arti into standby without voice. */}
         {onSleep && (

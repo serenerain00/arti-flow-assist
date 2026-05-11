@@ -26,6 +26,15 @@ export interface ConsoleTelemetry {
   detail?: string;
 }
 
+export interface ConsoleBackup {
+  /** Display name of the backup device. */
+  name: string;
+  /** Where the backup lives (room/cart/storage). */
+  location: string;
+  /** True if a backup is on-hand and ready to swap in. */
+  available: boolean;
+}
+
 export interface ConsoleDevice {
   id: ConsoleId;
   /** Compact name used in voice + cards. */
@@ -51,6 +60,13 @@ export interface ConsoleDevice {
    * "fluid management" all resolve to the same console.
    */
   tags: string[];
+  /**
+   * Ordered troubleshooting steps surfaced by the Equipment Failure modal
+   * when this console drops to status === "error" or "offline".
+   */
+  troubleshooting?: string[];
+  /** Backup device the room can fall back to if this console is unrecoverable. */
+  backup?: ConsoleBackup;
 }
 
 export const CONSOLES: ConsoleDevice[] = [
@@ -72,6 +88,17 @@ export const CONSOLES: ConsoleDevice[] = [
       { label: "Cable B", value: "Connected · idle" },
     ],
     tags: ["light", "light source", "lamp", "led", "illumination", "synergy light", "uhd light"],
+    troubleshooting: [
+      "Verify cable A is fully seated in the source and the scope.",
+      "Cycle the source — power off, wait 10 seconds, power on.",
+      "Swap to cable B (currently idle, confirmed connected).",
+      "If lamp fault persists, swap to backup source on Cart 2.",
+    ],
+    backup: {
+      name: "SynergyUHD4 Light Source · backup unit",
+      location: "Equipment Cart 2 · sub-sterile core",
+      available: true,
+    },
   },
   {
     id: "camera",
@@ -104,6 +131,17 @@ export const CONSOLES: ConsoleDevice[] = [
       "endoscope",
       "scope",
     ],
+    troubleshooting: [
+      "Confirm the 4K camera head cable is fully seated at the CCU.",
+      "Power-cycle the CCU — hold standby for 5 seconds, then re-enable.",
+      "Swap to the Nano arthroscopic camera on the secondary input.",
+      "If signal does not return, switch to the backup CCU on Cart 2.",
+    ],
+    backup: {
+      name: "Synergy 4K CCU · backup unit",
+      location: "Equipment Cart 2 · sub-sterile core",
+      available: true,
+    },
   },
   {
     id: "image",
@@ -133,6 +171,16 @@ export const CONSOLES: ConsoleDevice[] = [
       "captures",
       "stills",
     ],
+    troubleshooting: [
+      "Re-seat the footswitch cable at the back of the console.",
+      "Confirm the USB drive is inserted and not write-locked.",
+      "Cycle network — patient context syncs over the OR VLAN.",
+    ],
+    backup: {
+      name: "Synergy ID · spare recorder",
+      location: "Bio-med · pickup ETA 8 min",
+      available: false,
+    },
   },
   {
     id: "pump",
@@ -163,6 +211,17 @@ export const CONSOLES: ConsoleDevice[] = [
       "dualwave",
       "ar-6480",
     ],
+    troubleshooting: [
+      "Check that both inflow and outflow tubing sets are clamped open.",
+      "Confirm the saline bag is spiked and above pump level.",
+      "Re-prime the pump (hold Prime for 3 seconds).",
+      "If pressure does not stabilize, switch to backup pump on Cart 2.",
+    ],
+    backup: {
+      name: "DualWave Pump · backup unit",
+      location: "Equipment Cart 2 · sub-sterile core",
+      available: true,
+    },
   },
   {
     id: "shaver",
@@ -193,6 +252,16 @@ export const CONSOLES: ConsoleDevice[] = [
       "power instrument",
       "power console",
     ],
+    troubleshooting: [
+      "Re-seat the handpiece at the console — listen for the click.",
+      "Verify the footpedal cable is locked at the rear panel.",
+      "Swap to the 5.5 mm round burr handpiece (currently loaded, ready).",
+    ],
+    backup: {
+      name: "APS II Shaver · backup unit",
+      location: "Equipment Cart 2 · sub-sterile core",
+      available: true,
+    },
   },
   {
     id: "rf",
@@ -223,6 +292,16 @@ export const CONSOLES: ConsoleDevice[] = [
       "ar-9700",
       "wand",
     ],
+    troubleshooting: [
+      "Confirm the wand is fully seated in the front-panel port.",
+      "Cycle the generator — standby off, wait 5 seconds, standby on.",
+      "Swap to the spare Quantum 50° wand on the back table.",
+    ],
+    backup: {
+      name: "Quantum 2 Generator · backup unit",
+      location: "Equipment Cart 2 · sub-sterile core",
+      available: true,
+    },
   },
 ];
 

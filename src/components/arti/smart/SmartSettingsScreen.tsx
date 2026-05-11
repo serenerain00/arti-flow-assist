@@ -33,6 +33,7 @@ interface Props {
   staffRole: string;
   initials: string;
   onSleep: () => void;
+  onOpenPacu?: () => void;
   onLogout: () => void;
   onPrompt: (text: string) => void;
   onBack: () => void;
@@ -60,6 +61,7 @@ export function SmartSettingsScreen({
   staffRole,
   initials,
   onSleep,
+  onOpenPacu,
   onLogout,
   onPrompt,
   onBack,
@@ -188,7 +190,13 @@ export function SmartSettingsScreen({
       />
 
       <div className="flex min-w-0 flex-1 flex-col overflow-hidden">
-        <TopBar staffName={staffName} staffRole={staffRole} initials={initials} onSleep={onSleep} />
+        <TopBar
+          staffName={staffName}
+          staffRole={staffRole}
+          initials={initials}
+          onSleep={onSleep}
+          onOpenPacu={onOpenPacu}
+        />
 
         <main className="relative min-h-0 flex-1 overflow-hidden animate-fade-in">
           <div className="flex h-full">

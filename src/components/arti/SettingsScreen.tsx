@@ -8,6 +8,7 @@ interface Props {
   staffRole: string;
   initials: string;
   onSleep: () => void;
+  onOpenPacu?: () => void;
   onLogout: () => void;
   onPrompt: (text: string) => void;
   onOpenAdmin: () => void;
@@ -24,6 +25,7 @@ export function SettingsScreen({
   staffRole,
   initials,
   onSleep,
+  onOpenPacu,
   onLogout,
   onPrompt,
   onOpenAdmin,
@@ -39,7 +41,13 @@ export function SettingsScreen({
       />
 
       <div className="flex min-w-0 flex-1 flex-col overflow-hidden">
-        <TopBar staffName={staffName} staffRole={staffRole} initials={initials} onSleep={onSleep} />
+        <TopBar
+          staffName={staffName}
+          staffRole={staffRole}
+          initials={initials}
+          onSleep={onSleep}
+          onOpenPacu={onOpenPacu}
+        />
 
         <main
           data-scroll

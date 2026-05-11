@@ -18,6 +18,7 @@ import {
   Heart,
   Image as ImageIcon,
   Layers,
+  LogOut,
   Mic,
   Package,
   Pill,
@@ -89,6 +90,7 @@ interface Props {
   staffRole: string;
   initials: string;
   onSleep: () => void;
+  onOpenPacu?: () => void;
   onLogout: () => void;
   activeCase?: CaseItem;
   onEndCase: () => void;
@@ -154,6 +156,7 @@ export function IntraopDashboard({
   staffRole,
   initials,
   onSleep,
+  onOpenPacu,
   onLogout,
   activeCase,
   onEndCase,
@@ -352,11 +355,17 @@ export function IntraopDashboard({
       />
 
       <div className="relative flex min-w-0 flex-1 flex-col overflow-hidden">
-        <TopBar staffName={staffName} staffRole={staffRole} initials={initials} onSleep={onSleep} />
+        <TopBar
+          staffName={staffName}
+          staffRole={staffRole}
+          initials={initials}
+          onSleep={onSleep}
+          onOpenPacu={onOpenPacu}
+        />
 
         <main data-scroll className="min-h-0 flex-1 overflow-y-auto px-8 py-6 animate-fade-in">
           <div className="flex flex-col gap-5 pb-32">
-            {/* Back row — Back to pre-op on the left, Multi-view toggle far right. */}
+            {/* Back row — Back to pre-op on the left, End-case + Multi-view far right. */}
             <div className="-mb-2 flex items-center justify-between gap-3">
               <button
                 onClick={onEndCase}
@@ -364,17 +373,28 @@ export function IntraopDashboard({
               >
                 <ArrowLeft className="h-3 w-3" /> Back to pre-op
               </button>
-              {onShowMultiView && (
+              <div className="flex items-center gap-2">
+                {onShowMultiView && (
+                  <button
+                    type="button"
+                    onClick={onShowMultiView}
+                    title="Show all four roles at once on the wall"
+                    className="inline-flex items-center gap-2 rounded-full border border-border bg-surface-2 px-4 py-1.5 font-mono text-[10px] uppercase tracking-wider text-muted-foreground transition-all hover:border-primary/40 hover:bg-surface-2/80 hover:text-foreground"
+                  >
+                    <Grid2x2 className="h-3.5 w-3.5" strokeWidth={1.8} />
+                    Multi-view
+                  </button>
+                )}
                 <button
                   type="button"
-                  onClick={onShowMultiView}
-                  title="Show all four roles at once on the wall"
-                  className="inline-flex items-center gap-2 rounded-full border border-border bg-surface-2 px-4 py-1.5 font-mono text-[10px] uppercase tracking-wider text-muted-foreground transition-all hover:border-primary/40 hover:bg-surface-2/80 hover:text-foreground"
+                  onClick={onEndCase}
+                  title="End case and start turnover (or say 'Arti, end case')"
+                  className="inline-flex items-center gap-2 rounded-full border border-destructive/40 bg-destructive/10 px-4 py-1.5 font-mono text-[10px] uppercase tracking-wider text-destructive transition-all hover:border-destructive/60 hover:bg-destructive/15"
                 >
-                  <Grid2x2 className="h-3.5 w-3.5" strokeWidth={1.8} />
-                  Multi-view
+                  <LogOut className="h-3.5 w-3.5" strokeWidth={1.8} />
+                  End Case
                 </button>
-              )}
+              </div>
             </div>
 
             {/* ── Live case header ── */}
@@ -1322,7 +1342,7 @@ function ScrubPanel({ snapshot }: { snapshot: IntraopSnapshot }) {
     <div className="grid grid-cols-1 gap-5 lg:grid-cols-2">
       <PanelShell
         title="Sterile field"
-        kicker="Cockpit · scrub"
+        kicker="Live Case · scrub"
         icon={Sparkles}
         iconTone="text-success"
       >
@@ -2161,10 +2181,7 @@ function AiPromptsCard({ prompts }: { prompts: AiPrompt[] }) {
 
 // Single source of truth for the activity-stream legend so the header
 // chips, the per-event label chips, and the dot tones never drift.
-const KIND_META: Record<
-  ActivityEvent["kind"],
-  { label: string; dot: string; chip: string }
-> = {
+const KIND_META: Record<ActivityEvent["kind"], { label: string; dot: string; chip: string }> = {
   med: { label: "Med", dot: "bg-warning", chip: "bg-warning/15 text-warning" },
   imaging: { label: "Imaging", dot: "bg-accent", chip: "bg-accent/15 text-accent" },
   implant: { label: "Implant", dot: "bg-primary", chip: "bg-primary/15 text-primary" },
@@ -2223,10 +2240,7 @@ function ActivityStream({ events, highlight }: { events: ActivityEvent[]; highli
           return (
             <li key={`${e.title}-${i}`} className="relative">
               {!isLast && (
-                <span
-                  aria-hidden
-                  className="absolute -left-5 top-3 -bottom-6 w-px bg-border/40"
-                />
+                <span aria-hidden className="absolute -left-5 top-3 -bottom-6 w-px bg-border/40" />
               )}
               <span
                 aria-hidden

@@ -17,7 +17,6 @@ import type { LightboxImage } from "./ImageLightboxModal";
 import type { CaseItem } from "./cases";
 import { PATIENT_CLINICAL } from "./cases";
 import type { PatientVideoSession } from "./PatientVideoModal";
-import { AnatomyModel3D } from "./AnatomyModel3D";
 
 export const SURGEON_LIGHTBOX_IMAGES: LightboxImage[] = [
   {
@@ -41,6 +40,8 @@ interface Props {
   videoSession?: PatientVideoSession;
   onOpenPatientVideo: () => void;
   onOpenXrays: () => void;
+  /** Open the VIP 3D planning reference modal (full-screen Spline plan view). */
+  onOpenVipPlanning?: () => void;
 }
 
 function fmtClock(sec: number): string {
@@ -75,6 +76,7 @@ export function SurgeonPanel({
   videoSession,
   onOpenPatientVideo,
   onOpenXrays,
+  onOpenVipPlanning,
 }: Props) {
   const clinical = activeCase ? PATIENT_CLINICAL[activeCase.id] : PATIENT_CLINICAL["c-002"];
   const c = clinical ?? PATIENT_CLINICAL["c-002"];
@@ -277,14 +279,32 @@ export function SurgeonPanel({
 
       {/* ── Right column ── */}
       <div className="space-y-4">
-        {/* 3D anatomy — interactive shoulder joint with implant indicator. */}
+        {/* 3D anatomy — interactive shoulder joint via Spline embed. */}
         <div className="rounded-2xl border border-accent/20 bg-accent/[0.04] p-5">
-          <PanelLabel icon={Box}>Anatomy · 3D</PanelLabel>
-          <div className="aspect-[16/11] w-full">
-            <AnatomyModel3D
-              caption={`${activeCase?.procedureShort ?? "RSA"} · ${
+          <div className="mb-4 flex items-center justify-between">
+            <PanelLabel icon={Box}>Anatomy · 3D</PanelLabel>
+            {onOpenVipPlanning && (
+              <button
+                type="button"
+                onClick={onOpenVipPlanning}
+                className="inline-flex items-center gap-1.5 rounded-full border border-primary/30 bg-primary/10 px-3 py-1 text-[10px] font-light uppercase tracking-wider text-primary transition-colors hover:bg-primary/15"
+                title="Open the VIP 3D planning reference (or say 'Arti, open VIP planning model')"
+              >
+                Open VIP Plan
+              </button>
+            )}
+          </div>
+          <div className="aspect-[16/11] w-full overflow-hidden rounded-xl bg-black/40">
+            <iframe
+              src="https://my.spline.design/untitled-e2ebd84b19d8c58cc8a9b2f149b1366e/"
+              title={`${activeCase?.procedureShort ?? "RSA"} · ${
                 activeCase?.side ? `${activeCase.side} shoulder` : "Right shoulder"
               }`}
+              frameBorder="0"
+              width="100%"
+              height="100%"
+              allow="autoplay; fullscreen; xr-spatial-tracking"
+              className="h-full w-full"
             />
           </div>
         </div>

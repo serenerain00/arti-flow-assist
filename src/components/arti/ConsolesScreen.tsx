@@ -1,5 +1,5 @@
 import { useMemo, useState } from "react";
-import { CircleDot, Cpu } from "lucide-react";
+import { AlertOctagon, CircleDot, Cpu } from "lucide-react";
 import { Sidebar, type SidebarKey } from "./Sidebar";
 import { TopBar } from "./TopBar";
 import { ArtiInvoker } from "./ArtiInvoker";
@@ -12,12 +12,15 @@ interface Props {
   staffRole: string;
   initials: string;
   onSleep: () => void;
+  onOpenPacu?: () => void;
   onLogout: () => void;
   onPrompt: (text: string) => void;
   onSidebarNavigate?: (key: SidebarKey) => void;
   /** Voice-driven focus — set by focus_console tool. */
   focusedId: ConsoleId | null;
   onFocusChange: (id: ConsoleId | null) => void;
+  /** Optional: simulate an equipment-failure event for the focused device. */
+  onSimulateFailure?: (consoleId: ConsoleId) => void;
 }
 
 const STATUS_LEGEND: Array<{ status: ConsoleStatus; label: string; dot: string }> = [
@@ -41,11 +44,13 @@ export function ConsolesScreen({
   staffRole,
   initials,
   onSleep,
+  onOpenPacu,
   onLogout,
   onPrompt,
   onSidebarNavigate,
   focusedId,
   onFocusChange,
+  onSimulateFailure,
 }: Props) {
   // Local fallback when no focused console — show the first ACTIVE
   // device by default so the panel isn't empty on first load.
@@ -87,7 +92,13 @@ export function ConsolesScreen({
       />
 
       <div className="flex min-w-0 flex-1 flex-col overflow-hidden">
-        <TopBar staffName={staffName} staffRole={staffRole} initials={initials} onSleep={onSleep} />
+        <TopBar
+          staffName={staffName}
+          staffRole={staffRole}
+          initials={initials}
+          onSleep={onSleep}
+          onOpenPacu={onOpenPacu}
+        />
 
         <main data-scroll className="min-h-0 flex-1 overflow-y-auto px-8 py-6 animate-fade-in">
           {/* ── Header ─────────────────────────────────────────────── */}
@@ -129,7 +140,12 @@ export function ConsolesScreen({
             </div>
 
             {/* Detail panel */}
-            <ConsoleDetailPanel device={focused} />
+            <ConsoleDetailPanel
+              device={focused}
+              onSimulateFailure={
+                onSimulateFailure ? () => onSimulateFailure(focused.id) : undefined
+              }
+            />
           </div>
 
           <div className="h-24" />
@@ -151,7 +167,13 @@ export function ConsolesScreen({
 
 // ── Detail panel ──────────────────────────────────────────────────────────
 
-function ConsoleDetailPanel({ device }: { device: ConsoleDevice }) {
+function ConsoleDetailPanel({
+  device,
+  onSimulateFailure,
+}: {
+  device: ConsoleDevice;
+  onSimulateFailure?: () => void;
+}) {
   const STATUS_PILL: Record<
     ConsoleStatus,
     { label: string; chip: string; ring: string; pulse: boolean }
@@ -229,6 +251,17 @@ function ConsoleDetailPanel({ device }: { device: ConsoleDevice }) {
           {pill.label}
         </span>
         <span className="text-[11px] font-light text-muted-foreground">{device.statusDetail}</span>
+        {onSimulateFailure && (
+          <button
+            type="button"
+            onClick={onSimulateFailure}
+            className="ml-auto inline-flex items-center gap-1.5 rounded-full border border-destructive/40 bg-destructive/10 px-3 py-1 font-mono text-[10px] uppercase tracking-wider text-destructive transition-colors hover:border-destructive/60 hover:bg-destructive/15"
+            title={`Simulate a failure event for ${device.shortName} (or say 'Arti, simulate ${device.shortName} failure')`}
+          >
+            <AlertOctagon className="h-3 w-3" strokeWidth={2} />
+            Simulate failure
+          </button>
+        )}
       </div>
 
       {/* Attachments */}

@@ -1,4 +1,4 @@
-import { CheckCircle, Clock, MapPin, Play, User, XCircle } from "lucide-react";
+import { CheckCircle, Clock, MapPin, Play, Scissors, User, XCircle } from "lucide-react";
 import { useEffect, useState } from "react";
 import type { CaseItem } from "./cases";
 
@@ -13,6 +13,8 @@ interface Props {
    * that are already done / cancelled.
    */
   onStartCase?: () => void;
+  /** Optional procedure-overview opener — orientation reference for new staff. */
+  onOpenProcedureOverview?: () => void;
 }
 
 function secsFromScheduled(timeStr: string): number {
@@ -31,7 +33,12 @@ function formatSecs(abs: number): string {
   return hh > 0 ? `${hh}:${String(mm).padStart(2, "0")}:${ss}` : `${mm}:${ss}`;
 }
 
-export function CaseHeader({ activeCase, onOpenPatientDetails, onStartCase }: Props) {
+export function CaseHeader({
+  activeCase,
+  onOpenPatientDetails,
+  onStartCase,
+  onOpenProcedureOverview,
+}: Props) {
   const [secs, setSecs] = useState(() =>
     activeCase ? secsFromScheduled(activeCase.time) : 32 * 60 + 14,
   );
@@ -114,6 +121,17 @@ export function CaseHeader({ activeCase, onOpenPatientDetails, onStartCase }: Pr
             >
               <User className="h-4 w-4 text-primary" />
               Patient Info
+            </button>
+          )}
+
+          {onOpenProcedureOverview && (
+            <button
+              onClick={onOpenProcedureOverview}
+              className="flex items-center gap-2 rounded-xl border border-border bg-surface-2/60 px-4 py-2.5 text-sm text-muted-foreground transition-colors hover:border-primary/40 hover:text-foreground"
+              title="Orientation reference for new staff (or say 'Arti, show procedure overview')"
+            >
+              <Scissors className="h-4 w-4 text-primary" />
+              Procedure Overview
             </button>
           )}
 
