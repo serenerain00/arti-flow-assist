@@ -945,7 +945,13 @@ const TOOLS: Anthropic.Tool[] = [
   },
   {
     name: "toggle_timeout_item",
-    description: "Check or uncheck a surgical time-out checklist item.",
+    description:
+      "Check or uncheck one of the FOUR universal-protocol time-out items: patient, site, procedure, allergies. " +
+      "Use this ONLY when the user is referring to the pre-incision Universal Protocol time-out (4 items). " +
+      "DISAMBIGUATION vs toggle_nurse_checklist_item: " +
+      "  • If the time-out modal is OPEN (live context will say so) → strongly prefer this tool when the user names any of patient/site/procedure/allergies. " +
+      "  • If the user explicitly says 'time-out' / 'universal protocol' / 'pre-incision time-out' → this tool. " +
+      "  • Otherwise prefer toggle_nurse_checklist_item — it covers a much broader vocabulary (25 items) and accepts free-text labels.",
     input_schema: {
       type: "object" as const,
       properties: {
@@ -956,6 +962,50 @@ const TOOLS: Anthropic.Tool[] = [
         },
       },
       required: ["id"],
+    },
+  },
+  {
+    name: "toggle_nurse_checklist_item",
+    description:
+      "Toggle a single item on the Circulating Nurse Checklist (phase-banded: Pre-incision · Intra-op · Closing, 25 items total). " +
+      "The 25 items include: patient identity verified, surgical consent signed, allergies confirmed, NPO status verified, site marked with surgeon, patient positioned + padded, skin prep, antibiotic given, SCDs + warming, opening counts; specimen labeling station, suction containers labeled, fluid balance tracking, family updated, implant log started, EBL documented; final raytec/lap/needle counts, specimens routed, dressing applied, drains documented, PACU handoff, family notified post-op, EHR documentation closed. " +
+      "Trigger phrases for status:'done' — 'check off <X>', 'mark off <X>', 'mark <X> done', '<X> is done', '<X> complete', 'I did <X>', 'cross off <X>'. " +
+      "Trigger phrases for status:'pending' — 'uncheck <X>', 'undo <X>', '<X> isn't done'. " +
+      "`item` is FREE TEXT — server fuzzy-matches against the 25 labels (e.g. 'patient ID', 'consent', 'allergies posted', 'SCDs', 'antibiotic', 'specimens routed', 'PACU handoff', 'EHR closed'). " +
+      "DISAMBIGUATION vs toggle_timeout_item: if the time-out modal is OPEN and the user names patient/site/procedure/allergies in a bare form, use toggle_timeout_item. Otherwise this tool. " +
+      "NARRATION REQUIRED: confirm tightly — 'Patient ID checked off.' / 'Consent marked done.' / 'SCDs un-checked.' Under 6 words.",
+    input_schema: {
+      type: "object" as const,
+      properties: {
+        item: {
+          type: "string",
+          description: "Free-text item name as the user said it.",
+        },
+        status: {
+          type: "string",
+          enum: ["done", "pending"],
+          description: "'done' to check off, 'pending' to un-check. Default 'done'.",
+        },
+      },
+      required: ["item"],
+    },
+  },
+  {
+    name: "complete_nurse_checklist_phase",
+    description:
+      "Bulk-complete every item in one phase of the Circulating Nurse Checklist. Phases are: 'pre-incision' (10 items), 'intra-op' (6 items), 'closing' (9 items). " +
+      "Trigger phrases: 'all pre-incision items are done', 'mark all pre-incision complete', 'pre-incision is complete', 'finish pre-incision', 'all intra-op items done', 'closing is done', 'mark closing complete', 'wrap-up phase is complete'. " +
+      "NARRATION REQUIRED: confirm tightly — 'Pre-incision phase complete.' / 'Closing phase logged.' Under 6 words.",
+    input_schema: {
+      type: "object" as const,
+      properties: {
+        phase: {
+          type: "string",
+          description:
+            "Free-text phase name — 'pre-incision' / 'pre-op' / 'opening' / 'intra-op' / 'during case' / 'closing' / 'wrap-up' / 'close-out'.",
+        },
+      },
+      required: ["phase"],
     },
   },
   {
@@ -1564,6 +1614,31 @@ const TOOLS: Anthropic.Tool[] = [
         },
       },
       required: ["item"],
+    },
+  },
+  {
+    name: "set_all_pref_card_tools_status",
+    description:
+      "Bulk-set status for EVERY tool on a pref-card table. Use this when the user says the whole table is accounted for / missing / contaminated — not individual items. " +
+      "Trigger phrases: 'all items on the back table are accounted for', 'everything on the back table is here', 'back table is all set', 'the whole back table is accounted for', 'all Mayo items accounted for', 'everything on the Mayo is here', 'Mayo stand is complete', 'check off all' (when the checklist modal is open), 'mark all accounted', 'check everything', 'uncheck everything on the back table', 'reset the Mayo'. " +
+      "`table` (OPTIONAL) is free-text — 'back', 'back table', 'mayo', 'mayo stand'. When the user says a bare 'check off all' / 'mark all' WITHOUT naming a table, OMIT the arg; the handler uses the currently-open modal's table (live context shows which is open). If no modal is open and no table is named, the call will fail. " +
+      "NARRATION REQUIRED: confirm tightly — 'Back table all accounted.' / 'Mayo stand reset.' / 'Back table cleared.' Keep under 6 words.",
+    input_schema: {
+      type: "object" as const,
+      properties: {
+        table: {
+          type: "string",
+          description:
+            "OPTIONAL free-text table name. Omit when the user said a bare 'check off all' and the modal is open — the handler uses the open table.",
+        },
+        status: {
+          type: "string",
+          enum: ["accounted", "missing", "contaminated"],
+          description:
+            "New status for every tool on the resolved table. Default 'accounted' for 'all set / accounted / here', 'missing' for 'reset / uncheck / clear'.",
+        },
+      },
+      required: ["status"],
     },
   },
   {

@@ -47,6 +47,24 @@ function normalizeForTts(input: string): string {
   s = s.replace(/(\d+(?:\.\d+)?)\s*°?F\b/g, "$1 degrees Fahrenheit");
   s = s.replace(/(\d+(?:\.\d+)?)\s*%/g, "$1 percent");
 
+  // ── Time durations. Hours first so "2h 14m" reads as "2 hours 14
+  //    minutes" cleanly. Single-letter forms ('5m', '3h') are caught
+  //    last; the word-boundary requirement keeps "30mg", "5ml", "5mEq"
+  //    safe (they don't end on a word boundary at the 'm').
+  s = s.replace(/(\d+(?:\.\d+)?)\s*hrs?\b/gi, (_, n: string) =>
+    n === "1" ? "1 hour" : `${n} hours`,
+  );
+  s = s.replace(/(\d+(?:\.\d+)?)\s*h\b/g, (_, n: string) => (n === "1" ? "1 hour" : `${n} hours`));
+  s = s.replace(/(\d+(?:\.\d+)?)\s*mins?\b/gi, (_, n: string) =>
+    n === "1" ? "1 minute" : `${n} minutes`,
+  );
+  s = s.replace(/(\d+(?:\.\d+)?)\s*m\b/g, (_, n: string) =>
+    n === "1" ? "1 minute" : `${n} minutes`,
+  );
+  s = s.replace(/(\d+(?:\.\d+)?)\s*secs?\b/gi, (_, n: string) =>
+    n === "1" ? "1 second" : `${n} seconds`,
+  );
+
   // ── Vitals shortcuts — pronounce as words, not letters ───────────────
   s = s.replace(/\bSpO2\b/g, "S P O 2");
   s = s.replace(/\bSpO₂\b/g, "S P O 2");

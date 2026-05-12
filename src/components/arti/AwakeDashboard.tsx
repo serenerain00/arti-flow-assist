@@ -62,6 +62,9 @@ interface Props {
   /** Route-owned handoff notes + setter (passed into the nurse checklist). */
   handoffNotes: HandoffNotes;
   onSetHandoffNote: (section: HandoffSection, text: string) => void;
+  /** Route-owned circulating-nurse checklist state + toggle. */
+  nurseChecklistChecked: Set<string>;
+  onToggleNurseChecklistItem: (id: string) => void;
   /** Transition to the intraoperative ("case active") view. */
   onStartCase?: () => void;
   /** Time-out checklist state — lifted to the route so the start-case modal shares it. */
@@ -110,6 +113,8 @@ export function AwakeDashboard({
   onOpenVipPlanning,
   handoffNotes,
   onSetHandoffNote,
+  nurseChecklistChecked,
+  onToggleNurseChecklistItem,
   onStartCase,
   timeOutChecked,
   onToggleTimeOutItem,
@@ -191,17 +196,7 @@ export function AwakeDashboard({
     () => new Set(MACHINE_CHECK_INITIAL_DONE),
   );
   // Circulating-nurse checklist — phase-banded (pre-incision / intra-op /
-  // closing). Tracked here so the route's context builder can read tallies
-  // and Arti can answer "what's left on the nurse checklist" anywhere.
-  const [nurseChecklistChecked, setNurseChecklistChecked] = useState<Set<string>>(() => new Set());
-  const toggleNurseChecklistItem = useCallback((id: string) => {
-    setNurseChecklistChecked((prev) => {
-      const next = new Set(prev);
-      if (next.has(id)) next.delete(id);
-      else next.add(id);
-      return next;
-    });
-  }, []);
+  // closing). State + setter come from the route so voice can drive it.
 
   // Keep the route-level context builder updated with live dashboard state.
   useEffect(() => {
@@ -285,6 +280,17 @@ export function AwakeDashboard({
             `── Circulating-nurse checklist ──`,
             ...lines,
             `READ-BACK GUIDANCE: when the user asks "what's left on the nurse checklist / circulating nurse / pre-incision / intra-op / closing checklist", read the matching phase's pending items aloud (one short sentence, list first 3–4 names). For "overall nurse checklist status", give a one-liner like "Pre-incision 7 of 10, intra-op 2 of 6, closing not started."`,
+            ``,
+            `WRITE GUIDANCE — fire toggle_nurse_checklist_item with item free-text + status:`,
+            `  "check off <X>" / "mark <X> done" / "<X> is done" / "I did <X>" / "cross off <X>" → status:"done".`,
+            `  "uncheck <X>" / "undo <X>" / "<X> isn't done" → status:"pending".`,
+            `  Bulk: "all pre-incision items are done" / "mark all closing complete" / "finish intra-op phase" → fire complete_nurse_checklist_phase(phase).`,
+            ``,
+            `DISAMBIGUATION vs toggle_timeout_item (Universal Protocol time-out: 4 items — patient, site, procedure, allergies):`,
+            `  • If the user explicitly says "time-out" / "universal protocol" → toggle_timeout_item.`,
+            `  • If the time-out modal is currently OPEN (see route-level context) and the user names patient/site/procedure/allergies in a BARE form → toggle_timeout_item.`,
+            `  • If the user gives a specific nurse-checklist phrase (e.g. "patient ID verified", "allergies posted", "consent signed", "site marked with surgeon", "antibiotic given", "SCDs applied") → toggle_nurse_checklist_item.`,
+            `  • Anything outside the 4 time-out items (NPO, prep, SCDs, antibiotic, counts, specimens, fluid balance, EBL, dressing, drains, PACU handoff, EHR closed, etc.) → toggle_nurse_checklist_item.`,
           ].join("\n");
         })(),
         (() => {
@@ -809,7 +815,7 @@ export function AwakeDashboard({
                   <div className="space-y-5">
                     <CirculatingNurseChecklist
                       checked={nurseChecklistChecked}
-                      onToggle={toggleNurseChecklistItem}
+                      onToggle={onToggleNurseChecklistItem}
                       handoffNotes={handoffNotes}
                       onSetHandoffNote={onSetHandoffNote}
                     />

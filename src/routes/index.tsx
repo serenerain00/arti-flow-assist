@@ -71,6 +71,11 @@ import {
   type HandoffSection,
 } from "@/components/arti/handoffNotes";
 import {
+  NURSE_CHECKLIST,
+  findNurseChecklistItem,
+  type NursePhase,
+} from "@/components/arti/CirculatingNurseChecklist";
+import {
   filterLibrary,
   findLatestVideo,
   PROCEDURE_VIDEOS,
@@ -338,6 +343,7 @@ function ArtiWallAuthenticated({ onLogout }: { onLogout: () => void }) {
       | "onShowPrefCardChecklist"
       | "onClosePrefCardChecklist"
       | "onSetPrefCardToolStatus"
+      | "onSetAllPrefCardToolsStatus"
       | "onSetCleaningItemStatus"
       | "onSetWrapupTaskStatus"
       | "onCompleteTimeout"
@@ -348,6 +354,8 @@ function ArtiWallAuthenticated({ onLogout }: { onLogout: () => void }) {
       | "onClearVitalThresholdAlerts"
       | "onSetHandoffNote"
       | "onSendCommsReply"
+      | "onToggleNurseChecklistItem"
+      | "onCompleteNurseChecklistPhase"
     >
   >({
     onWake: () => {},
@@ -442,6 +450,7 @@ function ArtiWallAuthenticated({ onLogout }: { onLogout: () => void }) {
     onShowPrefCardChecklist: () => notAvailable(),
     onClosePrefCardChecklist: () => notAvailable(),
     onSetPrefCardToolStatus: () => notAvailable(),
+    onSetAllPrefCardToolsStatus: () => notAvailable(),
     onSetCleaningItemStatus: () => notAvailable(),
     onSetWrapupTaskStatus: () => notAvailable(),
     onCompleteTimeout: () => notAvailable(),
@@ -452,6 +461,8 @@ function ArtiWallAuthenticated({ onLogout }: { onLogout: () => void }) {
     onClearVitalThresholdAlerts: () => notAvailable(),
     onSetHandoffNote: () => notAvailable(),
     onSendCommsReply: () => notAvailable(),
+    onToggleNurseChecklistItem: () => notAvailable(),
+    onCompleteNurseChecklistPhase: () => notAvailable(),
   });
 
   // Dashboard-only tool bridge. `null` when no dashboard is mounted.
@@ -690,6 +701,8 @@ function ArtiWallAuthenticated({ onLogout }: { onLogout: () => void }) {
         navCallbacksRef.current.onClosePrefCardChecklist?.() ?? notAvailable(),
       onSetPrefCardToolStatus: (table, tool, status) =>
         navCallbacksRef.current.onSetPrefCardToolStatus?.(table, tool, status) ?? notAvailable(),
+      onSetAllPrefCardToolsStatus: (table, status) =>
+        navCallbacksRef.current.onSetAllPrefCardToolsStatus?.(table, status) ?? notAvailable(),
       onSetCleaningItemStatus: (item, status) =>
         navCallbacksRef.current.onSetCleaningItemStatus?.(item, status) ?? notAvailable(),
       onSetWrapupTaskStatus: (item, status) =>
@@ -708,6 +721,10 @@ function ArtiWallAuthenticated({ onLogout }: { onLogout: () => void }) {
         navCallbacksRef.current.onSetHandoffNote?.(section, text) ?? notAvailable(),
       onSendCommsReply: (source, text) =>
         navCallbacksRef.current.onSendCommsReply?.(source, text) ?? notAvailable(),
+      onToggleNurseChecklistItem: (item, status) =>
+        navCallbacksRef.current.onToggleNurseChecklistItem?.(item, status) ?? notAvailable(),
+      onCompleteNurseChecklistPhase: (phase) =>
+        navCallbacksRef.current.onCompleteNurseChecklistPhase?.(phase) ?? notAvailable(),
 
       onUserTranscript: () => idleResetRef.current(),
       onAgentResponse: () => idleResetRef.current(),
@@ -870,6 +887,7 @@ interface ArtiWallProps {
       | "onShowPrefCardChecklist"
       | "onClosePrefCardChecklist"
       | "onSetPrefCardToolStatus"
+      | "onSetAllPrefCardToolsStatus"
       | "onSetCleaningItemStatus"
       | "onSetWrapupTaskStatus"
       | "onCompleteTimeout"
@@ -880,6 +898,8 @@ interface ArtiWallProps {
       | "onClearVitalThresholdAlerts"
       | "onSetHandoffNote"
       | "onSendCommsReply"
+      | "onToggleNurseChecklistItem"
+      | "onCompleteNurseChecklistPhase"
     >
   >;
   dashboardActionsRef: DashboardActionsRef;
@@ -1076,6 +1096,19 @@ function ArtiWall({
   // + flow display. Default matches the seeded shoulder-arthroplasty case.
   // Voice tool set_fluid_pump_joint flips this from any screen.
   const [fluidPumpJoint, setFluidPumpJoint] = useState<FluidPumpJoint>("shoulder");
+
+  // Circulating-nurse phase-banded checklist (pre-incision / intra-op /
+  // closing). Lifted from AwakeDashboard so voice can toggle individual
+  // items or bulk-complete a phase from any screen.
+  const [nurseChecklistChecked, setNurseChecklistChecked] = useState<Set<string>>(() => new Set());
+  const toggleNurseChecklistItem = useCallback((id: string) => {
+    setNurseChecklistChecked((prev) => {
+      const next = new Set(prev);
+      if (next.has(id)) next.delete(id);
+      else next.add(id);
+      return next;
+    });
+  }, []);
 
   // Handoff notes — 7 named fields the circulating nurse fills for PACU.
   // Pre-fills procedure + implants from the active case. State persists
@@ -1771,8 +1804,14 @@ function ArtiWall({
         return [
           `── Preference-card table checklist ──`,
           ...lines,
-          `Modal: ${prefCardChecklistOpen ? "OPEN" : "closed"} (initial table: ${prefCardInitialTable}).`,
-          `READ-BACK GUIDANCE: when the user asks "what's missing on the back table / Mayo / pref card", "what's accounted for", "any contamination / sterility breach", "what's still pending" — read the matching tally aloud in one short sentence (count + first 2–3 names if listing). When they say "show the pref card checklist / table layout / Mayo stand", fire show_pref_card_checklist (pass the table). To mark a tool, use set_pref_card_tool_status with table + tool free-text + status one of "accounted" / "missing" / "contaminated". Common contamination triggers: "X dropped", "X broke sterility", "X is contaminated", "X became unsterile", "X touched the field" → set_pref_card_tool_status status:"contaminated".`,
+          `Modal: ${prefCardChecklistOpen ? `OPEN — currently showing ${prefCardInitialTable}` : "closed"}.`,
+          `READ-BACK GUIDANCE: when the user asks "what's missing on the back table / Mayo / pref card", "what's accounted for", "any contamination / sterility breach", "what's still pending" — read the matching tally aloud in one short sentence (count + first 2–3 names if listing). When they say "show the pref card checklist / table layout / Mayo stand", fire show_pref_card_checklist (pass the table). To mark a single tool, use set_pref_card_tool_status with table + tool free-text + status one of "accounted" / "missing" / "contaminated". Common contamination triggers: "X dropped", "X broke sterility", "X is contaminated", "X became unsterile", "X touched the field" → set_pref_card_tool_status status:"contaminated".`,
+          `BULK CHECK-OFF — fire set_all_pref_card_tools_status when the user wants every tool on a table flipped at once:`,
+          `  "all items on the back table are accounted for" / "everything on back table is here" / "back table is all set" / "the whole back table is accounted for" → table:"back-table", status:"accounted".`,
+          `  "all Mayo items accounted for" / "everything's on the Mayo" / "Mayo stand is complete" → table:"mayo-stand", status:"accounted".`,
+          `  "check off all" / "mark all accounted" / "check everything" (when the checklist modal is OPEN) → omit the table; the handler uses the currently-open table from the live context above.`,
+          `  "uncheck everything on the back table" / "reset the back table" → table:"back-table", status:"missing".`,
+          `  NARRATE TIGHTLY: "Back table all accounted." / "Mayo stand reset." Under 6 words.`,
         ].join("\n");
       })(),
       (() => {
@@ -2979,6 +3018,35 @@ function ArtiWall({
         state: { table: hit.table.label, tool: hit.tool.label, status },
       };
     },
+    onSetAllPrefCardToolsStatus: (
+      tableQuery: string | undefined,
+      status: ToolStatus,
+    ): ArtiToolResult => {
+      // Resolution order: explicit table arg → modal's currently-open table.
+      const namedTableId = tableQuery ? resolveTableId(tableQuery) : undefined;
+      const targetTableId =
+        namedTableId ?? (prefCardChecklistOpen ? prefCardInitialTable : undefined);
+      if (!targetTableId) {
+        return {
+          ok: false,
+          reason: "no table named and no checklist open — try 'all back table items accounted for'",
+        };
+      }
+      const table = findTable(targetTableId);
+      if (!table) return { ok: false, reason: "table not found" };
+      const ts = new Date().toISOString();
+      setPrefCardToolState((prev) => {
+        const next = { ...prev };
+        for (const tool of table.tools) {
+          next[toolKey(table.id, tool.id)] = { status, ts };
+        }
+        return next;
+      });
+      return {
+        ok: true,
+        state: { table: table.label, count: table.tools.length, status },
+      };
+    },
     onSetCleaningItemStatus: (itemQuery: string, status: "done" | "pending"): ArtiToolResult => {
       const item = findCleaningItem(itemQuery);
       if (!item) return { ok: false, reason: `no cleaning item matched "${itemQuery}"` };
@@ -3064,6 +3132,39 @@ function ArtiWall({
         ok: true,
         state: { section, label: meta?.label, text: trimmed },
       };
+    },
+    onToggleNurseChecklistItem: (itemQuery: string, status: "done" | "pending"): ArtiToolResult => {
+      const hit = findNurseChecklistItem(itemQuery);
+      if (!hit) return { ok: false, reason: `no nurse-checklist item matched "${itemQuery}"` };
+      setNurseChecklistChecked((prev) => {
+        const next = new Set(prev);
+        if (status === "done") next.add(hit.item.id);
+        else next.delete(hit.item.id);
+        return next;
+      });
+      return {
+        ok: true,
+        state: { phase: hit.phase, item: hit.item.label, status },
+      };
+    },
+    onCompleteNurseChecklistPhase: (phaseQuery: string): ArtiToolResult => {
+      const q = phaseQuery.toLowerCase().trim();
+      const phaseId: NursePhase | undefined = /closing|closeout|close.?out|wrap.?up/.test(q)
+        ? "closing"
+        : /intra|intraop|during/.test(q)
+          ? "intra-op"
+          : /pre|pre.?incision|pre.?op|opening/.test(q)
+            ? "pre-incision"
+            : undefined;
+      if (!phaseId) return { ok: false, reason: `unknown nurse-checklist phase "${phaseQuery}"` };
+      const phase = NURSE_CHECKLIST.find((p) => p.id === phaseId);
+      if (!phase) return { ok: false, reason: "phase not found" };
+      setNurseChecklistChecked((prev) => {
+        const next = new Set(prev);
+        for (const item of phase.items) next.add(item.id);
+        return next;
+      });
+      return { ok: true, state: { phase: phase.label, count: phase.items.length } };
     },
     onSendCommsReply: (sourceQuery: string, text: string): ArtiToolResult => {
       const trimmed = text.trim();
@@ -3654,6 +3755,8 @@ function ArtiWall({
         onOpenVipPlanning={() => setVipPlanningOpen(true)}
         handoffNotes={handoffNotes}
         onSetHandoffNote={setHandoffNote}
+        nurseChecklistChecked={nurseChecklistChecked}
+        onToggleNurseChecklistItem={toggleNurseChecklistItem}
         onStartCase={() => {
           closeOverlays();
           setTimeOutModalOpen(true);

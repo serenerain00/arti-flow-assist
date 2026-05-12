@@ -220,6 +220,15 @@ export interface ArtiVoiceCallbacks {
     tool: string,
     status: "accounted" | "missing" | "contaminated",
   ) => ArtiToolResult;
+  /**
+   * Bulk-set status for every tool on a pref-card table. `table` is
+   * optional free-text — when omitted, the open modal's current table is
+   * used (passed from the route's live state).
+   */
+  onSetAllPrefCardToolsStatus?: (
+    table: string | undefined,
+    status: "accounted" | "missing" | "contaminated",
+  ) => ArtiToolResult;
   /** Mark a turnover cleaning checklist item done or pending (by free-text label). */
   onSetCleaningItemStatus?: (item: string, status: "done" | "pending") => ArtiToolResult;
   /** Mark a home Wrap-up checklist item done or pending (by free-text label). */
@@ -250,6 +259,10 @@ export interface ArtiVoiceCallbacks {
   onSetHandoffNote?: (section: string, text: string) => ArtiToolResult;
   /** Send a reply to a comms-feed thread, addressed by source ("PACU", etc.). */
   onSendCommsReply?: (source: string, text: string) => ArtiToolResult;
+  /** Toggle a single circulating-nurse checklist item by free text. */
+  onToggleNurseChecklistItem?: (item: string, status: "done" | "pending") => ArtiToolResult;
+  /** Bulk-complete every item in a nurse-checklist phase. */
+  onCompleteNurseChecklistPhase?: (phase: string) => ArtiToolResult;
   /** Open the pre-op patient video modal on the surgeon panel. */
   onOpenPatientVideo?: () => ArtiToolResult;
   onClosePatientVideo?: () => ArtiToolResult;
@@ -750,6 +763,15 @@ function executeToolCall(call: ArtiToolCall, cb: ArtiVoiceCallbacks): void {
     case "send_comms_reply":
       cb.onSendCommsReply?.(String(inp.source ?? ""), String(inp.text ?? ""));
       break;
+    case "toggle_nurse_checklist_item": {
+      const status = String(inp.status ?? "done");
+      const s = status === "pending" ? "pending" : "done";
+      cb.onToggleNurseChecklistItem?.(String(inp.item ?? ""), s);
+      break;
+    }
+    case "complete_nurse_checklist_phase":
+      cb.onCompleteNurseChecklistPhase?.(String(inp.phase ?? ""));
+      break;
     case "set_pref_card_tool_status": {
       const status = String(inp.status ?? "");
       const valid: Array<"accounted" | "missing" | "contaminated"> = [
@@ -761,6 +783,20 @@ function executeToolCall(call: ArtiToolCall, cb: ArtiVoiceCallbacks): void {
         ? (status as "accounted" | "missing" | "contaminated")
         : "missing";
       cb.onSetPrefCardToolStatus?.(String(inp.table ?? ""), String(inp.tool ?? ""), s);
+      break;
+    }
+    case "set_all_pref_card_tools_status": {
+      const status = String(inp.status ?? "accounted");
+      const valid: Array<"accounted" | "missing" | "contaminated"> = [
+        "accounted",
+        "missing",
+        "contaminated",
+      ];
+      const s = (valid as string[]).includes(status)
+        ? (status as "accounted" | "missing" | "contaminated")
+        : "accounted";
+      const table = typeof inp.table === "string" && inp.table.trim() ? inp.table : undefined;
+      cb.onSetAllPrefCardToolsStatus?.(table, s);
       break;
     }
     case "toggle_opening_checklist_item":

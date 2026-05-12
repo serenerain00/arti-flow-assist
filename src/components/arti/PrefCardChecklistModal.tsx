@@ -100,6 +100,12 @@ export function PrefCardChecklistModal({
     onSetStatus(activeTable.id, toolId, "contaminated");
   }
 
+  function setAllOnTable(status: ToolStatus) {
+    for (const tool of activeTable.tools) {
+      onSetStatus(activeTable.id, tool.id, status);
+    }
+  }
+
   return (
     <Dialog open={open} onOpenChange={(o) => !o && onClose()}>
       <DialogContent className="flex max-h-[95vh] w-[min(98vw,118rem)] max-w-none flex-col overflow-hidden border-border/60 bg-surface/95 backdrop-blur-xl">
@@ -151,6 +157,20 @@ export function PrefCardChecklistModal({
                 {tallies.contaminated} contaminated
               </span>
             ) : null}
+            <button
+              onClick={() => setAllOnTable("accounted")}
+              title={`Mark every tool on the ${activeTable.label.toLowerCase()} as accounted for`}
+              className="rounded-full border border-success/40 bg-success/15 px-3 py-0.5 text-success transition-colors hover:bg-success/25"
+            >
+              Check all
+            </button>
+            <button
+              onClick={() => setAllOnTable("missing")}
+              title={`Reset every tool on the ${activeTable.label.toLowerCase()} to pending`}
+              className="rounded-full border border-border bg-surface-2 px-3 py-0.5 text-muted-foreground transition-colors hover:border-warning/40 hover:text-warning"
+            >
+              Reset
+            </button>
             <button
               onClick={() => setShowPins((p) => !p)}
               className="rounded-full border border-border bg-surface-2 px-3 py-0.5 text-muted-foreground transition-colors hover:border-primary/30 hover:text-foreground"
