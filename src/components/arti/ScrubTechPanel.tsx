@@ -92,10 +92,14 @@ export function ScrubTechPanel({
   const procedureShort = activeCase?.procedureShort ?? "RSA";
 
   return (
+    /* Row-by-row layout (priority-ordered, no column-stack gaps):
+         Row 1: Instrument counts (full)        ← most-referenced, big numerals
+         Row 2: Opening checklist (2) + Implants (1) ← verify + know what's open
+         Row 3: Table layout (full)             ← reference images at the bottom
+       Each row fills the 3-col grid; CSS stretches items to the taller card. */
     <div className="grid grid-cols-1 gap-5 xl:grid-cols-3 animate-fade-in">
-      {/* ── Left (2 cols) ── */}
-      <div className="space-y-4 xl:col-span-2">
-        {/* Instrument counts — large numerals readable at distance from sterile field */}
+      {/* Row 1 — Instrument counts (full width) */}
+      <div className="col-span-full">
         <div className="rounded-2xl border border-border/60 bg-surface/60 p-5 backdrop-blur-sm">
           <PanelLabel icon={Package}>Instrument Counts · {procedureShort}</PanelLabel>
           <div className="grid grid-cols-2 gap-3 sm:grid-cols-3 md:grid-cols-5">
@@ -155,42 +159,10 @@ export function ScrubTechPanel({
             })}
           </div>
         </div>
-
-        {/* Table layout images */}
-        <div className="rounded-2xl border border-border/60 bg-surface/60 p-5 backdrop-blur-sm">
-          <PanelLabel icon={LayoutGrid}>Table Layout · Tap to Inspect</PanelLabel>
-          <div className="grid grid-cols-2 gap-3">
-            {SCRUB_LIGHTBOX_IMAGES.map((img, i) => (
-              <button
-                key={img.label}
-                onClick={() => onOpenLightbox(SCRUB_LIGHTBOX_IMAGES, i)}
-                className="group relative overflow-hidden rounded-xl border border-border/60 bg-surface-2 text-left transition-all duration-300 hover:border-success/40 hover:shadow-[0_0_28px_-8px_var(--success)]"
-              >
-                <img
-                  src={img.src}
-                  alt={img.alt}
-                  className="aspect-video w-full object-cover transition-transform duration-500 group-hover:scale-105"
-                  loading="lazy"
-                />
-                <div className="absolute inset-0 flex items-end bg-gradient-to-t from-black/70 via-black/10 to-transparent p-3 opacity-100">
-                  <p className="font-mono text-[10px] uppercase tracking-[0.2em] text-white/80">
-                    {img.label}
-                  </p>
-                </div>
-                <div className="absolute inset-0 flex items-center justify-center opacity-0 transition-opacity duration-200 group-hover:opacity-100">
-                  <div className="rounded-full border border-white/20 bg-black/60 px-3 py-1.5 text-[10px] uppercase tracking-widest text-white/80 backdrop-blur-sm">
-                    Expand
-                  </div>
-                </div>
-              </button>
-            ))}
-          </div>
-        </div>
       </div>
 
-      {/* ── Right column ── */}
-      <div className="space-y-4">
-        {/* Opening checklist */}
+      {/* Row 2 — Opening Checklist (2) + Implant Availability (1) */}
+      <div className="xl:col-span-2">
         <div className="rounded-2xl border border-border/60 bg-surface/60 p-5 backdrop-blur-sm">
           <PanelLabel icon={Layers}>Opening Checklist</PanelLabel>
           <div className="space-y-2.5">
@@ -241,8 +213,8 @@ export function ScrubTechPanel({
             </div>
           </div>
         </div>
-
-        {/* Implant availability */}
+      </div>
+      <div className="xl:col-span-1">
         <div className="rounded-2xl border border-border/60 bg-surface/60 p-5 backdrop-blur-sm">
           <PanelLabel icon={CheckCircle}>Implant Availability</PanelLabel>
           <div className="space-y-2.5">
@@ -260,6 +232,39 @@ export function ScrubTechPanel({
                   {imp.status}
                 </span>
               </div>
+            ))}
+          </div>
+        </div>
+      </div>
+
+      {/* Row 3 — Table Layout images (full width) */}
+      <div className="col-span-full">
+        <div className="rounded-2xl border border-border/60 bg-surface/60 p-5 backdrop-blur-sm">
+          <PanelLabel icon={LayoutGrid}>Table Layout · Tap to Inspect</PanelLabel>
+          <div className="grid grid-cols-2 gap-3">
+            {SCRUB_LIGHTBOX_IMAGES.map((img, i) => (
+              <button
+                key={img.label}
+                onClick={() => onOpenLightbox(SCRUB_LIGHTBOX_IMAGES, i)}
+                className="group relative overflow-hidden rounded-xl border border-border/60 bg-surface-2 text-left transition-all duration-300 hover:border-success/40 hover:shadow-[0_0_28px_-8px_var(--success)]"
+              >
+                <img
+                  src={img.src}
+                  alt={img.alt}
+                  className="aspect-video w-full object-cover transition-transform duration-500 group-hover:scale-105"
+                  loading="lazy"
+                />
+                <div className="absolute inset-0 flex items-end bg-gradient-to-t from-black/70 via-black/10 to-transparent p-3 opacity-100">
+                  <p className="font-mono text-[10px] uppercase tracking-[0.2em] text-white/80">
+                    {img.label}
+                  </p>
+                </div>
+                <div className="absolute inset-0 flex items-center justify-center opacity-0 transition-opacity duration-200 group-hover:opacity-100">
+                  <div className="rounded-full border border-white/20 bg-black/60 px-3 py-1.5 text-[10px] uppercase tracking-widest text-white/80 backdrop-blur-sm">
+                    Expand
+                  </div>
+                </div>
+              </button>
             ))}
           </div>
         </div>

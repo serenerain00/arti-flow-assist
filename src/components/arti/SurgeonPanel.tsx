@@ -91,6 +91,31 @@ export function SurgeonPanel({
     <div className="grid grid-cols-1 gap-5 xl:grid-cols-3 animate-fade-in">
       {/* ── Left (2 cols) — procedure steps ── */}
       <div className="space-y-4 xl:col-span-2">
+        {/* Procedure Steps — surgeon's most-referenced card; moved to top of
+            the left column for priority placement. */}
+        <div className="rounded-2xl border border-border/60 bg-surface/60 p-5 backdrop-blur-sm">
+          <PanelLabel icon={BookOpen}>
+            Procedure Steps · {activeCase?.procedure ?? "Reverse Total Shoulder Arthroplasty"}
+          </PanelLabel>
+          <div className="space-y-2">
+            {c.procedureSteps.map((s, i) => (
+              <div
+                key={s.step}
+                className="flex items-start gap-4 rounded-xl border border-border/25 bg-surface-2/30 px-4 py-3 transition-colors hover:bg-surface-2/55"
+                style={{ animationDelay: `${i * 35}ms` }}
+              >
+                <div className="flex h-7 w-7 shrink-0 items-center justify-center rounded-full border border-accent/35 bg-accent/10">
+                  <span className="font-mono text-[11px] font-semibold text-accent">{s.step}</span>
+                </div>
+                <div className="min-w-0">
+                  <p className="text-sm font-medium text-foreground/90">{s.title}</p>
+                  <p className="text-xs font-light text-muted-foreground">{s.detail}</p>
+                </div>
+              </div>
+            ))}
+          </div>
+        </div>
+
         {/* Pre-op patient message card */}
         <button
           onClick={onOpenPatientVideo}
@@ -222,29 +247,6 @@ export function SurgeonPanel({
           </div>
         </button>
 
-        <div className="rounded-2xl border border-border/60 bg-surface/60 p-5 backdrop-blur-sm">
-          <PanelLabel icon={BookOpen}>
-            Procedure Steps · {activeCase?.procedure ?? "Reverse Total Shoulder Arthroplasty"}
-          </PanelLabel>
-          <div className="space-y-2">
-            {c.procedureSteps.map((s, i) => (
-              <div
-                key={s.step}
-                className="flex items-start gap-4 rounded-xl border border-border/25 bg-surface-2/30 px-4 py-3 transition-colors hover:bg-surface-2/55"
-                style={{ animationDelay: `${i * 35}ms` }}
-              >
-                <div className="flex h-7 w-7 shrink-0 items-center justify-center rounded-full border border-accent/35 bg-accent/10">
-                  <span className="font-mono text-[11px] font-semibold text-accent">{s.step}</span>
-                </div>
-                <div className="min-w-0">
-                  <p className="text-sm font-medium text-foreground/90">{s.title}</p>
-                  <p className="text-xs font-light text-muted-foreground">{s.detail}</p>
-                </div>
-              </div>
-            ))}
-          </div>
-        </div>
-
         {/* Table setup images */}
         <div className="rounded-2xl border border-border/60 bg-surface/60 p-5 backdrop-blur-sm">
           <PanelLabel icon={LayoutGrid}>Table Setup · Tap to Inspect</PanelLabel>
@@ -309,6 +311,36 @@ export function SurgeonPanel({
           </div>
         </div>
 
+        {/* Implant plan — promoted above Case Summary on the right column
+            because the surgeon references implant components more often than
+            patient demographics during the case. */}
+        <div className="rounded-2xl border border-border/60 bg-surface/60 p-5 backdrop-blur-sm">
+          <PanelLabel icon={ClipboardList}>Implant Plan</PanelLabel>
+          <div className="space-y-2">
+            {c.implantPlan.map((imp) => (
+              <div
+                key={imp.component}
+                className="flex items-start justify-between gap-3 rounded-xl border border-border/25 bg-surface-2/30 px-3 py-2.5"
+              >
+                <div>
+                  <p className="text-xs font-medium text-foreground/85">{imp.component}</p>
+                  <p className="text-[11px] font-light text-muted-foreground">{imp.spec}</p>
+                </div>
+                <span
+                  className={cn(
+                    "mt-0.5 shrink-0 rounded-full border px-2.5 py-0.5 font-mono text-[9px] uppercase tracking-wider",
+                    imp.confirmed
+                      ? "border-success/30 bg-success/[0.06] text-success"
+                      : "border-warning/30 bg-warning/8 text-warning",
+                  )}
+                >
+                  {imp.confirmed ? "confirmed" : "pending"}
+                </span>
+              </div>
+            ))}
+          </div>
+        </div>
+
         {/* Case summary */}
         <div className="rounded-2xl border border-accent/20 bg-accent/[0.04] p-5">
           <PanelLabel icon={ClipboardList}>Case Summary</PanelLabel>
@@ -338,34 +370,6 @@ export function SurgeonPanel({
           <div className="mt-4 flex items-center gap-2 rounded-xl border border-success/25 bg-success/[0.06] px-3 py-2 text-xs text-success">
             <CheckCircle className="h-3.5 w-3.5 shrink-0" strokeWidth={1.8} />
             Consent · Laterality · Allergy — all verified
-          </div>
-        </div>
-
-        {/* Implant plan */}
-        <div className="rounded-2xl border border-border/60 bg-surface/60 p-5 backdrop-blur-sm">
-          <PanelLabel icon={ClipboardList}>Implant Plan</PanelLabel>
-          <div className="space-y-2">
-            {c.implantPlan.map((imp) => (
-              <div
-                key={imp.component}
-                className="flex items-start justify-between gap-3 rounded-xl border border-border/25 bg-surface-2/30 px-3 py-2.5"
-              >
-                <div>
-                  <p className="text-xs font-medium text-foreground/85">{imp.component}</p>
-                  <p className="text-[11px] font-light text-muted-foreground">{imp.spec}</p>
-                </div>
-                <span
-                  className={cn(
-                    "mt-0.5 shrink-0 rounded-full border px-2.5 py-0.5 font-mono text-[9px] uppercase tracking-wider",
-                    imp.confirmed
-                      ? "border-success/30 bg-success/[0.06] text-success"
-                      : "border-warning/30 bg-warning/8 text-warning",
-                  )}
-                >
-                  {imp.confirmed ? "confirmed" : "pending"}
-                </span>
-              </div>
-            ))}
           </div>
         </div>
 

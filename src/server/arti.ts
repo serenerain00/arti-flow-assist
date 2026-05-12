@@ -485,7 +485,9 @@ const TOOLS: Anthropic.Tool[] = [
   {
     name: "cancel_reminders",
     description:
-      "Cancel all pending reminders. Use for 'cancel my reminders', 'clear my reminders', 'never mind the reminders', 'forget the reminders'.",
+      "Wipe ALL reminders — both pending (scheduled but not yet fired) AND any currently-showing reminder toasts. Use for: 'cancel my reminders', 'clear my reminders', 'clear reminder', 'clear the reminder', 'clear all reminders', 'never mind the reminders', 'forget the reminders', 'remove reminders', 'delete reminders'. " +
+      "DISAMBIGUATION vs dismiss_reminder_alert: dismiss_reminder_alert dismisses only the visible toast (used for 'close alert' / 'got it' / 'thanks'). cancel_reminders is the destructive 'remove everything' command — use it when the user says 'clear' / 'cancel' / 'forget' / 'remove'. " +
+      "NARRATION: 'Reminders cleared.' Under 4 words.",
     input_schema: { type: "object" as const, properties: {}, required: [] },
   },
   {

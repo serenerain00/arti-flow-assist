@@ -798,36 +798,52 @@ export function AwakeDashboard({
               onOpenProcedureOverview={() => setProcedureOverviewOpen(true)}
             />
 
-            {/* ── Nurse view (default) ── */}
+            {/* ── Nurse view (default) ──
+                Row-by-row layout (priority-ordered, no column-stack gaps):
+                  Row 1: Time-out (2) + Alerts (1)          ← critical + safety, pre-incision
+                  Row 2: Nurse Checklist (2) + Team (1)     ← primary workflow + people
+                  Row 3: Instrument Count (full)            ← big numerals, full width
+                  Row 4: Preference Card (full)             ← reference, below the fold
+                Each row totals 3 cols; CSS grid stretches items in a row to
+                the taller card's height, so there are no orphan gaps. */}
             {activeRole === "nurse" && (
-              <>
-                <div className="grid grid-cols-1 gap-5 xl:grid-cols-3">
-                  <div className="space-y-5 xl:col-span-2">
-                    <TimeOutPanel
-                      checked={timeOutChecked as Set<string>}
-                      onToggle={(id) => toggleTimeOutItem(id as TimeOutId)}
-                    />
-                    <InstrumentCount
-                      counts={counts}
-                      onAdjust={(id, delta) => adjustInstrumentCount(id as InstrumentId, delta)}
-                    />
-                  </div>
-                  <div className="space-y-5">
-                    <CirculatingNurseChecklist
-                      checked={nurseChecklistChecked}
-                      onToggle={onToggleNurseChecklistItem}
-                      handoffNotes={handoffNotes}
-                      onSetHandoffNote={onSetHandoffNote}
-                    />
-                    <AlertStack dismissed={dismissedAlerts} onDismiss={dismissAlert} />
-                    <TeamRoster />
-                  </div>
+              <div className="grid grid-cols-1 gap-5 xl:grid-cols-3">
+                <div className="xl:col-span-2">
+                  <TimeOutPanel
+                    checked={timeOutChecked as Set<string>}
+                    onToggle={(id) => toggleTimeOutItem(id as TimeOutId)}
+                  />
                 </div>
-                <PreferenceCard
-                  onOpenLightbox={onOpenLightbox}
-                  onOpenChecklist={onOpenPrefCardChecklist}
-                />
-              </>
+                <div className="xl:col-span-1">
+                  <AlertStack dismissed={dismissedAlerts} onDismiss={dismissAlert} />
+                </div>
+
+                <div className="xl:col-span-2">
+                  <CirculatingNurseChecklist
+                    checked={nurseChecklistChecked}
+                    onToggle={onToggleNurseChecklistItem}
+                    handoffNotes={handoffNotes}
+                    onSetHandoffNote={onSetHandoffNote}
+                  />
+                </div>
+                <div className="xl:col-span-1">
+                  <TeamRoster />
+                </div>
+
+                <div className="col-span-full">
+                  <InstrumentCount
+                    counts={counts}
+                    onAdjust={(id, delta) => adjustInstrumentCount(id as InstrumentId, delta)}
+                  />
+                </div>
+
+                <div className="col-span-full">
+                  <PreferenceCard
+                    onOpenLightbox={onOpenLightbox}
+                    onOpenChecklist={onOpenPrefCardChecklist}
+                  />
+                </div>
+              </div>
             )}
 
             {/* ── Scrub Tech view ── */}
@@ -891,6 +907,14 @@ export function AwakeDashboard({
         open={procedureOverviewOpen}
         onClose={() => setProcedureOverviewOpen(false)}
         activeCase={activeCase}
+        onOpenVipPlanning={
+          onOpenVipPlanning
+            ? () => {
+                setProcedureOverviewOpen(false);
+                onOpenVipPlanning();
+              }
+            : undefined
+        }
       />
 
       {activeCase && (

@@ -5,7 +5,7 @@ import {
   DialogTitle,
   DialogDescription,
 } from "@/components/ui/dialog";
-import { Clock, Wrench, ArrowUpDown, Package, Scissors } from "lucide-react";
+import { Clock, Wrench, ArrowUpDown, Package, Scissors, Compass, BookOpen } from "lucide-react";
 import type { CaseItem } from "./cases";
 import { PATIENT_CLINICAL } from "./cases";
 import { PREF_CARD } from "./PreferenceCard";
@@ -14,6 +14,8 @@ interface Props {
   open: boolean;
   onClose: () => void;
   activeCase?: CaseItem;
+  /** Opens the full VIP planning modal (Spline + orientation + implant table). */
+  onOpenVipPlanning?: () => void;
 }
 
 const SectionTitle = ({
@@ -36,7 +38,7 @@ function formatDuration(min: number): string {
   return m === 0 ? `${h}h` : `${h}h ${m}m`;
 }
 
-export function ProcedureOverviewModal({ open, onClose, activeCase }: Props) {
+export function ProcedureOverviewModal({ open, onClose, activeCase, onOpenVipPlanning }: Props) {
   const clinical = activeCase ? PATIENT_CLINICAL[activeCase.id] : undefined;
   const durationMin = activeCase?.durationMin ?? 90;
 
@@ -68,7 +70,13 @@ export function ProcedureOverviewModal({ open, onClose, activeCase }: Props) {
           </DialogDescription>
         </DialogHeader>
 
-        <div className="grid min-h-0 flex-1 grid-cols-1 gap-5 overflow-y-auto p-2 md:grid-cols-2">
+        {/* data-scroll-modal tells the route's scroll voice handler to scroll
+            THIS container when the user says "scroll down/up" while the modal
+            is open, instead of the page behind it. */}
+        <div
+          data-scroll-modal
+          className="grid min-h-0 flex-1 grid-cols-1 gap-5 overflow-y-auto p-2 md:grid-cols-2"
+        >
           {/* Estimated duration */}
           <div className="rounded-2xl border border-accent/20 bg-accent/[0.04] p-5">
             <SectionTitle icon={Clock} title="Estimated duration" />
@@ -96,6 +104,32 @@ export function ProcedureOverviewModal({ open, onClose, activeCase }: Props) {
               </li>
             </ul>
           </div>
+
+          {/* Procedure steps — spans both columns; the surgical sequence is
+              the orientation reference a new staffer needs most. */}
+          {clinical?.procedureSteps?.length ? (
+            <div className="rounded-2xl border border-accent/20 bg-accent/[0.04] p-5 md:col-span-2">
+              <SectionTitle icon={BookOpen} title="Procedure steps" />
+              <ol className="space-y-2">
+                {clinical.procedureSteps.map((s) => (
+                  <li
+                    key={s.step}
+                    className="flex items-start gap-4 rounded-xl border border-border/25 bg-surface-2/30 px-4 py-3"
+                  >
+                    <div className="flex h-7 w-7 shrink-0 items-center justify-center rounded-full border border-accent/35 bg-accent/10">
+                      <span className="font-mono text-[11px] font-semibold text-accent">
+                        {s.step}
+                      </span>
+                    </div>
+                    <div className="min-w-0">
+                      <p className="text-sm font-medium text-foreground/90">{s.title}</p>
+                      <p className="text-xs font-light text-muted-foreground">{s.detail}</p>
+                    </div>
+                  </li>
+                ))}
+              </ol>
+            </div>
+          ) : null}
 
           {/* Required equipment */}
           <div className="rounded-2xl border border-accent/20 bg-accent/[0.04] p-5">
@@ -129,6 +163,43 @@ export function ProcedureOverviewModal({ open, onClose, activeCase }: Props) {
                 </li>
               ))}
             </ul>
+          </div>
+
+          {/* Procedure planning reference — Spline 3D model moved to the
+              bottom; the procedure steps are the primary orientation tool,
+              the model is the visual aid. Full VIP plan one tap away. */}
+          <div className="rounded-2xl border border-primary/20 bg-primary/[0.04] p-5 md:col-span-2">
+            <div className="mb-3 flex items-center justify-between gap-3">
+              <div className="flex items-center gap-2 text-xs font-semibold uppercase tracking-wider text-primary">
+                <Compass className="h-3.5 w-3.5" />
+                Procedure planning reference
+              </div>
+              {onOpenVipPlanning && (
+                <button
+                  type="button"
+                  onClick={onOpenVipPlanning}
+                  className="inline-flex items-center gap-1.5 rounded-full border border-primary/30 bg-primary/10 px-3 py-1 text-[10px] font-light uppercase tracking-wider text-primary transition-colors hover:bg-primary/15"
+                  title="Open the full VIP planning modal (or say 'Arti, open VIP planning model')"
+                >
+                  Open full VIP plan
+                </button>
+              )}
+            </div>
+            <div className="aspect-[16/7] w-full overflow-hidden rounded-xl bg-black/40">
+              <iframe
+                src="https://my.spline.design/untitled-e2ebd84b19d8c58cc8a9b2f149b1366e/"
+                title={`${activeCase?.procedureShort ?? "RSA"} planning model`}
+                frameBorder="0"
+                width="100%"
+                height="100%"
+                allow="autoplay; fullscreen; xr-spatial-tracking"
+                className="h-full w-full"
+              />
+            </div>
+            <div className="mt-2 text-[11px] font-light text-muted-foreground">
+              Drag to rotate · scroll to zoom. Full plan has planned orientation values + confirmed
+              implants.
+            </div>
           </div>
         </div>
       </DialogContent>

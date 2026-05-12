@@ -2428,9 +2428,14 @@ function ArtiWall({
   }, []);
 
   const handleCancelReminders = useCallback(() => {
+    // Clear pending (scheduled but not yet fired) timers …
     for (const t of reminderTimersRef.current.values()) clearTimeout(t);
     reminderTimersRef.current.clear();
     setPendingReminders([]);
+    // … AND dismiss any toast that's currently on screen. Users say "clear
+    // reminder" / "clear my reminders" expecting it to wipe everything,
+    // not just the queue.
+    setFiredReminders([]);
   }, []);
 
   const handleDismissFiredReminder = useCallback((id: string) => {

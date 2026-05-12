@@ -279,6 +279,16 @@ export const HowToVideoModal = forwardRef<HowToVideoHandle, Props>(function HowT
   useEffect(() => {
     if (!open) return;
     let disposed = false;
+    // Reset error state on every video swap so a previously-broken video
+    // doesn't show its fallback over a fresh load.
+    setEmbedError(false);
+    // Safety net: some videos load the iframe but never reach the ready /
+    // playing state (region restriction, silent embed refusal). If onReady
+    // hasn't fired within 6 s we flip the fallback so the user gets a
+    // "Watch on YouTube" escape hatch instead of a black box.
+    const fallbackTimer = window.setTimeout(() => {
+      if (!playerReadyRef.current) setEmbedError(true);
+    }, 6000);
 
     void loadYouTubeApi()
       .then((YT) => {
@@ -345,6 +355,7 @@ export const HowToVideoModal = forwardRef<HowToVideoHandle, Props>(function HowT
 
     return () => {
       disposed = true;
+      window.clearTimeout(fallbackTimer);
     };
   }, [open, video.youtubeId, playerContainerId]);
 

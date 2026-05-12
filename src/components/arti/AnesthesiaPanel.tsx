@@ -84,9 +84,14 @@ export function AnesthesiaPanel({ activeCase, machineCheckDone, onToggleMachineC
   const machinePct = (machineComplete / MACHINE_CHECK_ITEMS.length) * 100;
 
   return (
+    /* Row-by-row layout (priority-ordered for anesthesia, no column gaps):
+         Row 1: Allergies (2) + Airway (1)         ← safety pair, top of fold
+         Row 2: Anesthesia Plan (2) + Patient (1)  ← playbook + dosing data
+         Row 3: Medications (2) + Pre-op Labs (1)  ← interactions + values
+         Row 4: Machine Check (full)               ← workflow at the bottom */
     <div className="grid grid-cols-1 gap-5 xl:grid-cols-3 animate-fade-in">
-      {/* ── Left (2 cols) ── */}
-      <div className="space-y-4 xl:col-span-2">
+      {/* Row 1 — Allergies (2) */}
+      <div className="xl:col-span-2">
         {/* Allergies — always first, never hidden */}
         <div className="rounded-2xl border border-destructive/30 bg-destructive/[0.06] p-5">
           <PanelLabel icon={AlertTriangle} color="text-destructive">
@@ -117,57 +122,11 @@ export function AnesthesiaPanel({ activeCase, machineCheckDone, onToggleMachineC
             </div>
           )}
         </div>
-
-        {/* Anesthesia Plan */}
-        <Panel>
-          <PanelLabel icon={Wind}>Anesthesia Plan</PanelLabel>
-          <p className="text-sm font-light text-foreground/85">{c.anesthesiaPlan}</p>
-        </Panel>
-
-        {/* Current Medications */}
-        <Panel>
-          <PanelLabel icon={Pill}>Current Medications</PanelLabel>
-          <div className="space-y-2">
-            {c.medications.map((med) => (
-              <div
-                key={med}
-                className="rounded-xl border border-border/30 bg-surface-2/40 px-4 py-2.5 text-sm font-light text-foreground/90"
-              >
-                {med}
-              </div>
-            ))}
-          </div>
-        </Panel>
       </div>
 
-      {/* ── Right column ── */}
-      <div className="space-y-4">
-        {/* Patient at a glance */}
-        <Panel>
-          <PanelLabel icon={Activity}>Patient</PanelLabel>
-          <div className="grid grid-cols-2 gap-3 text-sm">
-            {[
-              ["Name", activeCase?.patientName ?? "Marcus Chen"],
-              ["DOB", c.dob],
-              ["Age / Sex", activeCase?.patientAgeSex ?? c.sex],
-              ["Weight", c.weight],
-              ["Height", c.height],
-              ["Blood type", c.bloodType],
-            ].map(([label, val]) => (
-              <div key={label}>
-                <p className="text-[10px] uppercase tracking-wider text-muted-foreground">
-                  {label}
-                </p>
-                <p className="font-light text-foreground/85">{val}</p>
-              </div>
-            ))}
-          </div>
-          <div className="mt-3 rounded-xl border border-border/40 bg-surface-2/50 px-3 py-2 text-xs text-muted-foreground">
-            {c.npo}
-          </div>
-        </Panel>
-
-        {/* Airway */}
+      {/* Row 1 — Airway (1) */}
+      <div className="xl:col-span-1">
+        {/* Airway — moved up for safety-pair top row */}
         <Panel>
           <PanelLabel icon={Wind}>Airway Assessment</PanelLabel>
           <div className="grid grid-cols-2 gap-3 text-sm">
@@ -199,8 +158,62 @@ export function AnesthesiaPanel({ activeCase, machineCheckDone, onToggleMachineC
               : "No anticipated airway difficulty"}
           </div>
         </Panel>
+      </div>
 
-        {/* Pre-op Labs */}
+      {/* Row 2 — Anesthesia Plan (2) */}
+      <div className="xl:col-span-2">
+        <Panel>
+          <PanelLabel icon={Wind}>Anesthesia Plan</PanelLabel>
+          <p className="text-sm font-light text-foreground/85">{c.anesthesiaPlan}</p>
+        </Panel>
+      </div>
+
+      {/* Row 2 — Patient at a glance (1) */}
+      <div className="xl:col-span-1">
+        <Panel>
+          <PanelLabel icon={Activity}>Patient</PanelLabel>
+          <div className="grid grid-cols-2 gap-3 text-sm">
+            {[
+              ["Name", activeCase?.patientName ?? "Marcus Chen"],
+              ["DOB", c.dob],
+              ["Age / Sex", activeCase?.patientAgeSex ?? c.sex],
+              ["Weight", c.weight],
+              ["Height", c.height],
+              ["Blood type", c.bloodType],
+            ].map(([label, val]) => (
+              <div key={label}>
+                <p className="text-[10px] uppercase tracking-wider text-muted-foreground">
+                  {label}
+                </p>
+                <p className="font-light text-foreground/85">{val}</p>
+              </div>
+            ))}
+          </div>
+          <div className="mt-3 rounded-xl border border-border/40 bg-surface-2/50 px-3 py-2 text-xs text-muted-foreground">
+            {c.npo}
+          </div>
+        </Panel>
+      </div>
+
+      {/* Row 3 — Current Medications (2) */}
+      <div className="xl:col-span-2">
+        <Panel>
+          <PanelLabel icon={Pill}>Current Medications</PanelLabel>
+          <div className="space-y-2">
+            {c.medications.map((med) => (
+              <div
+                key={med}
+                className="rounded-xl border border-border/30 bg-surface-2/40 px-4 py-2.5 text-sm font-light text-foreground/90"
+              >
+                {med}
+              </div>
+            ))}
+          </div>
+        </Panel>
+      </div>
+
+      {/* Row 3 — Pre-op Labs (1) */}
+      <div className="xl:col-span-1">
         <Panel>
           <PanelLabel icon={FlaskConical}>Pre-op Labs</PanelLabel>
           <div className="space-y-1.5">
@@ -228,8 +241,10 @@ export function AnesthesiaPanel({ activeCase, machineCheckDone, onToggleMachineC
             ))}
           </div>
         </Panel>
+      </div>
 
-        {/* Machine Check */}
+      {/* Row 4 — Machine Check (full width) */}
+      <div className="col-span-full">
         <Panel>
           <PanelLabel icon={CheckCircle}>Machine Check</PanelLabel>
           <div className="space-y-1">
