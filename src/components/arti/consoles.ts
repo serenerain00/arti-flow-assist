@@ -17,6 +17,35 @@
  */
 export type ConsoleId = "light" | "camera" | "image" | "pump" | "shaver" | "rf";
 
+/** Joints the DualWave pump has presets for. */
+export type FluidPumpJoint = "shoulder" | "knee" | "hip" | "ankle" | "elbow" | "wrist";
+
+/** Default pressure / flow / mode-label for each joint preset. */
+export const FLUID_PUMP_PRESETS: Record<
+  FluidPumpJoint,
+  { pressureMmHg: number; flowMlMin: number; modeLabel: string }
+> = {
+  shoulder: { pressureMmHg: 60, flowMlMin: 200, modeLabel: "Shoulder · standard" },
+  knee: { pressureMmHg: 50, flowMlMin: 250, modeLabel: "Knee · standard" },
+  hip: { pressureMmHg: 80, flowMlMin: 300, modeLabel: "Hip · high-flow" },
+  ankle: { pressureMmHg: 50, flowMlMin: 200, modeLabel: "Ankle · low-pressure" },
+  elbow: { pressureMmHg: 40, flowMlMin: 150, modeLabel: "Elbow · gentle" },
+  wrist: { pressureMmHg: 30, flowMlMin: 100, modeLabel: "Wrist · gentle" },
+};
+
+/** Resolve a free-text joint name (voice) to the canonical enum. */
+export function resolveFluidPumpJoint(query?: string): FluidPumpJoint | undefined {
+  if (!query) return undefined;
+  const q = query.toLowerCase().trim();
+  if (/shoulder/.test(q)) return "shoulder";
+  if (/knee/.test(q)) return "knee";
+  if (/hip/.test(q)) return "hip";
+  if (/ankle/.test(q)) return "ankle";
+  if (/elbow/.test(q)) return "elbow";
+  if (/wrist/.test(q)) return "wrist";
+  return undefined;
+}
+
 export type ConsoleStatus = "active" | "connected" | "standby" | "warming" | "error" | "offline";
 
 export interface ConsoleTelemetry {

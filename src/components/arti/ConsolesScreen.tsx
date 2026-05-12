@@ -4,7 +4,14 @@ import { Sidebar, type SidebarKey } from "./Sidebar";
 import { TopBar } from "./TopBar";
 import { ArtiInvoker } from "./ArtiInvoker";
 import { ConsoleTower3D } from "./ConsoleTower3D";
-import { CONSOLES, type ConsoleDevice, type ConsoleId, type ConsoleStatus } from "./consoles";
+import {
+  CONSOLES,
+  FLUID_PUMP_PRESETS,
+  type ConsoleDevice,
+  type ConsoleId,
+  type ConsoleStatus,
+  type FluidPumpJoint,
+} from "./consoles";
 import { cn } from "@/lib/utils";
 
 interface Props {
@@ -21,6 +28,10 @@ interface Props {
   onFocusChange: (id: ConsoleId | null) => void;
   /** Optional: simulate an equipment-failure event for the focused device. */
   onSimulateFailure?: (consoleId: ConsoleId) => void;
+  /** Live joint preset on the DualWave pump (overrides static telemetry). */
+  fluidPumpJoint: FluidPumpJoint;
+  /** Change the joint preset (drives voice parity for manual taps). */
+  onSetFluidPumpJoint: (joint: FluidPumpJoint) => void;
 }
 
 const STATUS_LEGEND: Array<{ status: ConsoleStatus; label: string; dot: string }> = [
@@ -51,6 +62,8 @@ export function ConsolesScreen({
   focusedId,
   onFocusChange,
   onSimulateFailure,
+  fluidPumpJoint,
+  onSetFluidPumpJoint,
 }: Props) {
   // Local fallback when no focused console — show the first ACTIVE
   // device by default so the panel isn't empty on first load.
@@ -59,10 +72,23 @@ export function ConsolesScreen({
   );
   const effectiveFocusId = focusedId ?? localFocus;
 
-  const focused = useMemo<ConsoleDevice>(
-    () => CONSOLES.find((c) => c.id === effectiveFocusId) ?? CONSOLES[0],
-    [effectiveFocusId],
-  );
+  const focused = useMemo<ConsoleDevice>(() => {
+    const base = CONSOLES.find((c) => c.id === effectiveFocusId) ?? CONSOLES[0];
+    if (base.id !== "pump") return base;
+    // Overlay the live joint preset on the pump's static telemetry so
+    // voice changes show up immediately in the detail panel.
+    const preset = FLUID_PUMP_PRESETS[fluidPumpJoint];
+    return {
+      ...base,
+      statusDetail: `${preset.pressureMmHg} mmHg · ${preset.flowMlMin} mL/min`,
+      telemetry: base.telemetry.map((t) => {
+        if (t.label === "Pressure setpoint") return { ...t, value: `${preset.pressureMmHg} mmHg` };
+        if (t.label === "Flow rate") return { ...t, value: `${preset.flowMlMin} mL/min` };
+        if (t.label === "Mode") return { ...t, value: preset.modeLabel };
+        return t;
+      }),
+    };
+  }, [effectiveFocusId, fluidPumpJoint]);
 
   const handleFocus = (id: ConsoleId) => {
     setLocalFocus(id);
@@ -145,6 +171,8 @@ export function ConsolesScreen({
               onSimulateFailure={
                 onSimulateFailure ? () => onSimulateFailure(focused.id) : undefined
               }
+              fluidPumpJoint={focused.id === "pump" ? fluidPumpJoint : undefined}
+              onSetFluidPumpJoint={focused.id === "pump" ? onSetFluidPumpJoint : undefined}
             />
           </div>
 
@@ -170,9 +198,13 @@ export function ConsolesScreen({
 function ConsoleDetailPanel({
   device,
   onSimulateFailure,
+  fluidPumpJoint,
+  onSetFluidPumpJoint,
 }: {
   device: ConsoleDevice;
   onSimulateFailure?: () => void;
+  fluidPumpJoint?: FluidPumpJoint;
+  onSetFluidPumpJoint?: (joint: FluidPumpJoint) => void;
 }) {
   const STATUS_PILL: Record<
     ConsoleStatus,
@@ -263,6 +295,39 @@ function ConsoleDetailPanel({
           </button>
         )}
       </div>
+
+      {/* Joint preset (fluid pump only) */}
+      {fluidPumpJoint && onSetFluidPumpJoint && (
+        <div>
+          <div className="font-mono text-[10px] uppercase tracking-wider text-muted-foreground">
+            Joint preset
+          </div>
+          <div className="mt-2 flex flex-wrap gap-1.5">
+            {(Object.keys(FLUID_PUMP_PRESETS) as FluidPumpJoint[]).map((j) => {
+              const active = j === fluidPumpJoint;
+              return (
+                <button
+                  key={j}
+                  type="button"
+                  onClick={() => onSetFluidPumpJoint(j)}
+                  className={cn(
+                    "rounded-full border px-3 py-1 text-[11px] font-light capitalize transition-colors",
+                    active
+                      ? "border-cyan-300/50 bg-cyan-500/15 text-cyan-100"
+                      : "border-border bg-surface-3/40 text-muted-foreground hover:border-foreground/30 hover:text-foreground",
+                  )}
+                  title={`${FLUID_PUMP_PRESETS[j].modeLabel} — ${FLUID_PUMP_PRESETS[j].pressureMmHg} mmHg, ${FLUID_PUMP_PRESETS[j].flowMlMin} mL/min`}
+                >
+                  {j}
+                </button>
+              );
+            })}
+          </div>
+          <div className="mt-1.5 text-[10px] font-light text-muted-foreground">
+            Voice: &ldquo;Arti, set the pump to {fluidPumpJoint}.&rdquo;
+          </div>
+        </div>
+      )}
 
       {/* Attachments */}
       {device.attachments.length > 0 && (

@@ -24,6 +24,13 @@ import {
 import { TODAY_CASES, STATUS_META } from "../cases";
 import { cn } from "@/lib/utils";
 import type { WidgetContext } from "./types";
+import {
+  Dialog,
+  DialogContent,
+  DialogDescription,
+  DialogHeader,
+  DialogTitle,
+} from "@/components/ui/dialog";
 
 /**
  * Home-screen widget renderers, factored out so registry.tsx doesn't
@@ -824,6 +831,47 @@ function saveHomeTasks(tasks: HomeTask[]): void {
   }
 }
 
+/**
+ * Custom event that fires whenever the wrap-up checklist state changes —
+ * needed because the storage event only fires across tabs, not within the
+ * same tab. The widget subscribes so voice updates re-render the UI
+ * without having to lift state into the route.
+ */
+const HOME_TASKS_CHANGED_EVENT = "arti:home-tasks-changed";
+
+/** Fuzzy-match a wrap-up task by free-text (label substring or id). */
+export function findHomeTask(query: string): HomeTask | undefined {
+  const q = query.toLowerCase().trim();
+  if (!q) return undefined;
+  const tasks = loadHomeTasks();
+  const byId = tasks.find((t) => t.id === q);
+  if (byId) return byId;
+  const byLabel = tasks.find((t) => t.label.toLowerCase().includes(q));
+  if (byLabel) return byLabel;
+  // Reverse direction — query contains a meaningful word from the label.
+  return tasks.find((t) => {
+    const words = t.label.toLowerCase().split(/\s+/);
+    return words.some((w) => w.length >= 4 && q.includes(w));
+  });
+}
+
+/**
+ * External setter — voice tools call this to flip a wrap-up task. Persists
+ * to localStorage and fires the in-tab change event so the mounted widget
+ * (if any) re-renders. Returns the task that was updated, or undefined if
+ * no match.
+ */
+export function setHomeTaskDone(query: string, done: boolean): HomeTask | undefined {
+  const task = findHomeTask(query);
+  if (!task) return undefined;
+  const next = loadHomeTasks().map((t) => (t.id === task.id ? { ...t, done } : t));
+  saveHomeTasks(next);
+  if (typeof window !== "undefined") {
+    window.dispatchEvent(new CustomEvent(HOME_TASKS_CHANGED_EVENT));
+  }
+  return { ...task, done };
+}
+
 export function HomeTaskChecklistWidget({ ctx }: { ctx: WidgetContext }) {
   void ctx;
   const [tasks, setTasks] = useState<HomeTask[]>(() => loadHomeTasks());
@@ -831,6 +879,15 @@ export function HomeTaskChecklistWidget({ ctx }: { ctx: WidgetContext }) {
   useEffect(() => {
     saveHomeTasks(tasks);
   }, [tasks]);
+  // Re-load from storage when voice tools flip a task externally. Custom
+  // event is needed because the native `storage` event doesn't fire in the
+  // same tab.
+  useEffect(() => {
+    if (typeof window === "undefined") return;
+    const handler = () => setTasks(loadHomeTasks());
+    window.addEventListener(HOME_TASKS_CHANGED_EVENT, handler);
+    return () => window.removeEventListener(HOME_TASKS_CHANGED_EVENT, handler);
+  }, []);
   const remaining = tasks.filter((t) => !t.done).length;
   return (
     <WidgetShell
@@ -905,13 +962,27 @@ export function HomeTaskChecklistWidget({ ctx }: { ctx: WidgetContext }) {
 
 export type CommSource = "PACU" | "Family" | "Anesthesia" | "Sub-sterile" | "Charge RN";
 
+export interface HomeCommReply {
+  id: string;
+  from: "incoming" | "outgoing";
+  /** Sender label rendered in the thread bubble ("Laura, RN" / "PACU charge"). */
+  senderLabel: string;
+  text: string;
+  timeIso: string;
+}
+
 export interface HomeComm {
   id: string;
   source: CommSource;
   time: string;
   message: string;
   unread?: boolean;
+  /** Reply thread, oldest-first. Initial message is rendered above the thread. */
+  thread?: HomeCommReply[];
 }
+
+const HOME_COMMS_STORAGE_KEY = "arti.home.comms";
+const HOME_COMMS_CHANGED_EVENT = "arti:home-comms-changed";
 
 const COMM_TONE: Record<CommSource, string> = {
   PACU: "border-primary/40 bg-primary/10 text-primary",
@@ -921,13 +992,7 @@ const COMM_TONE: Record<CommSource, string> = {
   "Charge RN": "border-border/60 bg-surface-2 text-foreground/85",
 };
 
-export const SEED_COMMS: Array<{
-  id: string;
-  source: CommSource;
-  time: string;
-  message: string;
-  unread?: boolean;
-}> = [
+export const SEED_COMMS: HomeComm[] = [
   {
     id: "pacu-1",
     source: "PACU",
@@ -962,9 +1027,112 @@ export const SEED_COMMS: Array<{
   },
 ];
 
+/** Read the live comms list — seed merged with any saved unread/thread state. */
+export function loadHomeComms(): HomeComm[] {
+  if (typeof window === "undefined") return SEED_COMMS.map((c) => ({ ...c }));
+  try {
+    const raw = window.localStorage.getItem(HOME_COMMS_STORAGE_KEY);
+    if (!raw) return SEED_COMMS.map((c) => ({ ...c }));
+    const parsed = JSON.parse(raw) as Record<
+      string,
+      { unread?: boolean; thread?: HomeCommReply[] }
+    > | null;
+    if (!parsed || typeof parsed !== "object") return SEED_COMMS.map((c) => ({ ...c }));
+    return SEED_COMMS.map((c) => {
+      const overlay = parsed[c.id];
+      if (!overlay) return { ...c };
+      return {
+        ...c,
+        unread: typeof overlay.unread === "boolean" ? overlay.unread : c.unread,
+        thread: Array.isArray(overlay.thread) ? overlay.thread : c.thread,
+      };
+    });
+  } catch {
+    return SEED_COMMS.map((c) => ({ ...c }));
+  }
+}
+
+function saveHomeComms(comms: HomeComm[]): void {
+  if (typeof window === "undefined") return;
+  try {
+    const overlay: Record<string, { unread?: boolean; thread?: HomeCommReply[] }> = {};
+    for (const c of comms) {
+      overlay[c.id] = { unread: c.unread, thread: c.thread };
+    }
+    window.localStorage.setItem(HOME_COMMS_STORAGE_KEY, JSON.stringify(overlay));
+  } catch {
+    // ignore
+  }
+}
+
+function emitCommsChanged() {
+  if (typeof window !== "undefined") {
+    window.dispatchEvent(new CustomEvent(HOME_COMMS_CHANGED_EVENT));
+  }
+}
+
+/** Mark a single comm as read. Returns the updated comm or undefined. */
+export function markCommRead(id: string): HomeComm | undefined {
+  const comms = loadHomeComms();
+  const idx = comms.findIndex((c) => c.id === id);
+  if (idx < 0) return undefined;
+  if (!comms[idx].unread) return comms[idx];
+  comms[idx] = { ...comms[idx], unread: false };
+  saveHomeComms(comms);
+  emitCommsChanged();
+  return comms[idx];
+}
+
+/** Append a reply to a comm thread. Auto-clears unread. */
+export function appendCommReply(id: string, reply: HomeCommReply): HomeComm | undefined {
+  const comms = loadHomeComms();
+  const idx = comms.findIndex((c) => c.id === id);
+  if (idx < 0) return undefined;
+  const thread = [...(comms[idx].thread ?? []), reply];
+  comms[idx] = { ...comms[idx], thread, unread: false };
+  saveHomeComms(comms);
+  emitCommsChanged();
+  return comms[idx];
+}
+
+/** Find the most-recent comm from a given source (for voice-by-name replies). */
+export function findLatestCommBySource(source: CommSource): HomeComm | undefined {
+  const comms = loadHomeComms();
+  return comms.find((c) => c.source === source);
+}
+
 export function HomeCommsFeedWidget({ ctx }: { ctx: WidgetContext }) {
   void ctx;
-  const unread = SEED_COMMS.filter((c) => c.unread).length;
+  const [comms, setComms] = useState<HomeComm[]>(() => loadHomeComms());
+  const [openCommId, setOpenCommId] = useState<string | null>(null);
+
+  // Subscribe to changes so voice updates (or another tab) re-render this widget.
+  useEffect(() => {
+    if (typeof window === "undefined") return;
+    const handler = () => setComms(loadHomeComms());
+    window.addEventListener(HOME_COMMS_CHANGED_EVENT, handler);
+    return () => window.removeEventListener(HOME_COMMS_CHANGED_EVENT, handler);
+  }, []);
+
+  const unread = comms.filter((c) => c.unread).length;
+  const openComm = openCommId ? (comms.find((c) => c.id === openCommId) ?? null) : null;
+
+  function handleOpen(id: string) {
+    markCommRead(id);
+    setOpenCommId(id);
+  }
+
+  function handleSendReply(text: string) {
+    if (!openComm || !text.trim()) return;
+    appendCommReply(openComm.id, {
+      id: `reply-${Date.now()}-${Math.random().toString(36).slice(2, 6)}`,
+      from: "outgoing",
+      senderLabel: "Laura, RN",
+      text: text.trim(),
+      timeIso: new Date().toISOString(),
+    });
+  }
+
   return (
     <WidgetShell
       eyebrow="Inbound · last 30 min"
@@ -978,34 +1146,170 @@ export function HomeCommsFeedWidget({ ctx }: { ctx: WidgetContext }) {
       }
     >
       <ul className="space-y-2.5">
-        {SEED_COMMS.map((c) => (
-          <li
-            key={c.id}
-            className={cn(
-              "rounded-xl border p-3 transition-colors",
-              c.unread ? "border-primary/30 bg-primary/[0.04]" : "border-border/60 bg-surface-2/30",
-            )}
-          >
-            <div className="mb-1.5 flex items-center gap-2">
-              <span
+        {comms.map((c) => {
+          const replyCount = c.thread?.length ?? 0;
+          return (
+            <li key={c.id}>
+              <button
+                type="button"
+                onClick={() => handleOpen(c.id)}
                 className={cn(
-                  "rounded-full border px-2 py-0.5 font-mono text-[9px] uppercase tracking-wider",
-                  COMM_TONE[c.source],
+                  "w-full rounded-xl border p-3 text-left transition-colors hover:border-primary/40",
+                  c.unread
+                    ? "border-primary/30 bg-primary/[0.04]"
+                    : "border-border/60 bg-surface-2/30",
                 )}
               >
-                {c.source}
-              </span>
-              <span className="font-mono text-[10px] tabular-nums text-muted-foreground/70">
-                {c.time}
-              </span>
-              {c.unread && (
-                <span className="ml-auto h-1.5 w-1.5 rounded-full bg-primary" aria-label="Unread" />
-              )}
-            </div>
-            <p className="text-sm font-light leading-snug text-foreground/90">{c.message}</p>
-          </li>
-        ))}
+                <div className="mb-1.5 flex items-center gap-2">
+                  <span
+                    className={cn(
+                      "rounded-full border px-2 py-0.5 font-mono text-[9px] uppercase tracking-wider",
+                      COMM_TONE[c.source],
+                    )}
+                  >
+                    {c.source}
+                  </span>
+                  <span className="font-mono text-[10px] tabular-nums text-muted-foreground/70">
+                    {c.time}
+                  </span>
+                  {replyCount > 0 && (
+                    <span className="rounded-full border border-border/60 bg-surface-3/40 px-2 py-0.5 font-mono text-[9px] uppercase tracking-wider text-muted-foreground">
+                      {replyCount} repl{replyCount === 1 ? "y" : "ies"}
+                    </span>
+                  )}
+                  {c.unread && (
+                    <span
+                      className="ml-auto h-1.5 w-1.5 rounded-full bg-primary"
+                      aria-label="Unread"
+                    />
+                  )}
+                </div>
+                <p className="text-sm font-light leading-snug text-foreground/90">{c.message}</p>
+              </button>
+            </li>
+          );
+        })}
       </ul>
+
+      <CommsThreadModal
+        open={openComm !== null}
+        onClose={() => setOpenCommId(null)}
+        comm={openComm}
+        onSend={handleSendReply}
+      />
     </WidgetShell>
+  );
+}
+
+// ── Comms thread modal (clicked comm → conversation view + reply input) ──
+
+function CommsThreadModal({
+  open,
+  onClose,
+  comm,
+  onSend,
+}: {
+  open: boolean;
+  onClose: () => void;
+  comm: HomeComm | null;
+  onSend: (text: string) => void;
+}) {
+  const [draft, setDraft] = useState("");
+  // Reset draft when switching threads.
+  useEffect(() => {
+    if (!open) setDraft("");
+  }, [open, comm?.id]);
+
+  if (!comm) return null;
+
+  return (
+    <Dialog open={open} onOpenChange={(o) => !o && onClose()}>
+      <DialogContent className="flex max-h-[88vh] w-[min(95vw,42rem)] max-w-none flex-col overflow-hidden border-border/60 bg-surface/95 backdrop-blur-xl">
+        <DialogHeader className="shrink-0 pb-4 border-b border-border/40">
+          <DialogTitle className="flex items-center gap-3 text-lg">
+            <span
+              className={cn(
+                "rounded-full border px-2 py-0.5 font-mono text-[10px] uppercase tracking-wider",
+                COMM_TONE[comm.source],
+              )}
+            >
+              {comm.source}
+            </span>
+            <span className="font-light">Thread</span>
+            <span className="ml-auto font-mono text-[10px] tabular-nums text-muted-foreground">
+              opened {new Date().toLocaleTimeString([], { hour: "2-digit", minute: "2-digit" })}
+            </span>
+          </DialogTitle>
+          <DialogDescription className="mt-1 text-xs">
+            Replies are sent as Laura, RN. Voice equivalent: &ldquo;Arti, message {comm.source} —
+            &lt;your reply&gt;.&rdquo;
+          </DialogDescription>
+        </DialogHeader>
+
+        <div className="min-h-0 flex-1 space-y-3 overflow-y-auto p-2">
+          {/* Original incoming message */}
+          <div className="flex justify-start">
+            <div className="max-w-[80%] rounded-2xl rounded-tl-md border border-primary/30 bg-primary/[0.06] px-4 py-3 text-sm font-light text-foreground/90">
+              <div className="font-mono text-[10px] uppercase tracking-wider text-muted-foreground/80">
+                {comm.source} · {comm.time}
+              </div>
+              <div className="mt-1">{comm.message}</div>
+            </div>
+          </div>
+
+          {/* Thread */}
+          {(comm.thread ?? []).map((r) => {
+            const isOut = r.from === "outgoing";
+            return (
+              <div key={r.id} className={cn("flex", isOut ? "justify-end" : "justify-start")}>
+                <div
+                  className={cn(
+                    "max-w-[80%] rounded-2xl px-4 py-3 text-sm font-light",
+                    isOut
+                      ? "rounded-tr-md border border-success/30 bg-success/[0.08] text-foreground/90"
+                      : "rounded-tl-md border border-primary/30 bg-primary/[0.06] text-foreground/90",
+                  )}
+                >
+                  <div className="font-mono text-[10px] uppercase tracking-wider text-muted-foreground/80">
+                    {r.senderLabel} ·{" "}
+                    {new Date(r.timeIso).toLocaleTimeString([], {
+                      hour: "2-digit",
+                      minute: "2-digit",
+                    })}
+                  </div>
+                  <div className="mt-1">{r.text}</div>
+                </div>
+              </div>
+            );
+          })}
+        </div>
+
+        {/* Reply input */}
+        <form
+          onSubmit={(e) => {
+            e.preventDefault();
+            if (!draft.trim()) return;
+            onSend(draft);
+            setDraft("");
+          }}
+          className="flex shrink-0 items-center gap-2 border-t border-border/40 px-2 pt-3"
+        >
+          <input
+            type="text"
+            value={draft}
+            onChange={(e) => setDraft(e.target.value)}
+            placeholder={`Reply to ${comm.source}…`}
+            className="flex-1 rounded-full border border-border/50 bg-surface-3/30 px-4 py-2 text-sm font-light text-foreground placeholder:text-muted-foreground/40 focus:border-primary/40 focus:outline-none"
+          />
+          <button
+            type="submit"
+            disabled={!draft.trim()}
+            className="rounded-full border border-primary/40 bg-primary/15 px-4 py-2 font-mono text-[10px] uppercase tracking-wider text-primary transition-colors hover:bg-primary/20 disabled:cursor-not-allowed disabled:opacity-40"
+          >
+            Send
+          </button>
+        </form>
+      </DialogContent>
+    </Dialog>
   );
 }

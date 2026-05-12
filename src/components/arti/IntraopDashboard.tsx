@@ -58,6 +58,11 @@ import {
   type IntraopSnapshot,
   type SpecimenStatus,
   type VitalSnapshot,
+  type VitalId,
+  type VitalThreshold,
+  VITAL_LABELS,
+  observeVital,
+  thresholdMatches,
 } from "./intraop";
 import type { ArtiToolResult } from "@/hooks/useArtiVoice";
 
@@ -100,6 +105,14 @@ interface Props {
   onShowMultiView?: () => void;
   /** Route-owned ref bridge — IntraopDashboard registers actions on mount. */
   actionsRef?: IntraopActionsRef;
+  /** Active vital-threshold alerts that the dashboard evaluates on each vitals tick. */
+  vitalThresholds?: VitalThreshold[];
+  /** Fired callback — called once per threshold on first crossing. */
+  onVitalThresholdFired?: (id: string, observed: number) => void;
+  /** Manual: remove a threshold by id. */
+  onRemoveVitalThreshold?: (id: string) => void;
+  /** Manual: add a new threshold (from the inline form). */
+  onAddVitalThreshold?: (vital: VitalId, comparison: "below" | "above", value: number) => void;
 }
 
 const ROLE_DEFS: Array<{
@@ -164,6 +177,10 @@ export function IntraopDashboard({
   onSidebarNavigate,
   onShowMultiView,
   actionsRef,
+  vitalThresholds,
+  onVitalThresholdFired,
+  onRemoveVitalThreshold,
+  onAddVitalThreshold,
 }: Props) {
   const snapshot = useMemo(() => getIntraopSnapshot(activeCase?.id), [activeCase?.id]);
   const [activeRole, setActiveRole] = useState<IntraopRole>("nurse");
@@ -202,6 +219,21 @@ export function IntraopDashboard({
     const i = window.setInterval(() => setVitals((v) => driftVitals(v)), 2500);
     return () => window.clearInterval(i);
   }, []);
+
+  // Vital-threshold evaluation. Runs on every vitals change; for each active
+  // (unfired) threshold, checks the matching reading and notifies the route
+  // on first crossing. The route handles "fired" bookkeeping so this effect
+  // stays idempotent across re-renders.
+  useEffect(() => {
+    if (!vitalThresholds || vitalThresholds.length === 0 || !onVitalThresholdFired) return;
+    for (const t of vitalThresholds) {
+      if (t.fired) continue;
+      const observed = observeVital(vitals, t.vital);
+      if (thresholdMatches(t, observed)) {
+        onVitalThresholdFired(t.id, observed);
+      }
+    }
+  }, [vitals, vitalThresholds, onVitalThresholdFired]);
 
   // Auto-clear focus highlights so the wall settles back to its calm default.
   useEffect(() => {
@@ -482,6 +514,14 @@ export function IntraopDashboard({
             {/* ── Vitals strip (always visible — calm anesthesia awareness) ── */}
             <VitalsStrip vitals={vitals} highlight={panelFocus === "vitals"} />
 
+            {/* ── Vital threshold alerts (manual + voice parity) ── */}
+            <VitalAlertsPanel
+              vitals={vitals}
+              thresholds={vitalThresholds ?? []}
+              onAdd={onAddVitalThreshold}
+              onRemove={onRemoveVitalThreshold}
+            />
+
             {/* ── Main grid ── */}
             <div className="grid grid-cols-1 gap-5 xl:grid-cols-3">
               {/* Left + center (2 cols) — imaging then role focus tabs +
@@ -679,6 +719,145 @@ function PhaseTimeline({
           <span className="text-foreground/80">"jump to closure"</span>
         </div>
       </div>
+    </section>
+  );
+}
+
+// ─────────────────────────────────────────────────────────────────────────
+// Vital threshold alerts — voice/manual parity
+// ─────────────────────────────────────────────────────────────────────────
+
+function VitalAlertsPanel({
+  vitals,
+  thresholds,
+  onAdd,
+  onRemove,
+}: {
+  vitals: VitalSnapshot;
+  thresholds: VitalThreshold[];
+  onAdd?: (vital: VitalId, comparison: "below" | "above", value: number) => void;
+  onRemove?: (id: string) => void;
+}) {
+  const [showForm, setShowForm] = useState(false);
+  const [draftVital, setDraftVital] = useState<VitalId>("bp_sys");
+  const [draftCmp, setDraftCmp] = useState<"below" | "above">("below");
+  const [draftValue, setDraftValue] = useState<string>("90");
+  const active = thresholds.filter((t) => !t.fired);
+  const fired = thresholds.filter((t) => t.fired);
+
+  const canSubmit = onAdd && Number.isFinite(Number(draftValue)) && Number(draftValue) > 0;
+
+  return (
+    <section className="glass rounded-2xl p-5">
+      <div className="flex items-center justify-between gap-3">
+        <div>
+          <div className="font-mono text-[10px] uppercase tracking-[0.3em] text-primary">
+            Vital threshold alerts
+          </div>
+          <div className="mt-0.5 text-xs font-light text-muted-foreground">
+            {active.length === 0 && fired.length === 0
+              ? "None set — ask Arti to watch a vital."
+              : `${active.length} active${fired.length ? ` · ${fired.length} fired` : ""}`}
+          </div>
+        </div>
+        {onAdd && (
+          <button
+            type="button"
+            onClick={() => setShowForm((s) => !s)}
+            className="rounded-full border border-border bg-surface-3/40 px-3 py-1 font-mono text-[10px] uppercase tracking-wider text-muted-foreground transition-colors hover:border-primary/40 hover:text-foreground"
+          >
+            {showForm ? "Cancel" : "+ Add alert"}
+          </button>
+        )}
+      </div>
+
+      {showForm && onAdd && (
+        <div className="mt-3 flex flex-wrap items-center gap-2 rounded-xl border border-border/40 bg-surface-3/30 p-3">
+          <select
+            value={draftVital}
+            onChange={(e) => setDraftVital(e.target.value as VitalId)}
+            className="rounded-md border border-border bg-surface-2 px-2 py-1 text-sm"
+          >
+            {(Object.keys(VITAL_LABELS) as VitalId[]).map((v) => (
+              <option key={v} value={v}>
+                {VITAL_LABELS[v].label}
+              </option>
+            ))}
+          </select>
+          <select
+            value={draftCmp}
+            onChange={(e) => setDraftCmp(e.target.value as "below" | "above")}
+            className="rounded-md border border-border bg-surface-2 px-2 py-1 text-sm"
+          >
+            <option value="below">below</option>
+            <option value="above">above</option>
+          </select>
+          <input
+            type="number"
+            value={draftValue}
+            onChange={(e) => setDraftValue(e.target.value)}
+            placeholder="value"
+            className="w-24 rounded-md border border-border bg-surface-2 px-2 py-1 text-sm tabular-nums"
+          />
+          <span className="text-xs font-light text-muted-foreground">
+            {VITAL_LABELS[draftVital].unit}
+          </span>
+          <button
+            type="button"
+            disabled={!canSubmit}
+            onClick={() => {
+              if (!canSubmit) return;
+              onAdd(draftVital, draftCmp, Number(draftValue));
+              setShowForm(false);
+            }}
+            className="ml-auto rounded-full border border-success/40 bg-success/15 px-3 py-1 font-mono text-[10px] uppercase tracking-wider text-success transition-colors hover:bg-success/20 disabled:cursor-not-allowed disabled:opacity-40"
+          >
+            Watch
+          </button>
+        </div>
+      )}
+
+      {thresholds.length > 0 && (
+        <ul className="mt-3 space-y-1.5">
+          {thresholds.map((t) => {
+            const meta = VITAL_LABELS[t.vital];
+            const observed = observeVital(vitals, t.vital);
+            return (
+              <li
+                key={t.id}
+                className={cn(
+                  "flex items-center gap-3 rounded-lg border px-3 py-2 text-sm",
+                  t.fired
+                    ? "border-destructive/40 bg-destructive/10 text-destructive"
+                    : "border-border/40 bg-surface-3/30 text-foreground/90",
+                )}
+              >
+                <span className="font-mono text-[10px] uppercase tracking-wider">
+                  {t.fired ? "FIRED" : "Watching"}
+                </span>
+                <span className="text-foreground/90">
+                  {meta.label} {t.comparison} {t.value}
+                  <span className="text-muted-foreground">{meta.unit}</span>
+                </span>
+                <span className="ml-auto text-xs font-light tabular-nums text-muted-foreground">
+                  now {observed}
+                  {meta.unit}
+                </span>
+                {onRemove && (
+                  <button
+                    type="button"
+                    onClick={() => onRemove(t.id)}
+                    aria-label="Remove alert"
+                    className="rounded-full border border-border bg-surface-2 px-2 py-0.5 font-mono text-[9px] uppercase tracking-wider text-muted-foreground transition-colors hover:border-foreground/30 hover:text-foreground"
+                  >
+                    Clear
+                  </button>
+                )}
+              </li>
+            );
+          })}
+        </ul>
+      )}
     </section>
   );
 }

@@ -222,6 +222,34 @@ export interface ArtiVoiceCallbacks {
   ) => ArtiToolResult;
   /** Mark a turnover cleaning checklist item done or pending (by free-text label). */
   onSetCleaningItemStatus?: (item: string, status: "done" | "pending") => ArtiToolResult;
+  /** Mark a home Wrap-up checklist item done or pending (by free-text label). */
+  onSetWrapupTaskStatus?: (item: string, status: "done" | "pending") => ArtiToolResult;
+  /** Check off all four time-out items in one call ("record timeout completed"). */
+  onCompleteTimeout?: () => ArtiToolResult;
+  /**
+   * Open the focused-readout modal for a chart-data category. Pairs the
+   * spoken read-back with a visual presentation. Categories: allergies,
+   * consents, anesthesia, positioning, antibiotics, implants, fluid.
+   */
+  onShowFocusReadout?: (category: string) => ArtiToolResult;
+  onCloseFocusReadout?: () => ArtiToolResult;
+  /** Set the DualWave fluid pump's joint preset (shoulder, knee, hip, etc.). */
+  onSetFluidPumpJoint?: (joint: string) => ArtiToolResult;
+  /**
+   * Set a vital-threshold alert. Arti watches the named vital during
+   * intraop and notifies on first crossing of the threshold.
+   */
+  onSetVitalThresholdAlert?: (
+    vital: string,
+    comparison: "below" | "above",
+    value: number,
+  ) => ArtiToolResult;
+  /** Clear all active vital-threshold alerts. */
+  onClearVitalThresholdAlerts?: () => ArtiToolResult;
+  /** Write a handoff-note section by id ("ebl", "complications", etc.). */
+  onSetHandoffNote?: (section: string, text: string) => ArtiToolResult;
+  /** Send a reply to a comms-feed thread, addressed by source ("PACU", etc.). */
+  onSendCommsReply?: (source: string, text: string) => ArtiToolResult;
   /** Open the pre-op patient video modal on the surgeon panel. */
   onOpenPatientVideo?: () => ArtiToolResult;
   onClosePatientVideo?: () => ArtiToolResult;
@@ -688,6 +716,40 @@ function executeToolCall(call: ArtiToolCall, cb: ArtiVoiceCallbacks): void {
       cb.onSetCleaningItemStatus?.(String(inp.item ?? ""), s);
       break;
     }
+    case "set_wrapup_task_status": {
+      const status = String(inp.status ?? "done");
+      const s = status === "pending" ? "pending" : "done";
+      cb.onSetWrapupTaskStatus?.(String(inp.item ?? ""), s);
+      break;
+    }
+    case "complete_timeout":
+      cb.onCompleteTimeout?.();
+      break;
+    case "show_focus_readout":
+      cb.onShowFocusReadout?.(String(inp.category ?? ""));
+      break;
+    case "close_focus_readout":
+      cb.onCloseFocusReadout?.();
+      break;
+    case "set_fluid_pump_joint":
+      cb.onSetFluidPumpJoint?.(String(inp.joint ?? ""));
+      break;
+    case "set_vital_threshold_alert": {
+      const cmp = String(inp.comparison ?? "below");
+      const c: "below" | "above" = cmp === "above" ? "above" : "below";
+      const v = Number(inp.value);
+      cb.onSetVitalThresholdAlert?.(String(inp.vital ?? ""), c, Number.isFinite(v) ? v : 0);
+      break;
+    }
+    case "clear_vital_threshold_alerts":
+      cb.onClearVitalThresholdAlerts?.();
+      break;
+    case "set_handoff_note":
+      cb.onSetHandoffNote?.(String(inp.section ?? ""), String(inp.text ?? ""));
+      break;
+    case "send_comms_reply":
+      cb.onSendCommsReply?.(String(inp.source ?? ""), String(inp.text ?? ""));
+      break;
     case "set_pref_card_tool_status": {
       const status = String(inp.status ?? "");
       const valid: Array<"accounted" | "missing" | "contaminated"> = [

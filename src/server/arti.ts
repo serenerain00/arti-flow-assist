@@ -822,9 +822,10 @@ const TOOLS: Anthropic.Tool[] = [
       "Open the pre-incision time-out checklist OR — when the time-out modal is already open and all 4 items are confirmed — advance INTO the intraop ('case active') view. " +
       "FIRE for any of these phrases: " +
       "  • 'start case' / 'start the case' / 'start' / 'start it' / 'go' / 'begin' / 'let's go' / 'start now' " +
-      "  • 'start checklist' / 'start the checklist' / 'open the checklist' / 'start time-out' / 'start the time-out' / 'open time-out' / 'time out' " +
+      "  • 'start checklist' / 'start the checklist' / 'open the checklist' / 'start time-out' / 'start the time-out' / 'open time-out' / 'time out' / 'begin timeout' " +
+      "  • 'start pre-op workflow' / 'begin pre-op' / 'start preop' / 'open pre-op' (when not already on preop, the route loads the up-next case there) " +
       "  • 'continue' / 'ready to start' / 'we're ready' (when the modal is already open) " +
-      "Treat 'start checklist' / 'start time-out' as IDENTICAL to 'start case' — the checklist IS the case-start gate. " +
+      "Treat 'start checklist' / 'start time-out' / 'start pre-op workflow' as IDENTICAL to 'start case' — the checklist IS the case-start gate. " +
       "Behavior depends on live context: " +
       "  • On HOME (modal closed) → the route auto-loads the up-next case and opens the time-out modal. Respond e.g. 'Starting Marcus Chen's checklist.' " +
       "  • On PRE-OP (modal closed) → opens the time-out modal for the active case. Respond e.g. 'Starting the time-out.' " +
@@ -846,7 +847,10 @@ const TOOLS: Anthropic.Tool[] = [
   },
   {
     name: "end_case",
-    description: "Exit intraop back to pre-op. Only valid while on the intraop screen.",
+    description:
+      "End the live case — exits intraop and sends the room to Turnover (cleaning checklist + next-case countdown). Only valid while on the intraop screen. " +
+      "FIRE for any of these phrases: 'end case' / 'end the case' / 'we're done' / 'wrap up' / 'wrap up the case' / 'stop procedure timer' / 'stop the timer' / 'record procedure complete' / 'procedure complete' / 'case complete' / 'case is over' / 'close out' / 'start room turnover' / 'begin turnover'. " +
+      "All of these are synonymous — they end the case and the route transitions to the turnover screen automatically. Narrate a brief confirmation in the same turn ('Case ended.' / 'Room in turnover.'). Under 6 words.",
     input_schema: { type: "object" as const, properties: {}, required: [] },
   },
   {
@@ -953,6 +957,165 @@ const TOOLS: Anthropic.Tool[] = [
       },
       required: ["id"],
     },
+  },
+  {
+    name: "show_focus_readout",
+    description:
+      "Open a focused-readout MODAL for a chart-data category, then in the SAME turn READ the data aloud. Use this whenever the user says 'show me X' / 'display X' / 'pull up X' / 'bring up X' (rather than just asking 'what is X'). The modal visually presents the data while you narrate it. " +
+      "Map user verbs to category as follows: " +
+      "  • 'show allergies' / 'display patient allergies' / 'allergies full screen' / 'pull up allergies' → category:'allergies'. Read severe ones first; if NKDA say so. " +
+      "  • 'show consents' / 'display consents' / 'pull up consents' / 'show me what's signed' → category:'consents'. " +
+      "  • 'show anesthesia notes' / 'display anesthesia plan' / 'pull up anesthesia' → category:'anesthesia'. Flag difficult airway. " +
+      "  • 'open positioning instructions' / 'show positioning' / 'pull up positioning' / 'display the position' → category:'positioning'. " +
+      "  • 'display antibiotics status' / 'show antibiotics' / 'pull up antibiotic' / 'antibiotic redose' → category:'antibiotics'. " +
+      "  • 'show implant log' / 'display implants' / 'pull up the implants' / 'which implants are opened?' → category:'implants'. " +
+      "  • 'display irrigation totals' / 'show fluid totals' / 'pull up fluid balance' / 'track fluid deficit' → category:'fluid'. " +
+      "DISTINCT from set tools: this only displays + reads. " +
+      "DISTINCT from open_patient_details: that modal shows EVERYTHING; this is single-topic. Prefer this when the user names a specific data category. " +
+      "NARRATION REQUIRED: in the same turn, return ONE short readout sentence answering the data ('Severe penicillin — rash and hives. No NSAID allergy.' / 'Beach chair 60 to 70 degrees, articulated arm holder, axillary roll.' / 'Cefazolin 2 grams I V, last dose 7:14, redose in 28 minutes.'). Keep under 18 words.",
+    input_schema: {
+      type: "object" as const,
+      properties: {
+        category: {
+          type: "string",
+          enum: [
+            "allergies",
+            "consents",
+            "anesthesia",
+            "positioning",
+            "antibiotics",
+            "implants",
+            "fluid",
+          ],
+          description: "Which chart category to display in the focus modal.",
+        },
+      },
+      required: ["category"],
+    },
+  },
+  {
+    name: "close_focus_readout",
+    description:
+      "Close the focused-readout modal. Use when user says 'close', 'close that', 'close the readout', 'dismiss', 'go back', 'done' while the focus modal is open. Prefer close_topmost_modal when the user just says 'close'.",
+    input_schema: { type: "object" as const, properties: {}, required: [] },
+  },
+  {
+    name: "set_vital_threshold_alert",
+    description:
+      "Set up a vital-sign threshold alert. Arti watches the named vital during intraop and announces + toasts the first time it crosses the threshold. " +
+      "Trigger phrases: 'alert me if blood pressure drops below 90', 'let me know if BP goes under 100', 'watch the systolic — alert below 95', 'tell me if SpO2 drops below 92', 'alert me if heart rate spikes above 110', 'notify me if MAP falls below 65', 'set an alert for temp below 35'. " +
+      "Map free text to vital: 'systolic' / 'sys BP' → bp_sys; 'diastolic' / 'dia' → bp_dia; 'MAP' / 'mean arterial' → map; 'heart rate' / 'HR' / 'pulse' → hr; 'SpO2' / 'oxygen' / 'sats' → spo2; 'EtCO2' / 'CO2' → etco2; 'temp' / 'temperature' → tempC. " +
+      "comparison = 'below' for 'drops below / goes under / falls below'; 'above' for 'goes above / spikes over / climbs above'. " +
+      "NARRATION REQUIRED: confirm tightly with the watched vital + threshold: 'Watching systolic, alert below 90.' / 'Alert set for S P O 2 below 92.' Under 10 words.",
+    input_schema: {
+      type: "object" as const,
+      properties: {
+        vital: {
+          type: "string",
+          enum: ["bp_sys", "bp_dia", "map", "hr", "spo2", "etco2", "tempC"],
+          description: "Vital to watch.",
+        },
+        comparison: {
+          type: "string",
+          enum: ["below", "above"],
+          description: "Fire when the observed reading goes 'below' or 'above' the threshold.",
+        },
+        value: {
+          type: "number",
+          description:
+            "Threshold numeric value (mmHg for BP/MAP/EtCO2, bpm for HR, % for SpO2, °C for tempC).",
+        },
+      },
+      required: ["vital", "comparison", "value"],
+    },
+  },
+  {
+    name: "clear_vital_threshold_alerts",
+    description:
+      "Clear ALL active vital-threshold alerts (both fired and unfired). Use when the user says 'clear vital alerts', 'cancel all vital alerts', 'stop watching vitals', 'remove all alerts', 'reset vital watch'. " +
+      "NARRATION: 'Vital alerts cleared.' Under 4 words.",
+    input_schema: { type: "object" as const, properties: {}, required: [] },
+  },
+  {
+    name: "send_comms_reply",
+    description:
+      "Send a reply on the home Communications feed. Appends to the latest thread from the named source and marks it read. Sources: PACU, Family, Anesthesia, Sub-sterile, Charge RN. " +
+      "Aliases accepted in `source`: 'recovery' → PACU, 'waiting room' / 'next of kin' → Family, 'gas' / 'anaesth' → Anesthesia, 'sterile processing' / 'sterile core' → Sub-sterile, 'charge nurse' / 'nurse coordinator' → Charge RN. " +
+      "Trigger phrases: 'message PACU that we're 20 minutes out', 'reply to PACU: bed 3 confirmed', 'tell family she's stable', 'send to anesthesia — running ahead', 'let charge know we're behind 15 min', 'reply to sub-sterile: appreciate it'. " +
+      "NARRATION REQUIRED: confirm tightly — 'Sent to PACU.' / 'Replied to family.' / 'Message to anesthesia sent.' Keep under 5 words.",
+    input_schema: {
+      type: "object" as const,
+      properties: {
+        source: {
+          type: "string",
+          description:
+            "Recipient — PACU, Family, Anesthesia, Sub-sterile, or Charge RN (aliases ok).",
+        },
+        text: {
+          type: "string",
+          description: "Reply text to send. Pass the full message verbatim.",
+        },
+      },
+      required: ["source", "text"],
+    },
+  },
+  {
+    name: "set_handoff_note",
+    description:
+      "Write a section of the PACU handoff documentation. The 7 sections are: baseline (pre-op condition), procedure (procedure performed), complications (intra-op events), ebl (estimated blood loss), post_op (positioning, sling, weight-bearing, ice, drain care), implants (components used), follow_ups (pain plan, PT, callbacks). " +
+      "Trigger phrases: 'EBL was 150 mL', 'note complications were none', 'set complications to none', 'add to handoff that pain plan is interscalene block', 'follow-ups: PT day two, clinic in ten days', 'document baseline as alert and oriented'. " +
+      "For APPEND-style asks ('add to follow-ups', 'also note that…'), look at the current value in the live context and pass the COMBINED text (existing + new, separated by '. '). For REPLACE-style ('set EBL to 200 mL', 'change complications to …'), pass just the new text. " +
+      "NARRATION REQUIRED: confirm tightly — 'E B L set to 150 mL.' / 'Complications noted: none.' / 'Follow-ups updated.' Keep under 7 words.",
+    input_schema: {
+      type: "object" as const,
+      properties: {
+        section: {
+          type: "string",
+          enum: [
+            "baseline",
+            "procedure",
+            "complications",
+            "ebl",
+            "post_op",
+            "implants",
+            "follow_ups",
+          ],
+          description: "Which handoff section to write.",
+        },
+        text: {
+          type: "string",
+          description: "Final text for the section (replaces the current value).",
+        },
+      },
+      required: ["section", "text"],
+    },
+  },
+  {
+    name: "set_fluid_pump_joint",
+    description:
+      "Set the DualWave fluid pump's joint preset. Each preset auto-loads pressure + flow defaults: shoulder (60 mmHg, 200 mL/min), knee (50/250), hip (80/300), ankle (50/200), elbow (40/150), wrist (30/100). " +
+      "Trigger phrases: 'set the pump to <joint>', 'switch the pump to <joint>', 'make sure the pump is on <joint>', 'confirm pump is set to <joint>', 'put the pump on <joint>', 'pump to <joint> mode', 'change the pump to <joint>'. " +
+      "Also fires for 'make sure the fluid pump is set to <joint>' style confirm-and-set phrasing — if the pump is already on the requested joint, fire anyway (idempotent) and confirm. " +
+      "NARRATION REQUIRED: in the same turn as the tool call, confirm tightly with the new mode + numbers. Examples: 'Pump set to shoulder, sixty over two hundred.' / 'Pump already on shoulder.' Keep under 10 words.",
+    input_schema: {
+      type: "object" as const,
+      properties: {
+        joint: {
+          type: "string",
+          enum: ["shoulder", "knee", "hip", "ankle", "elbow", "wrist"],
+          description: "Joint preset to load.",
+        },
+      },
+      required: ["joint"],
+    },
+  },
+  {
+    name: "complete_timeout",
+    description:
+      "Mark ALL four time-out items confirmed in one shot — patient, site, procedure, allergies. Use when the user explicitly says the whole time-out was completed: 'record timeout completed', 'time-out done', 'all timeout items confirmed', 'mark time-out complete', 'timeout verified', 'we did the time-out'. " +
+      "Distinct from start_case (which opens the modal then transitions to intraop). This tool only flips the checks — it doesn't move to intraop. The user typically follows with a separate 'start case' / 'continue' to actually enter intraop. " +
+      "NARRATION REQUIRED: confirm tightly — 'Time-out logged.' / 'All four confirmed.' Under 5 words.",
+    input_schema: { type: "object" as const, properties: {}, required: [] },
   },
   {
     name: "adjust_instrument_count",
@@ -1327,7 +1490,7 @@ const TOOLS: Anthropic.Tool[] = [
   {
     name: "close_pacu_feed",
     description:
-      "Close the PACU feed modal. Use when user says 'close', 'close PACU', 'dismiss', 'go back' while the PACU feed is open. Prefer close_topmost_modal when the user just says 'close'.",
+      "Close the PACU feed modal. Fire this whenever the PACU feed is OPEN (see live context) and the user says any close-like phrase: 'close', 'close PACU', 'close the PACU', 'close pacu feed', 'close that', 'close the feed', 'dismiss', 'dismiss PACU', 'go back', 'exit PACU', 'hide PACU', 'I'm done', 'done with PACU', 'got it', 'okay close it', 'close out'. Never refuse a close on the PACU screen — if you're unsure, fire this (or close_topmost_modal, both work and are equivalent here).",
     input_schema: { type: "object" as const, properties: {}, required: [] },
   },
   {
@@ -1351,6 +1514,32 @@ const TOOLS: Anthropic.Tool[] = [
     description:
       "Close the preference-card checklist modal. Use when user says 'close', 'close checklist', 'dismiss', 'go back' while the modal is open. Prefer close_topmost_modal when the user just says 'close'.",
     input_schema: { type: "object" as const, properties: {}, required: [] },
+  },
+  {
+    name: "set_wrapup_task_status",
+    description:
+      "Mark an item on the home Wrap-up checklist done or pending. The current seeded tasks are: " +
+      "consent (Verify consent signed in EMR), prior-count (Confirm prior case count complete), block (Confirm interscalene block w/ anesthesia), raytec (Stock raytec for room turnover), timeout (Schedule final time-out), family (Update Mrs. Chen — 09:30 check-in). " +
+      "Trigger phrases for status:'done' — 'check off <X>', 'mark off <X>', 'mark <X> done', 'update <X>', '<X> is done', '<X> complete', '<X> taken care of', 'I did <X>', 'cross off <X>'. " +
+      "Trigger phrases for status:'pending' — 'uncheck <X>', 'undo <X>', '<X> isn't done', '<X> still pending', 'mark <X> not done'. " +
+      "`item` is FREE TEXT — pass whatever the user said (e.g. 'consent', 'block', 'raytec', 'family', 'time-out', 'count'). Server fuzzy-matches it against labels. " +
+      "NARRATION REQUIRED: in the SAME turn as the tool call, return a brief confirmation — e.g. 'Consent checked off.' / 'Block marked done.' / 'Raytec un-checked.' Keep under 6 words.",
+    input_schema: {
+      type: "object" as const,
+      properties: {
+        item: {
+          type: "string",
+          description:
+            "Free-text task name as the user said it (e.g. 'consent', 'block', 'raytec', 'family update', 'time-out').",
+        },
+        status: {
+          type: "string",
+          enum: ["done", "pending"],
+          description: "'done' to check off, 'pending' to un-check. Default 'done'.",
+        },
+      },
+      required: ["item"],
+    },
   },
   {
     name: "set_cleaning_item_status",
@@ -1381,22 +1570,26 @@ const TOOLS: Anthropic.Tool[] = [
     name: "set_pref_card_tool_status",
     description:
       "Update the status of a specific tool on the back table or Mayo stand checklist. Use for: " +
-      "(a) accounted-for confirmations — 'mark the Mayo scissors accounted for', 'Adson forceps is on the table', 'we have the curettes'; " +
-      "(b) missing notes — 'mark needle driver missing', 'we don't have the bone hook'; " +
+      "(a) accounted-for confirmations — 'I have a needle driver', 'mark the Mayo scissors accounted for', 'Adson forceps is on the table', 'we have the curettes', 'needle driver is here', 'the bone hook is on the field'; " +
+      "(b) missing notes — 'mark needle driver missing', 'we don't have the bone hook', 'no curettes yet'; " +
       "(c) STERILITY BREACHES — 'the scalpel dropped', 'X became unsterile', 'X is contaminated', 'X broke sterility', 'X touched the field', 'X needs to be re-sterilized'. " +
-      "`table` is free-text ('back', 'mayo', 'mayo stand'). `tool` is free-text matched against the tool labels on that table (e.g. 'mayo scissors', 'adson', 'needle driver', 'glenoid reamer'). " +
-      "NARRATION REQUIRED: in the SAME turn as the tool call, return a brief clinical confirmation — e.g. 'Mayo scissors marked contaminated.' / 'Adson forceps accounted for.' Keep under 7 words.",
+      "`tool` (REQUIRED) is free-text matched against the tool labels (e.g. 'mayo scissors', 'adson', 'needle driver', 'glenoid reamer', 'bone hook'). " +
+      "`table` (OPTIONAL) is free-text ('back', 'mayo', 'mayo stand') — omit it when the user doesn't name a table; the handler will find the tool across BOTH tables. " +
+      "BACK TABLE has: Metzenbaum scissors, Iris scissors, Mayo scissors, Needle driver (Mayo-Hegar), Mayo clamp, Halsted mosquito, Suture scissors, Knife handle #3, Adson forceps, DeBakey forceps, Bayonet forceps, Allis tissue clamp, Kelly clamp, Russian forceps, Operating scissors. " +
+      "MAYO STAND has: Glenoid reamer head, Starter awl, Humeral broaches, Trial glenosphere, Trial poly insert, Power handpiece, Burr / cleaning brush, Baseplate trials, Glenosphere impactor, Osteotomes, Curettes, Cobb elevator, Freer elevator, Bone hook, Hohmann retractor, Bone tenaculum, Army-Navy retractor, Senn rake retractor. " +
+      "NARRATION REQUIRED: in the SAME turn as the tool call, return a brief clinical confirmation — e.g. 'Needle driver accounted for.' / 'Mayo scissors marked contaminated.' Keep under 7 words.",
     input_schema: {
       type: "object" as const,
       properties: {
         table: {
           type: "string",
-          description: "Free-text table name — 'back', 'back table', 'mayo', 'mayo stand'.",
+          description:
+            "OPTIONAL free-text table name — 'back', 'back table', 'mayo', 'mayo stand'. Omit when the user doesn't name a table; the handler searches both tables.",
         },
         tool: {
           type: "string",
           description:
-            "Free-text tool name as the user said it (e.g. 'mayo scissors', 'adson forceps', 'needle driver', 'curettes').",
+            "REQUIRED free-text tool name as the user said it (e.g. 'mayo scissors', 'adson forceps', 'needle driver', 'curettes', 'bone hook').",
         },
         status: {
           type: "string",
@@ -1405,7 +1598,7 @@ const TOOLS: Anthropic.Tool[] = [
             "New status. 'accounted' = on the table / verified. 'missing' = not yet on the table. 'contaminated' = sterility breach (dropped, touched non-sterile field, etc).",
         },
       },
-      required: ["table", "tool", "status"],
+      required: ["tool", "status"],
     },
   },
   {
@@ -1726,6 +1919,10 @@ export const processVoiceCommand = createServerFn({ method: "POST" })
       "exit_ambient_recovery",
       "show_pacu_feed",
       "close_pacu_feed",
+      // show_focus_readout is intentionally NOT silent — Claude reads the
+      // chart data aloud while the modal displays it. close_focus_readout
+      // is silent (just dismisses the visual).
+      "close_focus_readout",
       "show_pref_card_checklist",
       "close_pref_card_checklist",
       // set_pref_card_tool_status is intentionally NOT silent — Claude

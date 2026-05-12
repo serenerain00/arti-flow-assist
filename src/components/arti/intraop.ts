@@ -96,6 +96,72 @@ export function initialVitals(): VitalSnapshot {
   return { ...SEED_VITALS, bp: { ...SEED_VITALS.bp } };
 }
 
+// ── Vital-threshold alerts (Arti reminders triggered by vitals) ──────────
+
+export type VitalId = "bp_sys" | "bp_dia" | "map" | "hr" | "spo2" | "etco2" | "tempC";
+export type VitalComparison = "below" | "above";
+
+export interface VitalThreshold {
+  id: string;
+  vital: VitalId;
+  comparison: VitalComparison;
+  value: number;
+  /** Human-readable label rendered in the manual panel + spoken alert. */
+  label: string;
+  createdAtIso: string;
+  /** ISO timestamp + observed value at the moment of first crossing. */
+  fired?: { atIso: string; observed: number };
+}
+
+export const VITAL_LABELS: Record<VitalId, { label: string; unit: string; spoken: string }> = {
+  bp_sys: { label: "Systolic BP", unit: "mmHg", spoken: "systolic blood pressure" },
+  bp_dia: { label: "Diastolic BP", unit: "mmHg", spoken: "diastolic blood pressure" },
+  map: { label: "MAP", unit: "mmHg", spoken: "mean arterial pressure" },
+  hr: { label: "Heart rate", unit: "bpm", spoken: "heart rate" },
+  spo2: { label: "SpO2", unit: "%", spoken: "S P O 2" },
+  etco2: { label: "EtCO2", unit: "mmHg", spoken: "end-tidal C O 2" },
+  tempC: { label: "Core temp", unit: "°C", spoken: "core temperature" },
+};
+
+/** Free-text → VitalId. Handles BP/blood pressure, MAP, SpO2, HR, EtCO2, temp. */
+export function resolveVitalId(query?: string): VitalId | undefined {
+  if (!query) return undefined;
+  const q = query.toLowerCase().trim();
+  if (/(systolic|sys)\b/.test(q)) return "bp_sys";
+  if (/(diastolic|dia)\b/.test(q)) return "bp_dia";
+  if (/\b(map|mean arterial)\b/.test(q)) return "map";
+  if (/\b(bp|blood pressure|pressure)\b/.test(q)) return "bp_sys";
+  if (/\b(hr|heart rate|pulse|bpm)\b/.test(q)) return "hr";
+  if (/\b(spo2|sp o2|sp o 2|oxygen|sat|saturation)\b/.test(q)) return "spo2";
+  if (/\b(etco2|et co2|end[- ]?tidal|co2)\b/.test(q)) return "etco2";
+  if (/\b(temp|temperature)\b/.test(q)) return "tempC";
+  return undefined;
+}
+
+/** Pull the current observed value for a vital out of a snapshot. */
+export function observeVital(v: VitalSnapshot, id: VitalId): number {
+  switch (id) {
+    case "bp_sys":
+      return v.bp.sys;
+    case "bp_dia":
+      return v.bp.dia;
+    case "map":
+      return v.map;
+    case "hr":
+      return v.hr;
+    case "spo2":
+      return v.spo2;
+    case "etco2":
+      return v.etco2;
+    case "tempC":
+      return v.tempC;
+  }
+}
+
+export function thresholdMatches(t: VitalThreshold, observed: number): boolean {
+  return t.comparison === "below" ? observed < t.value : observed > t.value;
+}
+
 // ── Activity stream ────────────────────────────────────────────────────
 
 export type ActivityKind = "med" | "imaging" | "implant" | "doc" | "room" | "ai";

@@ -13,11 +13,20 @@ import { createServerFn } from "@tanstack/react-start";
 function normalizeForTts(input: string): string {
   let s = input;
 
-  // ── Blood types: "A+" / "AB-" → "AB negative", etc. ──────────────────
-  // Match upper or lowercase, with optional space before +/-.
+  // ── Blood types: "A+" / "AB-" → "ay positive" / "ay bee negative", etc.
+  // ElevenLabs reads a lone "A" as the indefinite article ("uh"), so we
+  // expand each letter to its phonetic spelling. Match upper or lowercase,
+  // with optional space before +/-. Order matters — "AB" before single A/B.
+  const BLOOD_LETTERS: Record<string, string> = {
+    AB: "ay bee",
+    A: "ay",
+    B: "bee",
+    O: "oh",
+  };
   s = s.replace(
     /\b(AB|A|B|O)\s?([+-])/g,
-    (_, group: string, sign: string) => `${group} ${sign === "+" ? "positive" : "negative"}`,
+    (_, group: string, sign: string) =>
+      `${BLOOD_LETTERS[group] ?? group} ${sign === "+" ? "positive" : "negative"}`,
   );
 
   // ── Vitals + lab units. Word-boundary on the left, lookbehind for

@@ -6,9 +6,10 @@ import {
   Check,
   Circle,
   Activity,
-  Scissors,
   LogOut as Closure,
 } from "lucide-react";
+import { HandoffNotesPanel } from "./HandoffNotesPanel";
+import type { HandoffNotes, HandoffSection } from "./handoffNotes";
 
 export type NursePhase = "pre-incision" | "intra-op" | "closing";
 
@@ -106,9 +107,16 @@ export function findNurseChecklistItem(
 interface Props {
   checked: Set<string>;
   onToggle: (id: string) => void;
+  handoffNotes: HandoffNotes;
+  onSetHandoffNote: (section: HandoffSection, text: string) => void;
 }
 
-export function CirculatingNurseChecklist({ checked, onToggle }: Props) {
+export function CirculatingNurseChecklist({
+  checked,
+  onToggle,
+  handoffNotes,
+  onSetHandoffNote,
+}: Props) {
   // Each phase tracks its own expand/collapse so the nurse can keep the
   // current-phase section open while the others stay compact.
   const [expanded, setExpanded] = useState<Record<NursePhase, boolean>>({
@@ -222,6 +230,13 @@ export function CirculatingNurseChecklist({ checked, onToggle }: Props) {
                     );
                   })}
                 </ul>
+              )}
+              {/* Handoff notes — embedded in the Closing phase, only visible
+                  when the phase is expanded. */}
+              {phase.id === "closing" && isOpen && (
+                <div className="px-5 pb-4">
+                  <HandoffNotesPanel notes={handoffNotes} onSet={onSetHandoffNote} />
+                </div>
               )}
             </section>
           );

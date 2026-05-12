@@ -43,7 +43,7 @@ Browser mic (SpeechRecognition, continuous)
 
 **Silent by default.** Arti does NOT auto-greet on wake. It speaks only when a user prompt (voice or text) is submitted and Claude returns a response.
 
-**Idle auto-sleep.** 60-second idle timer starts on wake. Any user activity resets it. On expiry, Arti says *"I haven't heard from you in almost a minute, I'm going to take a nap."* then transitions to `phase = "sleep"`.
+**Idle auto-sleep.** 3-minute idle timer starts on wake. Any user activity resets it. On expiry, Arti says *"I haven't heard from you in a few minutes, I'm going to take a nap."* then transitions to `phase = "sleep"`.
 
 ---
 
@@ -74,7 +74,7 @@ Phase transitions happen via Claude tool calls (`navigate_home`, `navigate_cases
 - `dashboardContextRef` — live UI state snapshot getter, written by `AwakeDashboard`
 - `contextRef` — full Claude context getter, written by `ArtiWall` each render
 - `scrollActionsRef` — scroll control, written by `ArtiWall` each render
-- `idleResetRef` — resets the 60s idle timer, written by `ArtiWall` each render
+- `idleResetRef` — resets the 3-minute idle timer, written by `ArtiWall` each render
 
 ### Tool dispatch flow
 `ArtiVoiceCallbacks` (interface in `useArtiVoice.ts`) defines all voice→UI callbacks. `stableCallbacks` implements them by delegating through the refs above. `executeToolCall()` maps Claude tool names → callbacks.
@@ -196,7 +196,7 @@ ELEVENLABS_VOICE_ID=
 ## Key behaviors / invariants
 
 - **No auto-greet** — Arti never speaks unprompted. Only responds to user input.
-- **Idle timer** — 60s from last activity → spoken warning → `phase = "sleep"`.
+- **Idle timer** — 3 min from last activity → spoken warning → `phase = "sleep"`.
 - **Mic auto-restarts** — `SpeechRecognition.onend` restarts if `recognitionRef.current` is set. Only fatal errors (`not-allowed`, `audio-capture`) stop the mic.
 - **Critical alerts cannot be dismissed** — `AlertStack` tier === "Critical" returns `{ ok: false }`.
 - **`processingRef`** — prevents concurrent Claude calls. Overlapping transcripts are dropped.

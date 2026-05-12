@@ -30,6 +30,8 @@ import {
   OPENING_CHECKLIST_INITIAL_DONE,
 } from "./ScrubTechPanel";
 import { CirculatingNurseChecklist, NURSE_CHECKLIST } from "./CirculatingNurseChecklist";
+import type { HandoffNotes, HandoffSection } from "./handoffNotes";
+import { HANDOFF_SECTIONS } from "./handoffNotes";
 import { SurgeonPanel } from "./SurgeonPanel";
 import { ArrowLeft, LayoutGrid } from "lucide-react";
 import type { CaseItem } from "./cases";
@@ -57,6 +59,9 @@ interface Props {
   onOpenPrefCardChecklist?: (tableId?: "back-table" | "mayo-stand") => void;
   /** Open the VIP 3D planning reference. Route-level modal. */
   onOpenVipPlanning?: () => void;
+  /** Route-owned handoff notes + setter (passed into the nurse checklist). */
+  handoffNotes: HandoffNotes;
+  onSetHandoffNote: (section: HandoffSection, text: string) => void;
   /** Transition to the intraoperative ("case active") view. */
   onStartCase?: () => void;
   /** Time-out checklist state — lifted to the route so the start-case modal shares it. */
@@ -103,6 +108,8 @@ export function AwakeDashboard({
   onOpenLightbox,
   onOpenPrefCardChecklist,
   onOpenVipPlanning,
+  handoffNotes,
+  onSetHandoffNote,
   onStartCase,
   timeOutChecked,
   onToggleTimeOutItem,
@@ -280,6 +287,27 @@ export function AwakeDashboard({
             `READ-BACK GUIDANCE: when the user asks "what's left on the nurse checklist / circulating nurse / pre-incision / intra-op / closing checklist", read the matching phase's pending items aloud (one short sentence, list first 3–4 names). For "overall nurse checklist status", give a one-liner like "Pre-incision 7 of 10, intra-op 2 of 6, closing not started."`,
           ].join("\n");
         })(),
+        (() => {
+          // Handoff notes — section state + read-back/write guidance.
+          const filled = HANDOFF_SECTIONS.filter((s) => Boolean(handoffNotes[s.id]?.trim()));
+          const empty = HANDOFF_SECTIONS.filter((s) => !handoffNotes[s.id]?.trim());
+          const lines = HANDOFF_SECTIONS.map((s) => {
+            const v = handoffNotes[s.id]?.trim();
+            return `  ${s.id}: ${v ? `"${v}"` : "(empty)"}`;
+          });
+          return [
+            `── PACU handoff notes (${filled.length}/${HANDOFF_SECTIONS.length} filled) ──`,
+            ...lines,
+            empty.length
+              ? `Empty sections: ${empty.map((s) => s.id).join(", ")}`
+              : `All sections filled.`,
+            `READ-BACK / WRITE GUIDANCE:`,
+            `  "give me the handoff" / "read the PACU handoff" / "read the handoff notes" → read all 7 sections in order, "<label>: <text or 'not documented'>", one short sentence per filled section.`,
+            `  "read <section>" / "what did Laura note about <section>" / "what's the EBL?" / "any complications?" / "post-op instructions?" / "implants used?" / "follow-ups?" → read just that section (or "Not documented yet" if empty).`,
+            `  "EBL was 150" / "set complications to none" / "add to handoff that pain plan is interscalene block" / "note that we used the 38mm glenosphere" / "follow-up: PT in two weeks" → fire set_handoff_note(section, text). For numeric values like EBL, include units in the text (e.g. "150 mL"). For appends ("add to follow-ups"), pass the COMBINED text (existing + new); the live context above shows the current value.`,
+            `Valid sections (use these ids in the tool): ${HANDOFF_SECTIONS.map((s) => s.id).join(", ")}.`,
+          ].join("\n");
+        })(),
         patientDetailsOpen
           ? `Patient details modal: OPEN — "close" / "close modal" / "close patient info" → close_patient_details`
           : `Patient details modal: closed`,
@@ -334,6 +362,29 @@ export function AwakeDashboard({
               `AI-extracted video notes / insights (${clinical.patientVideo.aiInsights.length}):`,
               ...clinical.patientVideo.aiInsights.map((insight, i) => `  ${i + 1}. ${insight}`),
               `READ-BACK GUIDANCE: when the user asks "what are the video notes / patient notes / AI insights / patient video notes / video insights / what did the patient say" or any close variation, read these bullets aloud — one short sentence per insight, no preamble, no editorializing. List them in order. Cap at 5 bullets unless user asks for "all". This overrides the default "one short sentence" rule because the user is explicitly requesting a list.`,
+              ``,
+              `── VERB ROUTING — chart-data queries ──`,
+              `  "SHOW / DISPLAY / PULL UP / BRING UP <X>" → fire show_focus_readout(category) AND narrate the data in the same turn. The modal opens visually while you speak. Mapping:`,
+              `    'show allergies' / 'display patient allergies' / 'allergies full screen' / 'pull up allergies' → category:'allergies'`,
+              `    'show consents' / 'display consents' / 'pull up consents' → category:'consents'`,
+              `    'show anesthesia notes' / 'display anesthesia plan' / 'pull up anesthesia' → category:'anesthesia'`,
+              `    'open positioning instructions' / 'show positioning' / 'display position' → category:'positioning'`,
+              `    'display antibiotics status' / 'show antibiotics' / 'antibiotic redose' → category:'antibiotics'`,
+              `    'show implant log' / 'display implants' / 'pull up the implants' → category:'implants'`,
+              `    'display irrigation totals' / 'show fluid totals' / 'pull up fluid balance' / 'track fluid deficit' → category:'fluid'`,
+              ``,
+              `  "WHAT IS / WHAT'S / HOW MUCH / HAS X BEEN <verb>'d?" → answer directly from the chart data above, NO tool call. Examples:`,
+              `    "has consent been signed?" / "is consent on file?" → read the Consents line. If empty say "I don't see a consent yet."`,
+              `    "what are the allergies?" / "any allergies?" → read the Allergies line (severe first).`,
+              `    "what's the anesthesia plan?" / "anesthesia notes" → read Anesthesia plan + Airway. Flag difficult airway.`,
+              `    "what's the position?" → 'Beach chair, sixty to seventy degrees.' One sentence.`,
+              `    "what's the antibiotic?" / "when's the next dose?" → read the Antibiotic line.`,
+              `    "which implants are opened?" → name components with status opened/implanted. If none, 'No implants opened yet.'`,
+              `    "what's the fluid balance?" / "fluid deficit?" → read pump telemetry.`,
+              `    "what side are we on?" / "confirm laterality" → "${`${activeCase?.side ?? "Right"} ${activeCase?.procedureShort ?? "RSA"}.`}"`,
+              `    "what procedure are we doing?" → procedure + side, one short sentence.`,
+              ``,
+              `  Keep narrations under 18 words unless the user explicitly asks for "all" / "everything".`,
             ].join("\n")
           : "",
         `Actions available from this screen: toggle time-out items, adjust instrument counts, dismiss advisory alerts, open quad view, show preference card, show table layout images, open scrub tech table layout images, toggle opening checklist items, toggle machine check items, switch role view, open patient details, open patient video, open patient X-rays, open how-to video`,
@@ -346,6 +397,7 @@ export function AwakeDashboard({
     openingChecklist,
     machineCheck,
     nurseChecklistChecked,
+    handoffNotes,
     patientDetailsOpen,
     procedureOverviewOpen,
     patientVideoOpen,
@@ -758,6 +810,8 @@ export function AwakeDashboard({
                     <CirculatingNurseChecklist
                       checked={nurseChecklistChecked}
                       onToggle={toggleNurseChecklistItem}
+                      handoffNotes={handoffNotes}
+                      onSetHandoffNote={onSetHandoffNote}
                     />
                     <AlertStack dismissed={dismissedAlerts} onDismiss={dismissAlert} />
                     <TeamRoster />

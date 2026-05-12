@@ -34,6 +34,11 @@ import {
   OR_STATUS_GROUPS as HOME_OR_GROUPS,
   SEED_COMMS as HOME_COMMS,
   loadHomeTasks,
+  setHomeTaskDone,
+  loadHomeComms,
+  appendCommReply,
+  findLatestCommBySource,
+  type CommSource,
 } from "@/components/arti/dashboard/homeWidgets";
 import { PatientsScreen } from "@/components/arti/PatientsScreen";
 import { ConsolesScreen } from "@/components/arti/ConsolesScreen";
@@ -47,8 +52,24 @@ import {
   CONSOLES,
   findConsole,
   summarizeConsoles,
+  FLUID_PUMP_PRESETS,
+  resolveFluidPumpJoint,
   type ConsoleId,
+  type FluidPumpJoint,
 } from "@/components/arti/consoles";
+import {
+  VITAL_LABELS,
+  resolveVitalId,
+  type VitalId,
+  type VitalThreshold,
+} from "@/components/arti/intraop";
+import {
+  HANDOFF_SECTIONS,
+  getHandoffDefaults,
+  resolveHandoffSection,
+  type HandoffNotes,
+  type HandoffSection,
+} from "@/components/arti/handoffNotes";
 import {
   filterLibrary,
   findLatestVideo,
@@ -65,6 +86,7 @@ import { AmbientRecoveryScreen } from "@/components/arti/AmbientRecoveryScreen";
 import { PacuFeedModal } from "@/components/arti/PacuFeedModal";
 import { PACU_MESSAGES, formatRelative as formatPacuRelative } from "@/components/arti/pacu";
 import { PrefCardChecklistModal } from "@/components/arti/PrefCardChecklistModal";
+import { FocusReadoutModal, type ReadoutCategory } from "@/components/arti/FocusReadoutModal";
 import {
   PREF_CARD_TABLES,
   findTable,
@@ -317,6 +339,15 @@ function ArtiWallAuthenticated({ onLogout }: { onLogout: () => void }) {
       | "onClosePrefCardChecklist"
       | "onSetPrefCardToolStatus"
       | "onSetCleaningItemStatus"
+      | "onSetWrapupTaskStatus"
+      | "onCompleteTimeout"
+      | "onShowFocusReadout"
+      | "onCloseFocusReadout"
+      | "onSetFluidPumpJoint"
+      | "onSetVitalThresholdAlert"
+      | "onClearVitalThresholdAlerts"
+      | "onSetHandoffNote"
+      | "onSendCommsReply"
     >
   >({
     onWake: () => {},
@@ -412,6 +443,15 @@ function ArtiWallAuthenticated({ onLogout }: { onLogout: () => void }) {
     onClosePrefCardChecklist: () => notAvailable(),
     onSetPrefCardToolStatus: () => notAvailable(),
     onSetCleaningItemStatus: () => notAvailable(),
+    onSetWrapupTaskStatus: () => notAvailable(),
+    onCompleteTimeout: () => notAvailable(),
+    onShowFocusReadout: () => notAvailable(),
+    onCloseFocusReadout: () => notAvailable(),
+    onSetFluidPumpJoint: () => notAvailable(),
+    onSetVitalThresholdAlert: () => notAvailable(),
+    onClearVitalThresholdAlerts: () => notAvailable(),
+    onSetHandoffNote: () => notAvailable(),
+    onSendCommsReply: () => notAvailable(),
   });
 
   // Dashboard-only tool bridge. `null` when no dashboard is mounted.
@@ -652,6 +692,22 @@ function ArtiWallAuthenticated({ onLogout }: { onLogout: () => void }) {
         navCallbacksRef.current.onSetPrefCardToolStatus?.(table, tool, status) ?? notAvailable(),
       onSetCleaningItemStatus: (item, status) =>
         navCallbacksRef.current.onSetCleaningItemStatus?.(item, status) ?? notAvailable(),
+      onSetWrapupTaskStatus: (item, status) =>
+        navCallbacksRef.current.onSetWrapupTaskStatus?.(item, status) ?? notAvailable(),
+      onCompleteTimeout: () => navCallbacksRef.current.onCompleteTimeout?.() ?? notAvailable(),
+      onShowFocusReadout: (cat) =>
+        navCallbacksRef.current.onShowFocusReadout?.(cat) ?? notAvailable(),
+      onCloseFocusReadout: () => navCallbacksRef.current.onCloseFocusReadout?.() ?? notAvailable(),
+      onSetFluidPumpJoint: (joint) =>
+        navCallbacksRef.current.onSetFluidPumpJoint?.(joint) ?? notAvailable(),
+      onSetVitalThresholdAlert: (vital, cmp, value) =>
+        navCallbacksRef.current.onSetVitalThresholdAlert?.(vital, cmp, value) ?? notAvailable(),
+      onClearVitalThresholdAlerts: () =>
+        navCallbacksRef.current.onClearVitalThresholdAlerts?.() ?? notAvailable(),
+      onSetHandoffNote: (section, text) =>
+        navCallbacksRef.current.onSetHandoffNote?.(section, text) ?? notAvailable(),
+      onSendCommsReply: (source, text) =>
+        navCallbacksRef.current.onSendCommsReply?.(source, text) ?? notAvailable(),
 
       onUserTranscript: () => idleResetRef.current(),
       onAgentResponse: () => idleResetRef.current(),
@@ -815,6 +871,15 @@ interface ArtiWallProps {
       | "onClosePrefCardChecklist"
       | "onSetPrefCardToolStatus"
       | "onSetCleaningItemStatus"
+      | "onSetWrapupTaskStatus"
+      | "onCompleteTimeout"
+      | "onShowFocusReadout"
+      | "onCloseFocusReadout"
+      | "onSetFluidPumpJoint"
+      | "onSetVitalThresholdAlert"
+      | "onClearVitalThresholdAlerts"
+      | "onSetHandoffNote"
+      | "onSendCommsReply"
     >
   >;
   dashboardActionsRef: DashboardActionsRef;
@@ -1007,6 +1072,54 @@ function ArtiWall({
     null,
   );
 
+  // Fluid pump joint preset — overrides the pump console's Mode + pressure
+  // + flow display. Default matches the seeded shoulder-arthroplasty case.
+  // Voice tool set_fluid_pump_joint flips this from any screen.
+  const [fluidPumpJoint, setFluidPumpJoint] = useState<FluidPumpJoint>("shoulder");
+
+  // Handoff notes — 7 named fields the circulating nurse fills for PACU.
+  // Pre-fills procedure + implants from the active case. State persists
+  // across screens so voice can write from anywhere and read back later.
+  const [handoffNotes, setHandoffNotes] = useState<HandoffNotes>({});
+  const setHandoffNote = useCallback((section: HandoffSection, text: string) => {
+    setHandoffNotes((prev) => ({ ...prev, [section]: text }));
+  }, []);
+  // Re-seed defaults whenever activeCase changes. Only fills empty fields
+  // so the nurse's typed notes aren't clobbered by a re-render.
+  const lastSeededCaseRef = useRef<string | null>(null);
+
+  // Vital-threshold alerts. Arti can be asked to watch a vital (BP, SpO2,
+  // HR, etc.) and notify on first crossing. IntraopDashboard evaluates on
+  // every vitals tick and calls onVitalThresholdFired; route handles the
+  // spoken warning + toast and marks the threshold as fired so it doesn't
+  // re-trigger.
+  const [vitalThresholds, setVitalThresholds] = useState<VitalThreshold[]>([]);
+  const handleVitalThresholdFired = useCallback((id: string, observed: number) => {
+    setVitalThresholds((prev) => {
+      const idx = prev.findIndex((t) => t.id === id);
+      if (idx < 0 || prev[idx].fired) return prev;
+      const next = [...prev];
+      next[idx] = {
+        ...next[idx],
+        fired: { atIso: new Date().toISOString(), observed },
+      };
+      const t = next[idx];
+      const label = VITAL_LABELS[t.vital];
+      const text = `⚠ ${label.label} ${t.comparison} ${t.value}${label.unit} — observed ${observed}${label.unit}.`;
+      setFiredReminders((rs) => [
+        ...rs,
+        { id: `vital-${t.id}-${Date.now()}`, text, firedAt: Date.now() },
+      ]);
+      // Fire-and-forget — TTS is async and we don't await it inside a setState.
+      if (vForSleepRef.current) {
+        void vForSleepRef.current.speak(
+          `${label.spoken} ${t.comparison} ${t.value}. Observed ${observed}.`,
+        );
+      }
+      return next;
+    });
+  }, []);
+
   // VIP 3D Planning Reference modal — Spline-rendered implant planning view
   // surfaced over any screen. Voice-triggered for intraoperative reference.
   const [vipPlanningOpen, setVipPlanningOpen] = useState(false);
@@ -1022,6 +1135,12 @@ function ArtiWall({
   // live context so Arti can answer "what's missing on the back table"
   // from anywhere.
   const [prefCardChecklistOpen, setPrefCardChecklistOpen] = useState(false);
+
+  // Focus readout modal — big, visual readouts for "show me X" verbs
+  // (allergies, consents, anesthesia plan, positioning, antibiotics,
+  // implants, fluid). Voice fires the modal AND Claude reads the data
+  // aloud in the same turn.
+  const [focusReadoutCategory, setFocusReadoutCategory] = useState<ReadoutCategory | null>(null);
   const [prefCardInitialTable, setPrefCardInitialTable] = useState<PrefCardTableId>("back-table");
   const [prefCardToolState, setPrefCardToolState] = useState<PrefCardToolState>({});
   const setPrefCardStatus = useCallback(
@@ -1062,6 +1181,21 @@ function ArtiWall({
     }
     return new Set();
   });
+
+  // Seed handoff defaults when the active case first loads. Doesn't
+  // overwrite typed sections — only fills blanks.
+  useEffect(() => {
+    if (lastSeededCaseRef.current === activeCase.id) return;
+    lastSeededCaseRef.current = activeCase.id;
+    const defaults = getHandoffDefaults(activeCase);
+    setHandoffNotes((prev) => {
+      const next = { ...prev };
+      for (const [k, v] of Object.entries(defaults) as Array<[HandoffSection, string]>) {
+        if (!next[k]?.trim() && v) next[k] = v;
+      }
+      return next;
+    });
+  }, [activeCase]);
 
   useEffect(() => {
     if (typeof window === "undefined") return;
@@ -1407,16 +1541,16 @@ function ArtiWall({
       if (!v) return;
       // Don't nap while the user is waiting on a pending reminder — silence
       // here is expected (they're waiting for Arti to fire). Re-arm instead
-      // so we'll re-check in another minute; once the reminder fires the
+      // so we'll re-check after another window; once the reminder fires the
       // list will empty and normal nap behavior resumes.
       if (pendingRemindersRef.current.length > 0) {
         idleResetRef.current();
         return;
       }
-      await v.speak("I haven't heard from you in almost a minute, I'm going to take a nap.");
+      await v.speak("I haven't heard from you in a few minutes, I'm going to take a nap.");
       artiNapSetterRef.current(true);
       v.stopListening();
-    }, 60_000);
+    }, 3 * 60_000);
   }, [v, artiNapSetterRef, idleResetRef]);
 
   // Expose armIdleTimer through the ref so stableCallbacks can reset on user activity.
@@ -1604,7 +1738,7 @@ function ArtiWall({
         ? `VIP Planning Reference modal: OPEN — pre-op 3D implant plan with planned orientation values and implant checklist. "close" / "close planning" / "close model" → close_vip_planning (or close_topmost_modal).`
         : `VIP Planning Reference modal: closed`,
       pacuFeedOpen
-        ? `PACU Feed modal: OPEN — recent recovery-unit messages on screen. "close" / "close PACU" / "dismiss" → close_pacu_feed (or close_topmost_modal).`
+        ? `PACU Feed modal: OPEN — recent recovery-unit messages on screen. CLOSE OVERRIDE: any close-like phrase from the user MUST fire close_pacu_feed (or close_topmost_modal, equivalent here). Triggers include 'close', 'close PACU', 'close it', 'close that', 'dismiss', 'done', 'I'm done', 'got it', 'go back', 'exit', 'hide PACU'. Never refuse a close on this screen.`
         : `PACU Feed modal: closed`,
       (() => {
         // Pref-card table tallies — always exposed so Arti can answer
@@ -1786,6 +1920,33 @@ function ArtiWall({
       // actually on the consoles screen — otherwise lean one-liners to
       // keep the live context (and Claude turn-1 latency) tight.
       summarizeConsoles(focusedConsoleId, { verbose: phase === "consoles" }),
+      (() => {
+        if (vitalThresholds.length === 0) {
+          return (
+            `Vital threshold alerts: none active. ` +
+            `When the user says "alert me if <vital> drops below <n>" / "let me know if <vital> goes above <n>" / "watch the BP" / "tell me if SpO2 drops below 92" → fire set_vital_threshold_alert(vital, comparison, value). ` +
+            `Vitals: bp_sys, bp_dia, map, hr, spo2, etco2, tempC. Use comparison "below" for "drops below / goes under / falls below"; use "above" for "goes above / spikes over / climbs above". ` +
+            `Confirm tightly: "Watching systolic, alert below 90." Under 9 words.`
+          );
+        }
+        const lines = vitalThresholds.map((t) => {
+          const meta = VITAL_LABELS[t.vital];
+          return `  ${t.fired ? "✓ FIRED" : "•"} ${meta.label} ${t.comparison} ${t.value}${meta.unit}${t.fired ? ` — observed ${t.fired.observed}${meta.unit} at ${t.fired.atIso}` : ""}`;
+        });
+        return [
+          `── Vital threshold alerts (${vitalThresholds.length} total, ${vitalThresholds.filter((t) => !t.fired).length} active) ──`,
+          ...lines,
+          `When the user asks "what alerts am I watching?" / "any vital alerts?" → read the unfired ones. To clear all, fire clear_vital_threshold_alerts. To add another, fire set_vital_threshold_alert.`,
+        ].join("\n");
+      })(),
+      (() => {
+        const preset = FLUID_PUMP_PRESETS[fluidPumpJoint];
+        return (
+          `Fluid pump joint preset: ${fluidPumpJoint.toUpperCase()} — ${preset.modeLabel} · ${preset.pressureMmHg} mmHg · ${preset.flowMlMin} mL/min. ` +
+          `When the user asks "is the pump on shoulder?" / "what joint is the pump set to?" / "confirm pump preset" — answer one short sentence from this line. ` +
+          `When the user says "set the pump to <joint>" / "switch pump to <joint>" / "make sure the pump is on <joint>" / "confirm pump is set to <joint>" / "put the pump on <joint>" — fire set_fluid_pump_joint(joint:"<joint>") and narrate confirmation ("Pump set to shoulder, 60 over 200.") under 9 words. Supported joints: shoulder, knee, hip, ankle, elbow, wrist.`
+        );
+      })(),
       // Library filter state + the actual filtered result list. The result
       // list is the key piece — when the user says "open it" / "play that
       // one" / "open the video", Claude reads this block, sees there's a
@@ -1899,7 +2060,9 @@ function ArtiWall({
           },
           {} as Record<string, number>,
         );
-        const unreadComms = HOME_COMMS.filter((c) => c.unread).length;
+        // Live comms — overlays unread state + threads from localStorage.
+        const liveComms = loadHomeComms();
+        const unreadComms = liveComms.filter((c) => c.unread).length;
         const fmtItems = (items: Array<{ label: string; status: string; detail?: string }>) =>
           items
             .map((it) => `${it.label}: ${it.status}${it.detail ? ` (${it.detail})` : ""}`)
@@ -1919,10 +2082,15 @@ function ArtiWall({
                 .join("\n")}`
             : `    LEFT: (all clear)`,
           ``,
-          `  Communications (${HOME_COMMS.length} total, ${unreadComms} unread):`,
-          ...HOME_COMMS.map(
-            (c) => `    ${c.unread ? "[UNREAD] " : ""}${c.source} ${c.time}: "${c.message}"`,
-          ),
+          `  Communications (${liveComms.length} total, ${unreadComms} unread):`,
+          ...liveComms.flatMap((c) => {
+            const head = `    ${c.unread ? "[UNREAD] " : ""}${c.source} ${c.time}: "${c.message}"`;
+            const replies = (c.thread ?? []).map(
+              (r) =>
+                `        ↳ ${r.from === "outgoing" ? "Laura → " : ""}${r.senderLabel}: "${r.text}"`,
+            );
+            return [head, ...replies];
+          }),
           ``,
           `  Supply status (${supplyCounts.ready ?? 0} ready · ${
             supplyCounts.pending ?? 0
@@ -1940,6 +2108,16 @@ function ArtiWall({
           `    "what's the OR readiness?" / "is the room ready?" / "what's still pending?" → read OR readiness.`,
           `    "what supply is missing?" / "any backorders?" / "is the implant here?" → read Supply status.`,
           `    Multi-sentence narration is OK on the home screen — the user is asking for a readout, not a confirmation.`,
+          ``,
+          `  WRAP-UP CHECKLIST UPDATES — fire set_wrapup_task_status when the user wants to mark an item:`,
+          `    "check off <X>" / "mark off <X>" / "mark <X> done" / "update <X>" / "<X> is done" / "I did <X>" / "<X> complete" / "<X> taken care of" → set_wrapup_task_status(item:"<X>", status:"done").`,
+          `    "uncheck <X>" / "<X> isn't done" / "undo <X>" / "<X> still pending" → set_wrapup_task_status(item:"<X>", status:"pending").`,
+          `    The 'item' arg is FREE TEXT — pass whatever the user said (e.g. 'consent', 'block', 'raytec', 'family update', 'time-out', 'count'). The handler fuzzy-matches it against the labels above. Narrate a tight confirmation like "Consent checked off." / "Block marked done." Keep under 6 words.`,
+          ``,
+          `  COMMS REPLIES — fire send_comms_reply when Laura wants to message a source back:`,
+          `    "message PACU that we're 20 minutes out" / "reply to PACU: bed 3 confirmed" / "tell family she's stable" / "send to anesthesia — running ahead of schedule" / "let charge know we're behind 15 minutes" / "reply to sub-sterile: appreciate it" → send_comms_reply(source:"<source>", text:"<message>").`,
+          `    source must match one of: PACU, Family, Anesthesia, Sub-sterile, Charge RN (case-insensitive aliases ok: "recovery"→PACU, "waiting room"→Family, "gas"→Anesthesia, "sterile processing"→Sub-sterile, "charge nurse"→Charge RN).`,
+          `    Narrate a tight confirmation like "Sent to PACU." / "Replied to family." Keep under 5 words.`,
         ].join("\n");
       })(),
       // Smart Settings screen — lists every device + property so voice
@@ -2773,21 +2951,32 @@ function ArtiWall({
       toolQuery: string,
       status: ToolStatus,
     ): ArtiToolResult => {
-      const tableId = resolveTableId(tableQuery);
-      if (!tableId) return { ok: false, reason: "unknown table — say 'back table' or 'Mayo'" };
-      const table = findTable(tableId);
-      if (!table) return { ok: false, reason: "table not found" };
-      const tool = findTool(table, toolQuery);
-      if (!tool) {
-        return {
-          ok: false,
-          reason: `no tool matched "${toolQuery}" on the ${table.label.toLowerCase()}`,
-        };
+      // If a table was named, scope the search to it. Otherwise scan both
+      // — staff frequently say just "I have a needle driver" without
+      // naming the table, and we'd rather match across tables than refuse.
+      const namedTableId = resolveTableId(tableQuery);
+      const tablesToSearch = namedTableId
+        ? [findTable(namedTableId)].filter((t): t is NonNullable<typeof t> => Boolean(t))
+        : PREF_CARD_TABLES;
+      let hit: {
+        table: (typeof PREF_CARD_TABLES)[number];
+        tool: ReturnType<typeof findTool>;
+      } | null = null;
+      for (const t of tablesToSearch) {
+        const tool = findTool(t, toolQuery);
+        if (tool) {
+          hit = { table: t, tool };
+          break;
+        }
       }
-      setPrefCardStatus(tableId, tool.id, status);
+      if (!hit || !hit.tool) {
+        const scope = namedTableId ? `the ${tablesToSearch[0]?.label.toLowerCase()}` : "any table";
+        return { ok: false, reason: `no tool matched "${toolQuery}" on ${scope}` };
+      }
+      setPrefCardStatus(hit.table.id, hit.tool.id, status);
       return {
         ok: true,
-        state: { table: table.label, tool: tool.label, status },
+        state: { table: hit.table.label, tool: hit.tool.label, status },
       };
     },
     onSetCleaningItemStatus: (itemQuery: string, status: "done" | "pending"): ArtiToolResult => {
@@ -2800,6 +2989,133 @@ function ArtiWall({
         return next;
       });
       return { ok: true, state: { item: item.label, status } };
+    },
+    onSetWrapupTaskStatus: (itemQuery: string, status: "done" | "pending"): ArtiToolResult => {
+      const updated = setHomeTaskDone(itemQuery, status === "done");
+      if (!updated) {
+        return { ok: false, reason: `no wrap-up task matched "${itemQuery}"` };
+      }
+      return { ok: true, state: { item: updated.label, status } };
+    },
+    onCompleteTimeout: (): ArtiToolResult => {
+      setTimeOutChecked(new Set(["patient", "site", "procedure", "allergies"]));
+      return { ok: true };
+    },
+    onShowFocusReadout: (category: string): ArtiToolResult => {
+      const valid: ReadoutCategory[] = [
+        "allergies",
+        "consents",
+        "anesthesia",
+        "positioning",
+        "antibiotics",
+        "implants",
+        "fluid",
+      ];
+      const c = (valid as string[]).includes(category) ? (category as ReadoutCategory) : null;
+      if (!c) return { ok: false, reason: `unknown readout category "${category}"` };
+      setFocusReadoutCategory(c);
+      return { ok: true, state: { category: c } };
+    },
+    onCloseFocusReadout: (): ArtiToolResult => {
+      if (!focusReadoutCategory) return { ok: false, reason: "no focus readout open" };
+      setFocusReadoutCategory(null);
+      return { ok: true };
+    },
+    onSetVitalThresholdAlert: (
+      vitalQuery: string,
+      comparison: "below" | "above",
+      value: number,
+    ): ArtiToolResult => {
+      const vital = resolveVitalId(vitalQuery);
+      if (!vital) return { ok: false, reason: `unknown vital "${vitalQuery}"` };
+      if (!Number.isFinite(value) || value <= 0) {
+        return { ok: false, reason: "threshold value must be a positive number" };
+      }
+      const label = VITAL_LABELS[vital];
+      const id = `vt-${Date.now()}-${Math.random().toString(36).slice(2, 6)}`;
+      setVitalThresholds((prev) => [
+        ...prev,
+        {
+          id,
+          vital,
+          comparison,
+          value,
+          label: `${label.label} ${comparison} ${value}${label.unit}`,
+          createdAtIso: new Date().toISOString(),
+        },
+      ]);
+      return {
+        ok: true,
+        state: { vital: label.label, comparison, value, unit: label.unit },
+      };
+    },
+    onClearVitalThresholdAlerts: (): ArtiToolResult => {
+      const count = vitalThresholds.length;
+      setVitalThresholds([]);
+      return { ok: true, state: { cleared: count } };
+    },
+    onSetHandoffNote: (sectionQuery: string, text: string): ArtiToolResult => {
+      const section = resolveHandoffSection(sectionQuery);
+      if (!section) return { ok: false, reason: `unknown handoff section "${sectionQuery}"` };
+      const trimmed = text.trim();
+      setHandoffNote(section, trimmed);
+      const meta = HANDOFF_SECTIONS.find((s) => s.id === section);
+      return {
+        ok: true,
+        state: { section, label: meta?.label, text: trimmed },
+      };
+    },
+    onSendCommsReply: (sourceQuery: string, text: string): ArtiToolResult => {
+      const trimmed = text.trim();
+      if (!trimmed) return { ok: false, reason: "reply text was empty" };
+      const validSources: CommSource[] = [
+        "PACU",
+        "Family",
+        "Anesthesia",
+        "Sub-sterile",
+        "Charge RN",
+      ];
+      const normalized = sourceQuery.toLowerCase();
+      const source =
+        validSources.find((s) => s.toLowerCase() === normalized) ??
+        validSources.find((s) => normalized.includes(s.toLowerCase())) ??
+        // Allow "sterile processing", "scrub core" etc as Sub-sterile aliases.
+        (/(sub.?sterile|sterile proc|sterile core)/.test(normalized) ? "Sub-sterile" : undefined) ??
+        (/(charge|charge nurse|nurse coord)/.test(normalized) ? "Charge RN" : undefined) ??
+        (/(anesth|anaesth|gas)/.test(normalized) ? "Anesthesia" : undefined) ??
+        (/(family|waiting room|next of kin)/.test(normalized) ? "Family" : undefined) ??
+        (/(pacu|recovery)/.test(normalized) ? "PACU" : undefined);
+      if (!source) return { ok: false, reason: `unknown comms source "${sourceQuery}"` };
+      const target = findLatestCommBySource(source);
+      if (!target) return { ok: false, reason: `no recent message from ${source} to reply to` };
+      appendCommReply(target.id, {
+        id: `reply-${Date.now()}-${Math.random().toString(36).slice(2, 6)}`,
+        from: "outgoing",
+        senderLabel: "Laura, RN",
+        text: trimmed,
+        timeIso: new Date().toISOString(),
+      });
+      return { ok: true, state: { source, text: trimmed } };
+    },
+    onSetFluidPumpJoint: (jointQuery: string): ArtiToolResult => {
+      const joint = resolveFluidPumpJoint(jointQuery);
+      if (!joint) {
+        return {
+          ok: false,
+          reason: `unknown joint "${jointQuery}" — try shoulder, knee, hip, ankle, elbow, or wrist`,
+        };
+      }
+      const preset = FLUID_PUMP_PRESETS[joint];
+      setFluidPumpJoint(joint);
+      return {
+        ok: true,
+        state: {
+          joint,
+          modeLabel: preset.modeLabel,
+          pressure: `${preset.pressureMmHg} mmHg`,
+          flow: `${preset.flowMlMin} mL/min`,
+        },
+      };
     },
     onShowSchedule: () => {
       closeOverlays();
@@ -2969,6 +3285,10 @@ function ArtiWall({
       }
       if (prefCardChecklistOpen) {
         setPrefCardChecklistOpen(false);
+        return;
+      }
+      if (focusReadoutCategory) {
+        setFocusReadoutCategory(null);
         return;
       }
       if (resetAllConfirmOpen) {
@@ -3332,6 +3652,8 @@ function ArtiWall({
           setPrefCardChecklistOpen(true);
         }}
         onOpenVipPlanning={() => setVipPlanningOpen(true)}
+        handoffNotes={handoffNotes}
+        onSetHandoffNote={setHandoffNote}
         onStartCase={() => {
           closeOverlays();
           setTimeOutModalOpen(true);
@@ -3376,6 +3698,24 @@ function ArtiWall({
         onSidebarNavigate={handleSidebarNavigate}
         onShowMultiView={() => setMultiView(true)}
         actionsRef={intraopActionsRef}
+        vitalThresholds={vitalThresholds}
+        onVitalThresholdFired={handleVitalThresholdFired}
+        onRemoveVitalThreshold={(id) =>
+          setVitalThresholds((prev) => prev.filter((t) => t.id !== id))
+        }
+        onAddVitalThreshold={(vital, comparison, value) =>
+          setVitalThresholds((prev) => [
+            ...prev,
+            {
+              id: `vt-${Date.now()}-${Math.random().toString(36).slice(2, 6)}`,
+              vital,
+              comparison,
+              value,
+              label: `${VITAL_LABELS[vital].label} ${comparison} ${value}${VITAL_LABELS[vital].unit}`,
+              createdAtIso: new Date().toISOString(),
+            },
+          ])
+        }
       />
     );
   } else if (phase === "ambient") {
@@ -3481,6 +3821,8 @@ function ArtiWall({
         focusedId={focusedConsoleId}
         onFocusChange={setFocusedConsoleId}
         onSimulateFailure={(consoleId) => setEquipmentFailureConsoleId(consoleId)}
+        fluidPumpJoint={fluidPumpJoint}
+        onSetFluidPumpJoint={setFluidPumpJoint}
       />
     );
   } else if (phase === "journey") {
@@ -3730,6 +4072,12 @@ function ArtiWall({
         initialTableId={prefCardInitialTable}
         state={prefCardToolState}
         onSetStatus={setPrefCardStatus}
+      />
+      <FocusReadoutModal
+        open={focusReadoutCategory !== null}
+        onClose={() => setFocusReadoutCategory(null)}
+        category={focusReadoutCategory}
+        activeCase={activeCase}
       />
       <TimeOutModal
         open={timeOutModalOpen}
