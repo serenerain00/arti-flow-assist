@@ -20,6 +20,9 @@ import { AdminSettingsScreen } from "@/components/arti/AdminSettingsScreen";
 import { SmartSettingsScreen } from "@/components/arti/smart/SmartSettingsScreen";
 import {
   DEVICES as SMART_DEVICES,
+  CATEGORY_META as SMART_CATEGORY_META,
+  CATEGORY_ORDER as SMART_CATEGORY_ORDER,
+  type DeviceCategory as SmartDeviceCategory,
   type PropertySpec as SmartPropertySpec,
   type SmartDevice,
 } from "@/components/arti/smart/devices";
@@ -72,9 +75,11 @@ import {
 } from "@/components/arti/handoffNotes";
 import {
   NURSE_CHECKLIST,
+  NURSE_CHECKLIST_DEFAULT_EXPANDED,
   findNurseChecklistItem,
   type NursePhase,
 } from "@/components/arti/CirculatingNurseChecklist";
+import { CirculatingNurseChecklistModal } from "@/components/arti/CirculatingNurseChecklistModal";
 import {
   filterLibrary,
   findLatestVideo,
@@ -164,6 +169,8 @@ export interface DashboardActions {
   dismissAlert: (index: number) => ArtiToolResult;
   openQuadView: () => ArtiToolResult;
   focusQuadPanel: (panel: QuadPanelId) => ArtiToolResult;
+  /** Drop the focused-single state but keep the quad grid open. */
+  unfocusQuadPanel: () => ArtiToolResult;
   closeQuadView: () => ArtiToolResult;
   showPreferenceCard: () => ArtiToolResult;
   switchRole: (role: ActiveRole) => ArtiToolResult;
@@ -213,6 +220,8 @@ export interface SmartSettingsActions {
   applyPropertyChange: (deviceId: string, key: string, value: boolean | number | string) => void;
   /** Reload every device's state from storage — called after bulk reset. */
   reloadAllStates: () => void;
+  /** Expand a specific category accordion (lighting / displays / etc). */
+  selectCategory: (category: string) => void;
 }
 
 export type SmartSettingsActionsRef = React.MutableRefObject<SmartSettingsActions | null>;
@@ -267,6 +276,7 @@ function ArtiWallAuthenticated({ onLogout }: { onLogout: () => void }) {
       | "onShowSmartSettings"
       | "onSetHomeDashboardMode"
       | "onSelectSmartDevice"
+      | "onSelectSmartCategory"
       | "onSetSmartProperty"
       | "onToggleSmartDevice"
       | "onResetAllSmartDevices"
@@ -356,6 +366,8 @@ function ArtiWallAuthenticated({ onLogout }: { onLogout: () => void }) {
       | "onSendCommsReply"
       | "onToggleNurseChecklistItem"
       | "onCompleteNurseChecklistPhase"
+      | "onOpenNurseChecklist"
+      | "onCloseNurseChecklist"
     >
   >({
     onWake: () => {},
@@ -374,6 +386,7 @@ function ArtiWallAuthenticated({ onLogout }: { onLogout: () => void }) {
     onShowSmartSettings: () => {},
     onSetHomeDashboardMode: () => notAvailable(),
     onSelectSmartDevice: () => notAvailable(),
+    onSelectSmartCategory: () => notAvailable(),
     onSetSmartProperty: () => notAvailable(),
     onToggleSmartDevice: () => notAvailable(),
     onResetAllSmartDevices: () => notAvailable(),
@@ -463,6 +476,8 @@ function ArtiWallAuthenticated({ onLogout }: { onLogout: () => void }) {
     onSendCommsReply: () => notAvailable(),
     onToggleNurseChecklistItem: () => notAvailable(),
     onCompleteNurseChecklistPhase: () => notAvailable(),
+    onOpenNurseChecklist: () => notAvailable(),
+    onCloseNurseChecklist: () => notAvailable(),
   });
 
   // Dashboard-only tool bridge. `null` when no dashboard is mounted.
@@ -531,6 +546,8 @@ function ArtiWallAuthenticated({ onLogout }: { onLogout: () => void }) {
         navCallbacksRef.current.onSetHomeDashboardMode?.(m) ?? notAvailable(),
       onSelectSmartDevice: (d) =>
         navCallbacksRef.current.onSelectSmartDevice?.(d) ?? notAvailable(),
+      onSelectSmartCategory: (c) =>
+        navCallbacksRef.current.onSelectSmartCategory?.(c) ?? notAvailable(),
       onSetSmartProperty: (d, p, v) =>
         navCallbacksRef.current.onSetSmartProperty?.(d, p, v) ?? notAvailable(),
       onToggleSmartDevice: (d, on, p) =>
@@ -590,6 +607,7 @@ function ArtiWallAuthenticated({ onLogout }: { onLogout: () => void }) {
         dashboardActionsRef.current?.setInstrumentCount(item, value) ?? notAvailable(),
       onDismissAlert: (index) => dashboardActionsRef.current?.dismissAlert(index) ?? notAvailable(),
       onOpenQuadView: () => dashboardActionsRef.current?.openQuadView() ?? notAvailable(),
+      onUnfocusQuadPanel: () => dashboardActionsRef.current?.unfocusQuadPanel() ?? notAvailable(),
       onFocusQuadPanel: (panel) =>
         dashboardActionsRef.current?.focusQuadPanel(panel) ?? notAvailable(),
       onCloseQuadView: () => dashboardActionsRef.current?.closeQuadView() ?? notAvailable(),
@@ -725,6 +743,10 @@ function ArtiWallAuthenticated({ onLogout }: { onLogout: () => void }) {
         navCallbacksRef.current.onToggleNurseChecklistItem?.(item, status) ?? notAvailable(),
       onCompleteNurseChecklistPhase: (phase) =>
         navCallbacksRef.current.onCompleteNurseChecklistPhase?.(phase) ?? notAvailable(),
+      onOpenNurseChecklist: () =>
+        navCallbacksRef.current.onOpenNurseChecklist?.() ?? notAvailable(),
+      onCloseNurseChecklist: () =>
+        navCallbacksRef.current.onCloseNurseChecklist?.() ?? notAvailable(),
 
       onUserTranscript: () => idleResetRef.current(),
       onAgentResponse: () => idleResetRef.current(),
@@ -811,6 +833,7 @@ interface ArtiWallProps {
       | "onShowSmartSettings"
       | "onSetHomeDashboardMode"
       | "onSelectSmartDevice"
+      | "onSelectSmartCategory"
       | "onSetSmartProperty"
       | "onToggleSmartDevice"
       | "onResetAllSmartDevices"
@@ -900,6 +923,8 @@ interface ArtiWallProps {
       | "onSendCommsReply"
       | "onToggleNurseChecklistItem"
       | "onCompleteNurseChecklistPhase"
+      | "onOpenNurseChecklist"
+      | "onCloseNurseChecklist"
     >
   >;
   dashboardActionsRef: DashboardActionsRef;
@@ -1101,6 +1126,15 @@ function ArtiWall({
   // closing). Lifted from AwakeDashboard so voice can toggle individual
   // items or bulk-complete a phase from any screen.
   const [nurseChecklistChecked, setNurseChecklistChecked] = useState<Set<string>>(() => new Set());
+  // Dedicated modal for the nurse checklist — keeps voice toggles
+  // unambiguous (when this modal is open, "check off X" routes to the
+  // nurse list, not the 4-item time-out).
+  const [nurseChecklistModalOpen, setNurseChecklistModalOpen] = useState(false);
+  // Accordion expand state lifted so the inline + modal views stay perfectly
+  // synced — expanding "Closing" in one updates the other.
+  const [nurseChecklistExpanded, setNurseChecklistExpanded] = useState<Record<NursePhase, boolean>>(
+    NURSE_CHECKLIST_DEFAULT_EXPANDED,
+  );
   const toggleNurseChecklistItem = useCallback((id: string) => {
     setNurseChecklistChecked((prev) => {
       const next = new Set(prev);
@@ -1374,6 +1408,19 @@ function ArtiWall({
       const hay = (d.name + " " + d.id + " " + (d.group ?? "")).toLowerCase();
       return tokens.every((t) => hay.includes(t));
     });
+  }, []);
+
+  /** Resolve a spoken phrase to a smart-settings category panel. */
+  const resolveSmartCategory = useCallback((phrase: string): SmartDeviceCategory | undefined => {
+    const q = phrase.toLowerCase().trim();
+    if (!q) return undefined;
+    if (/(light|lamp|surgical light|boom|task light)/.test(q)) return "lighting";
+    if (/(display|monitor|screen|wall)/.test(q)) return "displays";
+    if (/(environment|temp|temperature|humid|airflow|hvac)/.test(q)) return "environment";
+    if (/(audio|sound|music|intercom|mic|microphone)/.test(q)) return "audio";
+    if (/(door|access|lock|live case|sterile cockpit)/.test(q)) return "doors";
+    // Exact id match as a fallback.
+    return (SMART_CATEGORY_ORDER as string[]).includes(q) ? (q as SmartDeviceCategory) : undefined;
   }, []);
 
   /** Resolve a spoken property phrase to one of the device's spec entries. */
@@ -1959,6 +2006,9 @@ function ArtiWall({
       // actually on the consoles screen — otherwise lean one-liners to
       // keep the live context (and Claude turn-1 latency) tight.
       summarizeConsoles(focusedConsoleId, { verbose: phase === "consoles" }),
+      nurseChecklistModalOpen
+        ? `Circulating-nurse Checklist modal: OPEN — voice toggles ("check off X" / "mark X done") MUST route to toggle_nurse_checklist_item, NOT toggle_timeout_item, even when X overlaps with the 4 time-out items (patient / site / procedure / allergies). The nurse list has the broader vocabulary (25 items). "close" / "close nurse checklist" / "dismiss" → close_nurse_checklist (or close_topmost_modal).`
+        : `Circulating-nurse Checklist modal: closed`,
       (() => {
         if (vitalThresholds.length === 0) {
           return (
@@ -3171,6 +3221,15 @@ function ArtiWall({
       });
       return { ok: true, state: { phase: phase.label, count: phase.items.length } };
     },
+    onOpenNurseChecklist: (): ArtiToolResult => {
+      setNurseChecklistModalOpen(true);
+      return { ok: true };
+    },
+    onCloseNurseChecklist: (): ArtiToolResult => {
+      if (!nurseChecklistModalOpen) return { ok: false, reason: "nurse checklist not open" };
+      setNurseChecklistModalOpen(false);
+      return { ok: true };
+    },
     onSendCommsReply: (sourceQuery: string, text: string): ArtiToolResult => {
       const trimmed = text.trim();
       if (!trimmed) return { ok: false, reason: "reply text was empty" };
@@ -3301,6 +3360,33 @@ function ArtiWall({
       }
       return { ok: true, state: { device: device.id, name: device.name } };
     },
+    onSelectSmartCategory: (categoryPhrase: string): ArtiToolResult => {
+      const category = resolveSmartCategory(categoryPhrase);
+      if (!category) {
+        return {
+          ok: false,
+          reason: `unknown category "${categoryPhrase}" — try lighting, displays, environment, audio, or access`,
+        };
+      }
+      // Pair the category expansion with selecting its first device so the
+      // right pane updates too. Keeps voice + click parity (clicking a
+      // category header in the UI focuses the first device underneath).
+      const first = SMART_DEVICES.find((d) => d.category === category);
+      if (smartSettingsActionsRef.current) {
+        smartSettingsActionsRef.current.selectCategory(category);
+        if (first) smartSettingsActionsRef.current.selectDevice(first.id);
+      } else {
+        // Not mounted yet — stash the first-device id so the screen lands
+        // on the right category accordion when it consumes it.
+        if (first) setPendingSmartDeviceId(first.id);
+        closeOverlays();
+        setPhase("smart-settings");
+      }
+      return {
+        ok: true,
+        state: { category, label: SMART_CATEGORY_META[category].label },
+      };
+    },
     onSetSmartProperty: (
       devicePhrase: string | undefined,
       propertyPhrase: string,
@@ -3395,6 +3481,10 @@ function ArtiWall({
       }
       if (focusReadoutCategory) {
         setFocusReadoutCategory(null);
+        return;
+      }
+      if (nurseChecklistModalOpen) {
+        setNurseChecklistModalOpen(false);
         return;
       }
       if (resetAllConfirmOpen) {
@@ -3762,6 +3852,9 @@ function ArtiWall({
         onSetHandoffNote={setHandoffNote}
         nurseChecklistChecked={nurseChecklistChecked}
         onToggleNurseChecklistItem={toggleNurseChecklistItem}
+        onOpenNurseChecklist={() => setNurseChecklistModalOpen(true)}
+        nurseChecklistExpanded={nurseChecklistExpanded}
+        onNurseChecklistExpandedChange={setNurseChecklistExpanded}
         onStartCase={() => {
           closeOverlays();
           setTimeOutModalOpen(true);
@@ -4186,6 +4279,16 @@ function ArtiWall({
         onClose={() => setFocusReadoutCategory(null)}
         category={focusReadoutCategory}
         activeCase={activeCase}
+      />
+      <CirculatingNurseChecklistModal
+        open={nurseChecklistModalOpen}
+        onClose={() => setNurseChecklistModalOpen(false)}
+        checked={nurseChecklistChecked}
+        onToggle={toggleNurseChecklistItem}
+        handoffNotes={handoffNotes}
+        onSetHandoffNote={setHandoffNote}
+        expanded={nurseChecklistExpanded}
+        onExpandedChange={setNurseChecklistExpanded}
       />
       <TimeOutModal
         open={timeOutModalOpen}

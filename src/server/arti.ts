@@ -199,6 +199,27 @@ const TOOLS: Anthropic.Tool[] = [
     },
   },
   {
+    name: "select_smart_category",
+    description:
+      "Expand one of the smart-settings CATEGORY panels (Lighting, Displays, Environment, Audio, Access). " +
+      "Auto-navigates to Smart Settings if not already there. " +
+      "Trigger phrases: 'select displays', 'open displays', 'show me the displays panel', 'expand lighting', 'open the lighting controls', 'environment panel', 'audio settings', 'open access / doors', 'show me the door controls'. " +
+      "Aliases: 'monitors' / 'screens' / 'wall display' → displays; 'lights' / 'lamps' / 'boom' / 'task light' → lighting; 'temp' / 'humidity' / 'airflow' / 'HVAC' → environment; 'sound' / 'music' / 'intercom' / 'mic' → audio; 'doors' / 'lock' / 'live case' → doors. " +
+      "DISTINCT from select_smart_device: select_smart_device focuses ONE device (e.g. 'Boom 1'); select_smart_category opens the WHOLE accordion panel and focuses its first device. " +
+      "NARRATION REQUIRED: confirm tightly — 'Displays panel open.' / 'Lighting expanded.' Under 5 words.",
+    input_schema: {
+      type: "object" as const,
+      properties: {
+        category: {
+          type: "string",
+          enum: ["lighting", "displays", "environment", "audio", "doors"],
+          description: "Which category panel to expand.",
+        },
+      },
+      required: ["category"],
+    },
+  },
+  {
     name: "set_smart_property",
     description:
       "Set a numeric or string property on a smart device. Works whether the user is on Smart Settings or not — the route writes to localStorage and the Mock OR widget updates live if visible. " +
@@ -1011,6 +1032,21 @@ const TOOLS: Anthropic.Tool[] = [
     },
   },
   {
+    name: "open_nurse_checklist",
+    description:
+      "Open the Circulating-Nurse Checklist in its dedicated modal. Use when the user wants a focused view of the 25-item phase-banded checklist (pre-incision / intra-op / closing) AND when they want subsequent toggle commands to unambiguously target the nurse list (not the 4-item time-out). " +
+      "Trigger phrases: 'open the nurse checklist', 'show me the circulating nurse checklist', 'open the circulator checklist', 'pull up the nurse checklist', 'show my checklist in a modal', 'open the full nurse list', 'expand the nurse checklist', 'I want to focus on the nurse checklist'. " +
+      "While this modal is OPEN, voice toggles ('check off X' / 'mark X done') route to toggle_nurse_checklist_item even when X overlaps the time-out items. " +
+      "NARRATION REQUIRED: confirm tightly — 'Nurse checklist open.' Under 4 words.",
+    input_schema: { type: "object" as const, properties: {}, required: [] },
+  },
+  {
+    name: "close_nurse_checklist",
+    description:
+      "Close the dedicated Circulating-Nurse Checklist modal. Trigger phrases (only when the modal is OPEN): 'close', 'close the nurse checklist', 'dismiss', 'done', 'go back', 'collapse the nurse checklist'. Prefer close_topmost_modal for a bare 'close'.",
+    input_schema: { type: "object" as const, properties: {}, required: [] },
+  },
+  {
     name: "show_focus_readout",
     description:
       "Open a focused-readout MODAL for a chart-data category, then in the SAME turn READ the data aloud. Use this whenever the user says 'show me X' / 'display X' / 'pull up X' / 'bring up X' (rather than just asking 'what is X'). The modal visually presents the data while you narrate it. " +
@@ -1164,7 +1200,8 @@ const TOOLS: Anthropic.Tool[] = [
   {
     name: "complete_timeout",
     description:
-      "Mark ALL four time-out items confirmed in one shot — patient, site, procedure, allergies. Use when the user explicitly says the whole time-out was completed: 'record timeout completed', 'time-out done', 'all timeout items confirmed', 'mark time-out complete', 'timeout verified', 'we did the time-out'. " +
+      "Mark ALL four time-out items confirmed in one shot — patient, site, procedure, allergies. " +
+      "FIRE for any of these phrases: 'timeout checklist confirmed' / 'time-out checklist confirmed' / 'timeout confirmed' / 'timeout is confirmed' / 'record timeout completed' / 'time-out done' / 'timeout done' / 'all timeout items confirmed' / 'mark time-out complete' / 'mark timeout complete' / 'timeout verified' / 'we did the time-out' / 'time-out complete' / 'all four confirmed' / 'all items verified'. " +
       "Distinct from start_case (which opens the modal then transitions to intraop). This tool only flips the checks — it doesn't move to intraop. The user typically follows with a separate 'start case' / 'continue' to actually enter intraop. " +
       "NARRATION REQUIRED: confirm tightly — 'Time-out logged.' / 'All four confirmed.' Under 5 words.",
     input_schema: { type: "object" as const, properties: {}, required: [] },
@@ -1231,7 +1268,11 @@ const TOOLS: Anthropic.Tool[] = [
   },
   {
     name: "focus_quad_panel",
-    description: "Focus a specific panel in the quad view.",
+    description:
+      "Expand a single panel inside the open quad view so it fills the wall (timeout, instruments, alerts, or team). " +
+      "Trigger phrases: 'focus <panel>', 'expand <panel>', 'enlarge <panel>', 'blow up <panel>', 'zoom into <panel>', 'show me just <panel>', 'full screen <panel>'. " +
+      "Map free-text panel names: 'time-out' / 'timeout checklist' → timeout; 'instruments' / 'counts' / 'instrument counts' → instruments; 'alerts' / 'awareness' / 'safety alerts' → alerts; 'team' / 'roster' / 'team roster' / 'who's here' → team. " +
+      "NARRATION: 'Focused on instruments.' Under 4 words.",
     input_schema: {
       type: "object" as const,
       properties: {
@@ -1244,8 +1285,18 @@ const TOOLS: Anthropic.Tool[] = [
     },
   },
   {
+    name: "unfocus_quad_panel",
+    description:
+      "Return from a focused single-panel back to the 2×2 quad grid — KEEPS the quad view open (does not close it). Use when the user wants out of the expanded card but wants to keep seeing all four panels. " +
+      "Trigger phrases (only when the quad view is OPEN and a panel is currently focused): 'unfocus' / 'unfocus the panel' / 'go back' / 'return' / 'back to quad' / 'back to overview' / 'show all four' / 'shrink' / 'minimize' / 'collapse'. " +
+      "DISTINCT from close_quad_view: this returns to the 4-up grid; close_quad_view exits the whole overlay. If the user says a bare 'close' on the quad view, prefer close_topmost_modal (or close_quad_view) — only use unfocus_quad_panel for explicit 'go back / unfocus / return' phrasing. " +
+      "NARRATION: 'Back to quad view.' Under 5 words.",
+    input_schema: { type: "object" as const, properties: {}, required: [] },
+  },
+  {
     name: "close_quad_view",
-    description: "Close the quad-panel view.",
+    description:
+      "Close the entire quad-panel overlay and return to the role view. Trigger phrases: 'close quad view' / 'close the quad' / 'exit quad' / 'close overview' / 'I'm done with the quad'. For 'go back' / 'unfocus' / 'return' while a single panel is focused, prefer unfocus_quad_panel instead.",
     input_schema: { type: "object" as const, properties: {}, required: [] },
   },
   {
@@ -1729,7 +1780,10 @@ const TOOLS: Anthropic.Tool[] = [
   {
     name: "open_xrays",
     description:
-      "Open the PACS-style imaging viewer for the active patient — pre-op X-rays, MRI, CT views with DICOM-style overlays, laterality marker, and radiology read panel. Trigger phrases: 'show me the X-rays', 'pull up the X-rays', 'open the imaging', 'show the films', 'show me the films', 'show the imaging', 'show the patient's X-rays', 'open the PACS', 'pull up imaging', 'show the CT'. Even when the user names a single modality (MRI/CT), open this viewer — the modality-specific view becomes selectable inside. Auto-switches to the surgeon role view if the user is on a different panel. Requires an active case. IMPORTANT: do NOT use this tool when the live context says 'Phase: intraop' or 'Multi-view: case ACTIVE' — in those screens use intraop_show_imaging instead (it swaps the surgeon's primary view tile in place, which is what the team wants mid-case).",
+      "Open the PACS-style PRE-OP IMAGING viewer for the active patient — X-rays, MRI, CT views with DICOM-style overlays, laterality marker, and radiology read panel. This is the card labeled 'Pre-op imaging' on the surgeon panel (the one directly below the patient video card). " +
+      "Trigger phrases: 'open pre-op imaging' / 'show the pre-op imaging' / 'pull up the imaging panel' / 'open the imaging viewer' / 'open the PACS viewer' / 'show me the X-rays' / 'pull up the X-rays' / 'open the imaging' / 'show the films' / 'show me the films' / 'show the imaging' / 'show the patient's X-rays' / 'open the PACS' / 'pull up imaging' / 'show the CT' / 'show me the scans' / 'pull up the scans' / 'open the films'. " +
+      "Even when the user names a single modality (MRI/CT), open this viewer — the modality-specific view becomes selectable inside. Auto-switches to the surgeon role view if the user is on a different panel. Requires an active case. " +
+      "IMPORTANT: do NOT use this tool when the live context says 'Phase: intraop' or 'Multi-view: case ACTIVE' — in those screens use intraop_show_imaging instead (it swaps the surgeon's primary view tile in place, which is what the team wants mid-case).",
     input_schema: { type: "object" as const, properties: {}, required: [] },
   },
   {
@@ -2000,6 +2054,9 @@ export const processVoiceCommand = createServerFn({ method: "POST" })
       // chart data aloud while the modal displays it. close_focus_readout
       // is silent (just dismisses the visual).
       "close_focus_readout",
+      // open_nurse_checklist is intentionally NOT silent (Arti narrates "Nurse
+      // checklist open."); close is silent.
+      "close_nurse_checklist",
       "show_pref_card_checklist",
       "close_pref_card_checklist",
       // set_pref_card_tool_status is intentionally NOT silent — Claude
@@ -2023,6 +2080,7 @@ export const processVoiceCommand = createServerFn({ method: "POST" })
       "xrays_reset_zoom",
       "open_quad_view",
       "focus_quad_panel",
+      "unfocus_quad_panel",
       "close_quad_view",
       // Lightbox / images
       "lightbox_next",

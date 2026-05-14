@@ -147,6 +147,13 @@ export function SmartSettingsScreen({
         setAllStates(loadAllDeviceStates());
         setDeviceState(loadDeviceState(selectedDevice));
       },
+      selectCategory: (category: string) => {
+        // Validate against CATEGORY_ORDER before flipping the accordion so
+        // a bad voice input doesn't put us in an unknown state.
+        if ((CATEGORY_ORDER as string[]).includes(category)) {
+          setExpandedCategory(category as DeviceCategory);
+        }
+      },
     };
     actionsRef.current = actions;
     return () => {

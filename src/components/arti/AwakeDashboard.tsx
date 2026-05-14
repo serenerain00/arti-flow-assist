@@ -29,7 +29,11 @@ import {
   OPENING_CHECKLIST_ITEMS,
   OPENING_CHECKLIST_INITIAL_DONE,
 } from "./ScrubTechPanel";
-import { CirculatingNurseChecklist, NURSE_CHECKLIST } from "./CirculatingNurseChecklist";
+import {
+  CirculatingNurseChecklist,
+  NURSE_CHECKLIST,
+  type NursePhase,
+} from "./CirculatingNurseChecklist";
 import type { HandoffNotes, HandoffSection } from "./handoffNotes";
 import { HANDOFF_SECTIONS } from "./handoffNotes";
 import { SurgeonPanel } from "./SurgeonPanel";
@@ -65,6 +69,11 @@ interface Props {
   /** Route-owned circulating-nurse checklist state + toggle. */
   nurseChecklistChecked: Set<string>;
   onToggleNurseChecklistItem: (id: string) => void;
+  /** Open the dedicated nurse-checklist modal (voice + click parity). */
+  onOpenNurseChecklist?: () => void;
+  /** Lifted accordion-expand state shared with the nurse-checklist modal. */
+  nurseChecklistExpanded?: Record<NursePhase, boolean>;
+  onNurseChecklistExpandedChange?: (next: Record<NursePhase, boolean>) => void;
   /** Transition to the intraoperative ("case active") view. */
   onStartCase?: () => void;
   /** Time-out checklist state — lifted to the route so the start-case modal shares it. */
@@ -115,6 +124,9 @@ export function AwakeDashboard({
   onSetHandoffNote,
   nurseChecklistChecked,
   onToggleNurseChecklistItem,
+  onOpenNurseChecklist,
+  nurseChecklistExpanded,
+  onNurseChecklistExpandedChange,
   onStartCase,
   timeOutChecked,
   onToggleTimeOutItem,
@@ -342,7 +354,11 @@ export function AwakeDashboard({
             })()
           : "",
         quadOpen
-          ? `Quad view: OPEN${quadFocused ? ` (focused on ${quadFocused})` : ""} — "close" / "close quad view" → close_quad_view`
+          ? `Quad view: OPEN${
+              quadFocused
+                ? ` — currently FOCUSED on the ${quadFocused} panel (full-screen). "go back" / "unfocus" / "return" / "back to quad" / "show all four" → unfocus_quad_panel (returns to the 2×2 grid, KEEPS quad view open). "close" / "close quad view" / "exit quad" → close_quad_view (exits the whole overlay).`
+                : ` — showing the 2×2 grid. "focus <panel>" / "expand <panel>" → focus_quad_panel (panel: timeout / instruments / alerts / team). "close" / "close quad view" → close_quad_view.`
+            }`
           : `Quad view: closed`,
         clinical
           ? [
@@ -466,6 +482,14 @@ export function AwakeDashboard({
   const focusQuadPanel = useCallback((panel: QuadPanelId): ArtiToolResult => {
     setQuadOpen(true);
     setQuadFocused(panel);
+    return { ok: true };
+  }, []);
+
+  const unfocusQuadPanel = useCallback((): ArtiToolResult => {
+    // Drop the focused-single state but keep the quad-grid open. Use
+    // when the user says "go back" / "unfocus" / "return" while a single
+    // panel is expanded — they want the 2×2 layout back, not to close.
+    setQuadFocused(null);
     return { ok: true };
   }, []);
 
@@ -688,6 +712,7 @@ export function AwakeDashboard({
       dismissAlert,
       openQuadView,
       focusQuadPanel,
+      unfocusQuadPanel,
       closeQuadView,
       showPreferenceCard,
       switchRole,
@@ -722,6 +747,7 @@ export function AwakeDashboard({
       dismissAlert,
       openQuadView,
       focusQuadPanel,
+      unfocusQuadPanel,
       closeQuadView,
       showPreferenceCard,
       switchRole,
@@ -824,6 +850,9 @@ export function AwakeDashboard({
                     onToggle={onToggleNurseChecklistItem}
                     handoffNotes={handoffNotes}
                     onSetHandoffNote={onSetHandoffNote}
+                    onExpand={onOpenNurseChecklist}
+                    expanded={nurseChecklistExpanded}
+                    onExpandedChange={onNurseChecklistExpandedChange}
                   />
                 </div>
                 <div className="xl:col-span-1">

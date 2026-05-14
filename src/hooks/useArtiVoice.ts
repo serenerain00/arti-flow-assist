@@ -58,6 +58,8 @@ export interface ArtiVoiceCallbacks {
   onSetHomeDashboardMode?: (mode: "my" | "procedure") => ArtiToolResult;
   /** Focus a smart device on the Smart Settings screen. Auto-navigates if needed. */
   onSelectSmartDevice?: (device: string) => ArtiToolResult;
+  /** Expand one of the smart-settings category panels (lighting, displays, …). */
+  onSelectSmartCategory?: (category: string) => ArtiToolResult;
   /** Set a numeric/string property on a smart device. */
   onSetSmartProperty?: (
     device: string | undefined,
@@ -156,6 +158,8 @@ export interface ArtiVoiceCallbacks {
   onDismissAlert?: (index: number) => ArtiToolResult;
   onOpenQuadView?: () => ArtiToolResult;
   onFocusQuadPanel?: (panel: QuadPanelId) => ArtiToolResult;
+  /** Return from a focused single-panel back to the 2×2 quad grid. */
+  onUnfocusQuadPanel?: () => ArtiToolResult;
   onCloseQuadView?: () => ArtiToolResult;
   onOpenHowToVideo?: (procedure?: string, title?: string, id?: string) => ArtiToolResult;
   /** Open the how-to viewer with the research-papers panel expanded. */
@@ -263,6 +267,9 @@ export interface ArtiVoiceCallbacks {
   onToggleNurseChecklistItem?: (item: string, status: "done" | "pending") => ArtiToolResult;
   /** Bulk-complete every item in a nurse-checklist phase. */
   onCompleteNurseChecklistPhase?: (phase: string) => ArtiToolResult;
+  /** Open / close the dedicated circulating-nurse checklist modal. */
+  onOpenNurseChecklist?: () => ArtiToolResult;
+  onCloseNurseChecklist?: () => ArtiToolResult;
   /** Open the pre-op patient video modal on the surgeon panel. */
   onOpenPatientVideo?: () => ArtiToolResult;
   onClosePatientVideo?: () => ArtiToolResult;
@@ -400,6 +407,9 @@ function executeToolCall(call: ArtiToolCall, cb: ArtiVoiceCallbacks): void {
     }
     case "select_smart_device":
       cb.onSelectSmartDevice?.(String(inp.device ?? ""));
+      break;
+    case "select_smart_category":
+      cb.onSelectSmartCategory?.(String(inp.category ?? ""));
       break;
     case "set_smart_property": {
       const v = inp.value;
@@ -562,6 +572,9 @@ function executeToolCall(call: ArtiToolCall, cb: ArtiVoiceCallbacks): void {
       break;
     case "focus_quad_panel":
       cb.onFocusQuadPanel?.(inp.panel as QuadPanelId);
+      break;
+    case "unfocus_quad_panel":
+      cb.onUnfocusQuadPanel?.();
       break;
     case "close_quad_view":
       cb.onCloseQuadView?.();
@@ -771,6 +784,12 @@ function executeToolCall(call: ArtiToolCall, cb: ArtiVoiceCallbacks): void {
     }
     case "complete_nurse_checklist_phase":
       cb.onCompleteNurseChecklistPhase?.(String(inp.phase ?? ""));
+      break;
+    case "open_nurse_checklist":
+      cb.onOpenNurseChecklist?.();
+      break;
+    case "close_nurse_checklist":
+      cb.onCloseNurseChecklist?.();
       break;
     case "set_pref_card_tool_status": {
       const status = String(inp.status ?? "");

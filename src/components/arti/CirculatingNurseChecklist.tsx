@@ -109,21 +109,51 @@ interface Props {
   onToggle: (id: string) => void;
   handoffNotes: HandoffNotes;
   onSetHandoffNote: (section: HandoffSection, text: string) => void;
+  /**
+   * When provided, an "Open in modal" chip renders in the header — clicking
+   * promotes the checklist into the dedicated modal so voice toggles route
+   * unambiguously to the nurse list (not the time-out). Omitted inside the
+   * modal itself to avoid a recursive "open" affordance.
+   */
+  onExpand?: () => void;
+  /**
+   * Lifted accordion-expand state (which phase is open). When provided
+   * (route owns it), the inline view + modal stay perfectly synced — open
+   * "Closing" in one and it's open in the other. When omitted, falls back
+   * to local state seeded with pre-incision open.
+   */
+  expanded?: Record<NursePhase, boolean>;
+  onExpandedChange?: (next: Record<NursePhase, boolean>) => void;
 }
+
+export const NURSE_CHECKLIST_DEFAULT_EXPANDED: Record<NursePhase, boolean> = {
+  "pre-incision": true,
+  "intra-op": false,
+  closing: false,
+};
 
 export function CirculatingNurseChecklist({
   checked,
   onToggle,
   handoffNotes,
   onSetHandoffNote,
+  onExpand,
+  expanded: expandedProp,
+  onExpandedChange,
 }: Props) {
-  // Each phase tracks its own expand/collapse so the nurse can keep the
-  // current-phase section open while the others stay compact.
-  const [expanded, setExpanded] = useState<Record<NursePhase, boolean>>({
-    "pre-incision": true,
-    "intra-op": false,
-    closing: false,
-  });
+  // When the parent provides expand state, use it; otherwise fall back to
+  // local state (pre-incision open) so the component still works
+  // stand-alone.
+  const [expandedLocal, setExpandedLocal] = useState<Record<NursePhase, boolean>>(
+    NURSE_CHECKLIST_DEFAULT_EXPANDED,
+  );
+  const expanded = expandedProp ?? expandedLocal;
+  const setExpanded = (
+    updater: (prev: Record<NursePhase, boolean>) => Record<NursePhase, boolean>,
+  ) => {
+    if (onExpandedChange) onExpandedChange(updater(expanded));
+    else setExpandedLocal(updater);
+  };
 
   const overallChecked = NURSE_CHECKLIST.reduce(
     (sum, p) => sum + p.items.filter((i) => checked.has(i.id)).length,
@@ -144,10 +174,20 @@ export function CirculatingNurseChecklist({
             </div>
           </div>
         </div>
-        <div className="flex items-center gap-3 text-xs font-light">
+        <div className="flex items-center gap-2 text-xs font-light">
           <span className="rounded-full border border-primary/30 bg-primary/10 px-2 py-0.5 text-primary tabular-nums">
             {overallChecked}/{overallTotal} complete
           </span>
+          {onExpand && (
+            <button
+              type="button"
+              onClick={onExpand}
+              className="rounded-full border border-border bg-surface-2 px-3 py-0.5 text-muted-foreground transition-colors hover:border-primary/30 hover:text-foreground"
+              title="Open in dedicated modal (voice: 'Arti, open the nurse checklist')"
+            >
+              Open in modal
+            </button>
+          )}
         </div>
       </div>
 
