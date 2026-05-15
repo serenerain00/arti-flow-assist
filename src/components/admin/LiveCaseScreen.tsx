@@ -50,21 +50,16 @@ export function LiveCaseScreen({
   onSelectDashboard,
   onSelectPhase,
 }: Props) {
-  // Filter to dashboards that make sense for a live case — either a
-  // procedure-tied dashboard or a published template.
-  const usable = useMemo(
-    () =>
-      dashboards
-        .filter((d) => !d.isTemplate || d.published)
-        .sort((a, b) => b.updatedAt - a.updatedAt),
-    [dashboards],
-  );
+  // Any saved dashboard is fair game for a live case for now — when this is
+  // wired to a real OR console the active surgeon + procedure will dictate
+  // the pick. For local testing we just grab one at random on mount.
+  const usable = useMemo(() => [...dashboards], [dashboards]);
 
-  // Auto-pick the most recent usable dashboard the first time we land here.
   useEffect(() => {
     if (activeDashboardId) return;
     if (usable.length === 0) return;
-    onSelectDashboard(usable[0].id);
+    const random = usable[Math.floor(Math.random() * usable.length)];
+    onSelectDashboard(random.id);
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [usable]);
 

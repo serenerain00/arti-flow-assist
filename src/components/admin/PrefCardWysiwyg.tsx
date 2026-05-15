@@ -26,7 +26,11 @@ const TOOLS: ToolDef[] = [
 
 export function PrefCardWysiwyg({ value, onChange }: Props) {
   const editorRef = useRef<HTMLDivElement | null>(null);
-  const lastEmittedRef = useRef(value);
+  // Sentinel: initial null guarantees the first effect run writes `value`
+  // into the editor, so saved prefcard HTML is restored on remount /
+  // procedure switch. Subsequent edits keep this in sync with what the
+  // user typed so we don't clobber the cursor mid-keystroke.
+  const lastEmittedRef = useRef<string | null>(null);
 
   useEffect(() => {
     const el = editorRef.current;
