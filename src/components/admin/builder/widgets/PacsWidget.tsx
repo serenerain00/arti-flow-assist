@@ -14,20 +14,20 @@ export function PacsWidget({ size }: Props) {
       </div>
       <div className="flex flex-1 items-center justify-center">
         <div className="text-center">
-          <div className="mx-auto flex h-16 w-16 items-center justify-center rounded-full border border-white/15 bg-white/[0.04] text-white/40">
+          <div className="mx-auto flex h-16 w-16 items-center justify-center rounded-full border border-white/15 bg-white/[0.04] text-white/55">
             <ScanLine className="h-7 w-7" strokeWidth={1.4} />
           </div>
           {size !== "small" && (
             <>
               <div className="mt-3 text-sm font-light text-white/80">PACS Imaging</div>
-              <div className="mt-0.5 font-mono text-[10px] uppercase tracking-[0.3em] text-white/40">
+              <div className="mt-0.5 font-mono text-[10px] uppercase tracking-[0.3em] text-white/65">
                 Xray · MRI · CT
               </div>
             </>
           )}
         </div>
       </div>
-      <div className="absolute bottom-3 right-3 font-mono text-[9px] uppercase tracking-[0.3em] text-white/30">
+      <div className="absolute bottom-3 right-3 font-mono text-[9px] uppercase tracking-[0.3em] text-white/60">
         OR feed
       </div>
     </div>

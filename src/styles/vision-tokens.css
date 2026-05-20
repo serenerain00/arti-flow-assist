@@ -178,10 +178,15 @@
   --vision-color-surface: var(--vision-black-600);
   --vision-color-surface-elevated: var(--vision-black-500);
 
-  /* Text */
+  /* Text — ramp lifted toward white for AA contrast on the near-black OR
+   * surfaces. Worst-case bg is surface-3 (--vision-black-600 #222426):
+   *   text   gray-100 #d1d8df → 10.8:1  (body — near-white, kept off pure
+   *                                       white to avoid wall-display glare)
+   *   muted  gray-200 #bac0c7 →  8.5:1  (was gray-300 6.5:1)
+   *   subtle gray-300 #a2a8af →  6.5:1  (was gray-400 4.3:1 — failed AA) */
   --vision-color-text: var(--vision-gray-100);               /* default body */
-  --vision-color-text-muted: var(--vision-gray-300);         /* secondary */
-  --vision-color-text-subtle: var(--vision-gray-400);        /* hints, captions */
+  --vision-color-text-muted: var(--vision-gray-200);         /* secondary */
+  --vision-color-text-subtle: var(--vision-gray-300);        /* hints, captions */
   --vision-color-text-inverse: var(--vision-black-700);      /* on light bg */
 
   /* Borders */
