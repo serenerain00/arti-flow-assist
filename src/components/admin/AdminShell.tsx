@@ -87,13 +87,6 @@ export function AdminShell() {
   }, [view.kind]);
 
   useEffect(() => {
-    // DEV: wipe builder dashboards on mount so every refresh starts with a
-    // clean slate for dashboards/templates. Surgeons, procedures, and
-    // preference-card images persist so the user doesn't re-create them on
-    // each refresh. Remove this block when end-to-end testing is done.
-    if (typeof window !== "undefined") {
-      window.localStorage.removeItem("art-setup.dashboards.v1");
-    }
     setSurgeons(loadSurgeons());
     setProcedures(loadProcedures());
     setImages(loadImages());

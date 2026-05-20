@@ -56,12 +56,16 @@ export function LiveCaseScreen({
   const usable = useMemo(() => [...dashboards], [dashboards]);
 
   useEffect(() => {
-    if (activeDashboardId) return;
     if (usable.length === 0) return;
+    // Keep the current selection only if it still resolves to a real
+    // dashboard. A persisted id from a prior session may point at one that
+    // no longer exists — in that case fall through and pick a fresh one so
+    // we never get stuck on the empty state.
+    if (activeDashboardId && usable.some((d) => d.id === activeDashboardId)) return;
     const random = usable[Math.floor(Math.random() * usable.length)];
     onSelectDashboard(random.id);
     // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [usable]);
+  }, [usable, activeDashboardId]);
 
   const active = useMemo(
     () => dashboards.find((d) => d.id === activeDashboardId) ?? null,
