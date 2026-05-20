@@ -513,7 +513,9 @@ export function AdminShell() {
     if (!next && view.kind === "live-case") {
       setView(authed ? { kind: "dashboard" } : { kind: "login" });
     }
-    persistLiveCase({ active: next });
+    // A case always starts in pre-op — reset the phase on enable so we never
+    // resume on whatever phase a previous session happened to leave behind.
+    persistLiveCase(next ? { active: true, currentPhase: "preop" } : { active: false });
   };
 
   // Whole-shell layout is a 2-column grid. Animating gridTemplateColumns
