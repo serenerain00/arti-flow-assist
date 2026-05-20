@@ -98,7 +98,13 @@ export function AdminShell() {
     setProcedures(loadProcedures());
     setImages(loadImages());
     setDashboards(loadDashboards());
-    setLiveCase(loadLiveCase());
+    // Live case always starts OFF on a fresh page load. Operators must turn
+    // it on explicitly each session, but we keep dashboardId / currentPhase
+    // from the persisted state so the previous selection is remembered.
+    const persisted = loadLiveCase();
+    const fresh: LiveCaseState = { ...persisted, active: false, updatedAt: Date.now() };
+    setLiveCase(fresh);
+    saveLiveCase(fresh);
     // Sync live-case state from other tabs (the wall preview tab listens
     // for changes too — this keeps the controller in sync if the user
     // edits state in another window).

@@ -8,7 +8,7 @@ interface Props {
 
 export function LiveCaseSwitch({ active, onToggle }: Props) {
   return (
-    <div className="pointer-events-none fixed bottom-5 right-5 z-50 flex items-center gap-3">
+    <div className="pointer-events-none fixed bottom-28 right-5 z-50 flex items-center gap-3">
       <div
         className={cn(
           "pointer-events-auto inline-flex items-center gap-3 rounded-full border bg-popover/80 px-4 py-2 shadow-xl backdrop-blur-md transition-colors",
