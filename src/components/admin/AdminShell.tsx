@@ -508,9 +508,11 @@ export function AdminShell() {
 
   const isBuilder = view.kind === "builder";
   const isLiveCase = view.kind === "live-case";
-  // The floating "Case in progress" switch belongs on the controller UI —
-  // not in the builder canvas (too cluttered) and not before login.
-  const showLiveCaseSwitch = authed && view.kind !== "builder" && view.kind !== "login" && view.kind !== "idle";
+  // The floating "Case in progress" switch lives on every controller view
+  // except the builder canvas (too cluttered) and the login form (focus
+  // belongs on the password input). It stays available on the idle / pre-
+  // login screen so a refresh-with-live-case-on can still be flipped off.
+  const showLiveCaseSwitch = view.kind !== "builder" && view.kind !== "login";
 
   const handleToggleLiveCase = () => {
     const next = !liveCase.active;
