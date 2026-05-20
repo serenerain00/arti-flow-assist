@@ -203,6 +203,41 @@ export function AdminShell() {
     persistDashboards(dashboards.filter((d) => d.id !== id));
   };
 
+  // ─── Surgeon / procedure deletion (cascades) ─────────────────────────
+  // Deleting a procedure also removes its prefcard images and its wall
+  // dashboard, and unlinks it from the owning surgeon.
+  const deleteProcedure = (id: string) => {
+    const proc = procedures.find((p) => p.id === id);
+    persistProcedures(procedures.filter((p) => p.id !== id));
+    persistImages(images.filter((i) => i.procedureId !== id));
+    persistDashboards(dashboards.filter((d) => d.procedureId !== id));
+    if (proc) {
+      persistSurgeons(
+        surgeons.map((s) =>
+          s.id === proc.surgeonId
+            ? {
+                ...s,
+                procedureIds: s.procedureIds.filter((pid) => pid !== id),
+                updatedAt: Date.now(),
+              }
+            : s,
+        ),
+      );
+    }
+  };
+
+  // Deleting a surgeon removes all of their procedures (and those
+  // procedures' prefcard images and dashboards) along with the surgeon.
+  const deleteSurgeon = (id: string) => {
+    const ownProcedureIds = new Set(
+      procedures.filter((p) => p.surgeonId === id).map((p) => p.id),
+    );
+    persistSurgeons(surgeons.filter((s) => s.id !== id));
+    persistProcedures(procedures.filter((p) => p.surgeonId !== id));
+    persistImages(images.filter((i) => !ownProcedureIds.has(i.procedureId)));
+    persistDashboards(dashboards.filter((d) => d.surgeonId !== id));
+  };
+
   const saveAsTemplate = (sourceId: string, name: string) => {
     const source = dashboards.find((d) => d.id === sourceId);
     if (!source) return;
@@ -340,15 +375,18 @@ export function AdminShell() {
                 from: "procedures",
               });
             }}
+            onDelete={(procedureId) => deleteProcedure(procedureId)}
           />
         );
       case "surgeons":
         return (
           <SurgeonsList
             surgeons={surgeons}
+            procedures={procedures}
             onBack={() => setView({ kind: "dashboard" })}
             onAdd={() => setView({ kind: "surgeon-new" })}
             onOpen={(id) => setView({ kind: "surgeon-detail", id })}
+            onDelete={(id) => deleteSurgeon(id)}
           />
         );
       case "surgeon-new":
@@ -407,6 +445,11 @@ export function AdminShell() {
                 from: "surgeon",
               })
             }
+            onDeleteProcedure={(procedureId) => deleteProcedure(procedureId)}
+            onDelete={() => {
+              deleteSurgeon(surgeon.id);
+              setView({ kind: "surgeons" });
+            }}
           />
         );
       }
@@ -438,6 +481,10 @@ export function AdminShell() {
             onOpenDashboard={() =>
               openProcedureDashboard(procedure.surgeonId, procedure.id, view.from)
             }
+            onDelete={() => {
+              deleteProcedure(procedure.id);
+              setView(backView);
+            }}
           />
         );
       }

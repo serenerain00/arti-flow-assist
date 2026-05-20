@@ -1,12 +1,16 @@
+import { useState } from "react";
 import { motion } from "framer-motion";
-import { ArrowLeft, ChevronRight, Plus, UserPlus } from "lucide-react";
-import type { Surgeon } from "./types";
+import { ArrowLeft, ChevronRight, Plus, Trash2, UserPlus } from "lucide-react";
+import type { Procedure, Surgeon } from "./types";
+import { ConfirmDeleteDialog } from "./ConfirmDeleteDialog";
 
 interface Props {
   surgeons: Surgeon[];
+  procedures: Procedure[];
   onBack: () => void;
   onAdd: () => void;
   onOpen: (id: string) => void;
+  onDelete: (id: string) => void;
 }
 
 function initialsFor(s: Surgeon) {
@@ -19,10 +23,15 @@ function fullName(s: Surgeon) {
   return [s.firstName, s.lastName].filter(Boolean).join(" ").trim() || "(no name)";
 }
 
-export function SurgeonsList({ surgeons, onBack, onAdd, onOpen }: Props) {
+export function SurgeonsList({ surgeons, procedures, onBack, onAdd, onOpen, onDelete }: Props) {
+  const [pendingDelete, setPendingDelete] = useState<Surgeon | null>(null);
   const sorted = [...surgeons].sort((a, b) =>
     fullName(a).localeCompare(fullName(b), undefined, { sensitivity: "base" }),
   );
+
+  const pendingProcedureCount = pendingDelete
+    ? procedures.filter((p) => p.surgeonId === pendingDelete.id).length
+    : 0;
 
   return (
     <motion.div
@@ -81,28 +90,56 @@ export function SurgeonsList({ surgeons, onBack, onAdd, onOpen }: Props) {
           </div>
           <ul>
             {sorted.map((s) => (
-              <li key={s.id}>
-                <button
-                  type="button"
-                  onClick={() => onOpen(s.id)}
-                  className="grid w-full grid-cols-[1fr_1.4fr_auto] items-center gap-4 border-b border-border/40 px-5 py-3.5 text-left transition-colors hover:bg-surface-2/40"
-                >
-                  <div className="flex min-w-0 items-center gap-3">
-                    <div className="flex h-9 w-9 shrink-0 items-center justify-center rounded-full border border-border/60 bg-surface-2/60 font-mono text-[11px] uppercase tracking-wider text-primary">
-                      {initialsFor(s)}
+              <li key={s.id} className="group">
+                <div className="flex items-center gap-4 border-b border-border/40 px-5 py-3.5 transition-colors hover:bg-surface-2/40">
+                  <button
+                    type="button"
+                    onClick={() => onOpen(s.id)}
+                    className="grid min-w-0 flex-1 grid-cols-[1fr_1.4fr] items-center gap-4 text-left"
+                  >
+                    <div className="flex min-w-0 items-center gap-3">
+                      <div className="flex h-9 w-9 shrink-0 items-center justify-center rounded-full border border-border/60 bg-surface-2/60 font-mono text-[11px] uppercase tracking-wider text-primary">
+                        {initialsFor(s)}
+                      </div>
+                      <span className="truncate text-sm font-light text-foreground">
+                        {fullName(s)}
+                      </span>
                     </div>
-                    <span className="truncate text-sm font-light text-foreground">
-                      {fullName(s)}
-                    </span>
-                  </div>
-                  <div className="truncate text-sm font-light text-muted-foreground">{s.email}</div>
-                  <ChevronRight className="h-4 w-4 text-muted-foreground" strokeWidth={1.7} />
-                </button>
+                    <div className="truncate text-sm font-light text-muted-foreground">
+                      {s.email}
+                    </div>
+                  </button>
+                  <button
+                    type="button"
+                    onClick={() => setPendingDelete(s)}
+                    aria-label={`Delete ${fullName(s)}`}
+                    className="flex h-7 w-7 shrink-0 items-center justify-center rounded-md text-muted-foreground opacity-0 transition-all hover:bg-destructive/20 hover:text-destructive group-hover:opacity-100"
+                  >
+                    <Trash2 className="h-3.5 w-3.5" strokeWidth={1.7} />
+                  </button>
+                  <ChevronRight className="h-4 w-4 shrink-0 text-muted-foreground" strokeWidth={1.7} />
+                </div>
               </li>
             ))}
           </ul>
         </div>
       )}
+
+      <ConfirmDeleteDialog
+        open={pendingDelete !== null}
+        onOpenChange={(open) => !open && setPendingDelete(null)}
+        title={`Delete ${pendingDelete ? fullName(pendingDelete) : "surgeon"}?`}
+        description={
+          pendingProcedureCount > 0
+            ? `This permanently deletes the surgeon along with ${pendingProcedureCount} procedure${pendingProcedureCount === 1 ? "" : "s"} and all of their preference cards and wall dashboards. This cannot be undone.`
+            : "This permanently deletes the surgeon. This cannot be undone."
+        }
+        confirmLabel="Delete surgeon"
+        onConfirm={() => {
+          if (pendingDelete) onDelete(pendingDelete.id);
+          setPendingDelete(null);
+        }}
+      />
     </motion.div>
   );
 }

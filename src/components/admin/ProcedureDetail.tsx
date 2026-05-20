@@ -8,11 +8,13 @@ import {
   Image as ImageIcon,
   Info,
   LayoutGrid,
+  Trash2,
   X,
 } from "lucide-react";
 import { PROCEDURE_CATEGORIES, type PrefCardImage, type Procedure, type Surgeon } from "./types";
 import { PrefCardImages } from "./PrefCardImages";
 import { PrefCardWysiwyg } from "./PrefCardWysiwyg";
+import { ConfirmDeleteDialog } from "./ConfirmDeleteDialog";
 import { PHASES, PHASE_LABEL, type Dashboard, type Phase } from "./builder/types";
 import { cn } from "@/lib/utils";
 
@@ -29,6 +31,7 @@ interface Props {
   onRemoveImage: (id: string) => void;
   onRenameImage: (id: string, name: string) => void;
   onOpenDashboard: () => void;
+  onDelete: () => void;
 }
 
 function surgeonTitle(s?: Surgeon) {
@@ -56,8 +59,10 @@ export function ProcedureDetail({
   onRemoveImage,
   onRenameImage,
   onOpenDashboard,
+  onDelete,
 }: Props) {
   const [section, setSection] = useState<Section>("info");
+  const [confirmDelete, setConfirmDelete] = useState(false);
 
   // Local mirror so typing is snappy; flush back to parent on blur or
   // after a short debounce, since the parent persists to localStorage.
@@ -127,8 +132,18 @@ export function ProcedureDetail({
             </h1>
           </div>
         </div>
-        <div className="font-mono text-[10px] uppercase tracking-[0.3em] text-muted-foreground">
-          Changes save automatically
+        <div className="flex items-center gap-4">
+          <button
+            type="button"
+            onClick={() => setConfirmDelete(true)}
+            className="inline-flex items-center gap-2 rounded-md border border-destructive/40 px-4 py-2 text-sm font-medium text-destructive transition-colors hover:bg-destructive/10"
+          >
+            <Trash2 className="h-4 w-4" strokeWidth={1.7} />
+            Delete
+          </button>
+          <div className="font-mono text-[10px] uppercase tracking-[0.3em] text-muted-foreground">
+            Changes save automatically
+          </div>
         </div>
       </header>
 
@@ -270,6 +285,18 @@ export function ProcedureDetail({
           )}
         </div>
       </div>
+
+      <ConfirmDeleteDialog
+        open={confirmDelete}
+        onOpenChange={setConfirmDelete}
+        title={`Delete ${procedure.name.trim() || "this procedure"}?`}
+        description="This permanently deletes the procedure along with its preference cards and wall dashboard. This cannot be undone."
+        confirmLabel="Delete procedure"
+        onConfirm={() => {
+          setConfirmDelete(false);
+          onDelete();
+        }}
+      />
     </motion.div>
   );
 }

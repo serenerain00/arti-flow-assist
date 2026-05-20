@@ -1,7 +1,8 @@
-import { useMemo } from "react";
+import { useMemo, useState } from "react";
 import { motion } from "framer-motion";
-import { ArrowLeft, ChevronRight, ClipboardList } from "lucide-react";
+import { ArrowLeft, ChevronRight, ClipboardList, Trash2 } from "lucide-react";
 import type { Procedure, Surgeon } from "./types";
+import { ConfirmDeleteDialog } from "./ConfirmDeleteDialog";
 import { PHASES, PHASE_LABEL, type Dashboard, type Phase } from "./builder/types";
 import { cn } from "@/lib/utils";
 
@@ -11,6 +12,7 @@ interface Props {
   dashboards: Dashboard[];
   onBack: () => void;
   onOpen: (procedureId: string) => void;
+  onDelete: (procedureId: string) => void;
 }
 
 function fullName(s: Surgeon | undefined) {
@@ -35,7 +37,15 @@ function PhaseChip({ phase, count }: { phase: Phase; count: number }) {
   );
 }
 
-export function ProceduresAllList({ procedures, surgeons, dashboards, onBack, onOpen }: Props) {
+export function ProceduresAllList({
+  procedures,
+  surgeons,
+  dashboards,
+  onBack,
+  onOpen,
+  onDelete,
+}: Props) {
+  const [pendingDelete, setPendingDelete] = useState<Procedure | null>(null);
   const surgeonsById = useMemo(() => {
     const map = new Map<string, Surgeon>();
     for (const s of surgeons) map.set(s.id, s);
@@ -95,36 +105,61 @@ export function ProceduresAllList({ procedures, surgeons, dashboards, onBack, on
                 (d) => !d.isTemplate && d.surgeonId === p.surgeonId && d.procedureId === p.id,
               );
               return (
-                <li key={p.id}>
-                  <button
-                    type="button"
-                    onClick={() => onOpen(p.id)}
-                    className="grid w-full grid-cols-[1.4fr_1fr_auto_auto_auto] items-center gap-4 border-b border-border/40 px-5 py-3.5 text-left transition-colors hover:bg-surface-2/40"
-                  >
-                    <span className="truncate text-sm font-light text-foreground">{p.name}</span>
-                    <span className="truncate text-sm font-light text-muted-foreground">
-                      {fullName(surgeonsById.get(p.surgeonId))}
-                    </span>
-                    <span className="rounded-full border border-border/60 bg-surface-2/60 px-3 py-0.5 font-mono text-[9px] uppercase tracking-wider text-muted-foreground">
-                      {p.category}
-                    </span>
-                    <span className="hidden items-center gap-1.5 md:flex">
-                      {PHASES.map((phase) => (
-                        <PhaseChip
-                          key={phase}
-                          phase={phase}
-                          count={dashboard?.layouts[phase].length ?? 0}
-                        />
-                      ))}
-                    </span>
-                    <ChevronRight className="h-4 w-4 text-muted-foreground" strokeWidth={1.7} />
-                  </button>
+                <li key={p.id} className="group">
+                  <div className="flex items-center gap-4 border-b border-border/40 px-5 py-3.5 transition-colors hover:bg-surface-2/40">
+                    <button
+                      type="button"
+                      onClick={() => onOpen(p.id)}
+                      className="grid min-w-0 flex-1 grid-cols-[1.4fr_1fr_auto_auto] items-center gap-4 text-left"
+                    >
+                      <span className="truncate text-sm font-light text-foreground">{p.name}</span>
+                      <span className="truncate text-sm font-light text-muted-foreground">
+                        {fullName(surgeonsById.get(p.surgeonId))}
+                      </span>
+                      <span className="rounded-full border border-border/60 bg-surface-2/60 px-3 py-0.5 font-mono text-[9px] uppercase tracking-wider text-muted-foreground">
+                        {p.category}
+                      </span>
+                      <span className="hidden items-center gap-1.5 md:flex">
+                        {PHASES.map((phase) => (
+                          <PhaseChip
+                            key={phase}
+                            phase={phase}
+                            count={dashboard?.layouts[phase].length ?? 0}
+                          />
+                        ))}
+                      </span>
+                    </button>
+                    <button
+                      type="button"
+                      onClick={() => setPendingDelete(p)}
+                      aria-label={`Delete ${p.name}`}
+                      className="flex h-7 w-7 shrink-0 items-center justify-center rounded-md text-muted-foreground opacity-0 transition-all hover:bg-destructive/20 hover:text-destructive group-hover:opacity-100"
+                    >
+                      <Trash2 className="h-3.5 w-3.5" strokeWidth={1.7} />
+                    </button>
+                    <ChevronRight
+                      className="h-4 w-4 shrink-0 text-muted-foreground"
+                      strokeWidth={1.7}
+                    />
+                  </div>
                 </li>
               );
             })}
           </ul>
         </div>
       )}
+
+      <ConfirmDeleteDialog
+        open={pendingDelete !== null}
+        onOpenChange={(open) => !open && setPendingDelete(null)}
+        title={`Delete ${pendingDelete?.name ?? "procedure"}?`}
+        description="This permanently deletes the procedure along with its preference cards and wall dashboard. This cannot be undone."
+        confirmLabel="Delete procedure"
+        onConfirm={() => {
+          if (pendingDelete) onDelete(pendingDelete.id);
+          setPendingDelete(null);
+        }}
+      />
     </motion.div>
   );
 }
