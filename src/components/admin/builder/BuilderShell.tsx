@@ -32,7 +32,7 @@ import { TimerWidget } from "./widgets/TimerWidget";
 import { StopwatchWidget } from "./widgets/StopwatchWidget";
 import { ArtiWidget } from "./widgets/ArtiWidget";
 import { CarouselWidget } from "./widgets/CarouselWidget";
-import { PrefCardImageWidget } from "./widgets/PrefCardImageWidget";
+import { ImageWidget } from "./widgets/ImageWidget";
 import { PrefCardTextWidget } from "./widgets/PrefCardTextWidget";
 import { PacsWidget } from "./widgets/PacsWidget";
 import { ProcedurePlanningWidget } from "./widgets/ProcedurePlanningWidget";
@@ -75,7 +75,7 @@ interface DragInfo {
 function defaultConfig(type: WidgetType): WidgetConfig {
   if (type === "timer") return { durationSec: 300, label: "Timer" };
   if (type === "stopwatch") return { label: "Stopwatch" };
-  if (type === "carousel" || type === "prefcard-image" || type === "prefcard-text") {
+  if (type === "carousel" || type === "image" || type === "prefcard-text") {
     return { source: "procedure" };
   }
   return {};
@@ -435,8 +435,8 @@ function DragGhost({
           {widget.type === "carousel" && (
             <CarouselWidget size={widget.size} images={carouselImages} />
           )}
-          {widget.type === "prefcard-image" && (
-            <PrefCardImageWidget size={widget.size} image={displayImage} />
+          {widget.type === "image" && (
+            <ImageWidget size={widget.size} image={displayImage} />
           )}
           {widget.type === "prefcard-text" && <PrefCardTextWidget size={widget.size} html={html} />}
           {widget.type === "pacs" && <PacsWidget size={widget.size} />}

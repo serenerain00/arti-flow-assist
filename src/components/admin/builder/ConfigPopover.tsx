@@ -68,7 +68,7 @@ export function ConfigPopover({ widget, procedures, surgeons, images, onClose, o
   const source: ContentSource = widget.config.source ?? "procedure";
   const supportsSourceToggle =
     widget.type === "carousel" ||
-    widget.type === "prefcard-image" ||
+    widget.type === "image" ||
     widget.type === "prefcard-text";
 
   const renderBody = () => {
@@ -104,7 +104,7 @@ export function ConfigPopover({ widget, procedures, surgeons, images, onClose, o
           </>
         );
       }
-      case "prefcard-image": {
+      case "image": {
         const procImages = widget.config.procedureId
           ? images.filter((i) => i.procedureId === widget.config.procedureId)
           : [];
@@ -244,6 +244,7 @@ export function ConfigPopover({ widget, procedures, surgeons, images, onClose, o
       case "arti":
       case "pacs":
       case "procedure-planning":
+      case "timeout-checklist":
         return (
           <p className="text-xs font-light text-muted-foreground">
             No configuration for this widget.

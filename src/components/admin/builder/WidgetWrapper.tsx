@@ -8,10 +8,11 @@ import { TimerWidget } from "./widgets/TimerWidget";
 import { StopwatchWidget } from "./widgets/StopwatchWidget";
 import { ArtiWidget } from "./widgets/ArtiWidget";
 import { CarouselWidget } from "./widgets/CarouselWidget";
-import { PrefCardImageWidget } from "./widgets/PrefCardImageWidget";
+import { ImageWidget } from "./widgets/ImageWidget";
 import { PrefCardTextWidget } from "./widgets/PrefCardTextWidget";
 import { PacsWidget } from "./widgets/PacsWidget";
 import { ProcedurePlanningWidget } from "./widgets/ProcedurePlanningWidget";
+import { TimeoutChecklistWidget } from "./widgets/TimeoutChecklistWidget";
 import { ConfigPopover } from "./ConfigPopover";
 import {
   WIDGET_META,
@@ -100,14 +101,16 @@ export function WidgetWrapper(props: Props) {
         return <ArtiWidget size={widget.size} />;
       case "carousel":
         return <CarouselWidget size={widget.size} images={carouselImages} />;
-      case "prefcard-image":
-        return <PrefCardImageWidget size={widget.size} caption={caption} image={displayImage} />;
+      case "image":
+        return <ImageWidget size={widget.size} caption={caption} image={displayImage} />;
       case "prefcard-text":
         return <PrefCardTextWidget size={widget.size} caption={caption} html={html} />;
       case "pacs":
         return <PacsWidget size={widget.size} />;
       case "procedure-planning":
         return <ProcedurePlanningWidget size={widget.size} />;
+      case "timeout-checklist":
+        return <TimeoutChecklistWidget size={widget.size} />;
     }
   };
 

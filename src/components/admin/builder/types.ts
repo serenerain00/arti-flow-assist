@@ -5,6 +5,7 @@ import {
   FileText,
   Image as ImageIcon,
   Images,
+  ListChecks,
   ScanLine,
   Sparkles,
   TimerReset,
@@ -16,11 +17,12 @@ export type WidgetType =
   | "timer"
   | "stopwatch"
   | "carousel"
-  | "prefcard-image"
+  | "image"
   | "prefcard-text"
   | "arti"
   | "pacs"
-  | "procedure-planning";
+  | "procedure-planning"
+  | "timeout-checklist";
 
 export type WidgetSize = "small" | "medium" | "large";
 
@@ -37,9 +39,9 @@ export interface WidgetConfig {
   source?: ContentSource;
   /** Procedure source for carousel + prefcard-text widgets. */
   procedureId?: string;
-  /** Specific image id (from a procedure) for prefcard-image widget. */
+  /** Specific image id (from a procedure) for the image widget. */
   imageId?: string;
-  /** Direct-upload images for carousel / prefcard-image when source is "custom". */
+  /** Direct-upload images for carousel / image when source is "custom". */
   customImages?: WidgetImage[];
   /** Direct-write HTML for prefcard-text when source is "custom". */
   customHtml?: string;
@@ -97,9 +99,9 @@ export const WIDGET_META: Record<WidgetType, WidgetMeta> = {
     defaultSize: "medium",
     sizes: ["medium", "large"],
   },
-  "prefcard-image": {
-    label: "Preference Card Image",
-    blurb: "Single preference card image.",
+  image: {
+    label: "Image",
+    blurb: "Single image from a preference card or custom upload.",
     icon: ImageIcon,
     defaultSize: "medium",
     sizes: ["small", "medium", "large"],
@@ -134,6 +136,13 @@ export const WIDGET_META: Record<WidgetType, WidgetMeta> = {
     sizes: ["medium", "large"],
     reserved: true,
   },
+  "timeout-checklist": {
+    label: "Time-Out Checklist",
+    blurb: "Read-only surgical time-out, fed from the safety checklist app.",
+    icon: ListChecks,
+    defaultSize: "medium",
+    sizes: ["small", "medium", "large"],
+  },
 };
 
 // Palette order excludes reserved widgets — they're auto-placed.
@@ -143,8 +152,9 @@ export const WIDGET_ORDER: WidgetType[] = [
   "stopwatch",
   "arti",
   "carousel",
-  "prefcard-image",
+  "image",
   "prefcard-text",
+  "timeout-checklist",
 ];
 
 export const RESERVED_WIDGET_TYPES: WidgetType[] = ["pacs", "procedure-planning"];

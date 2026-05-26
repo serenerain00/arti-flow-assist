@@ -1,6 +1,20 @@
-import { EMPTY_LAYOUTS, type Dashboard, type PhaseLayouts } from "./types";
+import {
+  EMPTY_LAYOUTS,
+  type Dashboard,
+  type PhaseLayouts,
+  type WidgetInstance,
+} from "./types";
 
 const DASHBOARDS_KEY = "art-setup.dashboards.v1";
+
+// "prefcard-image" was renamed to the generic "image" widget. Remap any
+// widgets stored under the old type so previously saved dashboards survive.
+function migrateWidgets(widgets: unknown): WidgetInstance[] {
+  if (!Array.isArray(widgets)) return [];
+  return (widgets as WidgetInstance[]).map((w) =>
+    (w.type as string) === "prefcard-image" ? { ...w, type: "image" } : w,
+  );
+}
 
 export function loadDashboards(): Dashboard[] {
   if (typeof window === "undefined") return [];
@@ -13,9 +27,9 @@ export function loadDashboards(): Dashboard[] {
     return (parsed as Dashboard[]).map((d) => ({
       ...d,
       layouts: {
-        preop: Array.isArray(d.layouts?.preop) ? d.layouts.preop : [],
-        intraop: Array.isArray(d.layouts?.intraop) ? d.layouts.intraop : [],
-        postop: Array.isArray(d.layouts?.postop) ? d.layouts.postop : [],
+        preop: migrateWidgets(d.layouts?.preop),
+        intraop: migrateWidgets(d.layouts?.intraop),
+        postop: migrateWidgets(d.layouts?.postop),
       },
     }));
   } catch {

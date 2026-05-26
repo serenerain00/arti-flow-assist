@@ -7,10 +7,11 @@ import { TimerWidget } from "./builder/widgets/TimerWidget";
 import { StopwatchWidget } from "./builder/widgets/StopwatchWidget";
 import { ArtiWidget } from "./builder/widgets/ArtiWidget";
 import { CarouselWidget } from "./builder/widgets/CarouselWidget";
-import { PrefCardImageWidget } from "./builder/widgets/PrefCardImageWidget";
+import { ImageWidget } from "./builder/widgets/ImageWidget";
 import { PrefCardTextWidget } from "./builder/widgets/PrefCardTextWidget";
 import { PacsWidget } from "./builder/widgets/PacsWidget";
 import { ProcedurePlanningWidget } from "./builder/widgets/ProcedurePlanningWidget";
+import { TimeoutChecklistWidget } from "./builder/widgets/TimeoutChecklistWidget";
 import {
   PHASES,
   PHASE_LABEL,
@@ -236,14 +237,15 @@ function WallCell({
       {widget.type === "carousel" && (
         <CarouselWidget size={widget.size} images={carouselImages} />
       )}
-      {widget.type === "prefcard-image" && (
-        <PrefCardImageWidget size={widget.size} caption={caption} image={displayImage} />
+      {widget.type === "image" && (
+        <ImageWidget size={widget.size} caption={caption} image={displayImage} />
       )}
       {widget.type === "prefcard-text" && (
         <PrefCardTextWidget size={widget.size} caption={caption} html={html} />
       )}
       {widget.type === "pacs" && <PacsWidget size={widget.size} />}
       {widget.type === "procedure-planning" && <ProcedurePlanningWidget size={widget.size} />}
+      {widget.type === "timeout-checklist" && <TimeoutChecklistWidget size={widget.size} />}
     </div>
   );
 }

@@ -14,7 +14,7 @@ interface Props {
   emptyHint?: string;
 }
 
-export function PrefCardImageWidget({ caption, image, size, emptyHint }: Props) {
+export function ImageWidget({ caption, image, size, emptyHint }: Props) {
   if (!image) {
     return (
       <div className="flex h-full w-full flex-col items-center justify-center gap-2 px-4 text-center">
